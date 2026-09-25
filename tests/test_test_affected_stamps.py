@@ -71,6 +71,8 @@ def _isolated(tmp_path, monkeypatch):
     for var in ("PRE_COMMIT_FROM_REF", "PRE_COMMIT_TO_REF", "PYRITE_PUSH_FULL"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.delenv("PYRITE_PUSH_FORCE", raising=False)
+    monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
+    monkeypatch.delenv("PYTEST_PLUGINS", raising=False)
     monkeypatch.delenv("FAKE_EXIT", raising=False)
     monkeypatch.delenv("FAKE_PY_VERSION", raising=False)
     monkeypatch.delenv("FAKE_DURING", raising=False)
@@ -196,6 +198,55 @@ class TestNeverStamped:
         _write(repo, "tests/conftest.py", "")
         assert _run(repo).returncode == 0
         assert _stamps(repo) == []
+
+    @NEVER
+    @pytest.mark.parametrize("var", ["PYTEST_ADDOPTS", "PYTEST_PLUGINS"])
+    def test_pytest_options_from_the_environment_are_not_stamped(self, repo, var):
+        # PYTEST_ADDOPTS="-k ..." narrows the run without a single argument
+        # on the command line (cold read, #459).
+        assert _run(repo, **{var: "-k b"}).returncode == 0
+        assert _stamps(repo) == []
+
+    @NEVER
+    @pytest.mark.parametrize(
+        "rel",
+        [
+            "tests/data.json",
+            "pyrite/table.csv",
+            "kb/entry.md",
+            "scripts/tool",
+            "extensions/x/y.yaml",
+        ],
+    )
+    def test_an_untracked_file_under_a_code_root_makes_the_tree_dirty(self, repo, rel):
+        # A test that reads an untracked data file passes; delete the file and
+        # the same tree fails -- so that pass says nothing about the tree.
+        _write(repo, rel, "{}")
+        assert _run(repo).returncode == 0
+        assert _stamps(repo) == []
+
+    @NEVER
+    def test_an_ignored_file_under_a_code_root_makes_the_tree_dirty(self, repo):
+        (repo / ".gitignore").write_text(".venv/\n*.db\n")
+        _git(repo, "commit", "-qam", "ignore dbs")
+        _write(repo, "tests/fixture.db", "x")
+        assert _run(repo).returncode == 0
+        assert _stamps(repo) == []
+
+    def test_build_noise_under_a_code_root_does_not_make_the_tree_dirty(self, repo):
+        (repo / ".gitignore").write_text(".venv/\n__pycache__/\n*.egg-info/\n.pytest_cache/\n")
+        _git(repo, "commit", "-qam", "ignore build noise")
+        _write(repo, "tests/__pycache__/test_b.cpython-312.pyc", "x")
+        _write(repo, "pyrite/__pycache__/b.cpython-312.pyc", "x")
+        _write(repo, "pyrite.egg-info/PKG-INFO", "x")
+        _write(repo, "tests/.pytest_cache/v/cache/lastfailed", "{}")
+        assert _run(repo).returncode == 0
+        assert len(_stamps(repo)) == 1
+
+    def test_an_untracked_file_outside_the_code_roots_does_not_dirty_the_tree(self, repo):
+        _write(repo, "notes.txt", "scratch")
+        assert _run(repo).returncode == 0
+        assert len(_stamps(repo)) == 1
 
     @NEVER
     def test_a_dirty_tree_does_not_skip_on_heads_stamp(self, repo):
@@ -408,18 +459,41 @@ class TestPrePush:
         assert len(_calls()) == 2, "a stamp on the working tree skipped an untested push"
 
 
+def _real_venv(repo: Path) -> None:
+    """A `.venv/bin/python` that is the real interpreter running this suite."""
+    python = repo / ".venv" / "bin" / "python"
+    python.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    python.chmod(0o755)
+
+
 class TestRealPytest:
-    def test_a_real_pass_is_stamped_and_the_rerun_skips(self, repo):
-        (repo / ".venv" / "bin" / "python").unlink()  # the script falls back to sys.executable
+    @pytest.fixture
+    def plain(self, repo):
         _write(repo, "tests/test_plain.py", "def test_plain():\n    assert True\n")
         _git(repo, "add", "tests/test_plain.py")
         _git(repo, "commit", "-qm", "plain")
-        first = _run(repo, "--files", "tests/test_plain.py", "-n", "1")
+        return repo
+
+    def test_a_real_pass_is_stamped_and_the_rerun_skips(self, plain):
+        _real_venv(plain)
+        first = _run(plain, "--files", "tests/test_plain.py", "-n", "1")
         assert first.returncode == 0, first.stdout + first.stderr
         assert "1 passed" in first.stdout
-        (stamp,) = _stamps(repo)
+        (stamp,) = _stamps(plain)
         assert stamp["python"] == f"{sys.version_info[0]}.{sys.version_info[1]}"
-        second = _run(repo, "--files", "tests/test_plain.py", "-n", "1")
+        second = _run(plain, "--files", "tests/test_plain.py", "-n", "1")
         assert second.returncode == 0
         assert "passed" not in second.stdout
         assert "skipping" in second.stdout + second.stderr
+
+    @NEVER
+    def test_without_the_worktrees_venv_nothing_is_stamped(self, plain):
+        # The fallback interpreter is another checkout's venv, whose editable
+        # installs point at THAT checkout's code (#210): its pass is about
+        # other code, and must not land in the shared stamp store.
+        (plain / ".venv" / "bin" / "python").unlink()
+        out = _run(plain, "--files", "tests/test_plain.py", "-n", "1")
+        assert out.returncode == 0, out.stdout + out.stderr
+        assert "1 passed" in out.stdout
+        assert _stamps(plain) == []
+        assert "no .venv" in out.stderr

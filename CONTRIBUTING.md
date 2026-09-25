@@ -171,14 +171,21 @@ set; and it switches to the full suite when you touch `conftest.py`,
 execute it on import. CI catches the rest.
 
 **Each tree is tested once.** A `--run` that passes on a clean tree (nothing
-uncommitted in tracked files, no untracked `.py` file) records a stamp: the
+uncommitted in tracked files, no untracked `.py` file, and no untracked or
+gitignored file under `pyrite/`, `tests/`, `extensions/`, `kb/` or `scripts/`
+beyond `__pycache__`-style build output), using the worktree's own `.venv`,
+records a stamp: the
 tree's SHA, the Python major.minor and the tests it ran, under the git common
 directory, so every worktree of the repository shares it. A later `--run` --
 the pre-push hook's included, which looks up the tree of the ref being pushed
 -- whose tests the stamp covers prints `already passed on tree <sha> (...);
 skipping` and exits 0. A dirty tree is never stamped and never skips;
-failures are never stamped; `--force` or `PYRITE_PUSH_FORCE=1` ignores
-stamps. Stamps older than 14 days are ignored and pruned.
+failures are never stamped, and neither is a run with `PYTEST_ADDOPTS` or
+`PYTEST_PLUGINS` set; `--force` or `PYRITE_PUSH_FORCE=1` ignores stamps.
+Stamps older than 14 days are ignored and pruned. A stamp is keyed on the
+tree and the Python version, not the environment: a pass where the Postgres
+tests skipped (`PYRITE_TEST_PG_URL` unset) covers a later run where it is
+set. When what changed is the environment, use `--force`.
 
 **After a failure that looks load-caused** (a timeout, a flaky port), re-run
 only what failed rather than the whole selection:
