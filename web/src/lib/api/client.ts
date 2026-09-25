@@ -306,15 +306,14 @@ class ApiClient {
 		return this.request(`/api/entries/${encodeURIComponent(id)}${qs ? `?${qs}` : ''}`);
 	}
 
-	// The web writes keep the pre-#378 type behaviour: REST refuses a type the
-	// KB's kb.yaml does not declare unless the caller sends allow_undeclared, and
-	// the New-entry form, the clipper and import offer every core and plugin
-	// type. So the web client opts in on every create. Offering only the
-	// declared types (and an explicit override) is the follow-up, #392.
+	// REST refuses a type the KB's kb.yaml does not declare unless the caller
+	// sends allow_undeclared (#378). The form offers only declared types and
+	// sets the flag itself only through its explicit override control (#392),
+	// so the client never opts in on the caller's behalf.
 	async createEntry(req: CreateEntryRequest): Promise<CreateResponse> {
 		return this.request('/api/entries', {
 			method: 'POST',
-			body: JSON.stringify({ allow_undeclared: true, ...req })
+			body: JSON.stringify(req)
 		});
 	}
 
@@ -659,7 +658,7 @@ class ApiClient {
 	async clipUrl(req: ClipRequest): Promise<ClipResponse> {
 		return this.request('/api/clip', {
 			method: 'POST',
-			body: JSON.stringify({ allow_undeclared: true, ...req })
+			body: JSON.stringify(req)
 		});
 	}
 
@@ -776,11 +775,17 @@ class ApiClient {
 	}
 
 	// Import/Export
-	async importEntries(file: File, kb: string, format?: string): Promise<ImportResult> {
+	async importEntries(
+		file: File,
+		kb: string,
+		format?: string,
+		allowUndeclared?: boolean
+	): Promise<ImportResult> {
 		const formData = new FormData();
 		formData.append('file', file);
-		const params = new URLSearchParams({ kb, allow_undeclared: 'true' });
+		const params = new URLSearchParams({ kb });
 		if (format) params.set('format', format);
+		if (allowUndeclared) params.set('allow_undeclared', 'true');
 		const url = `${this.baseUrl}/api/entries/import?${params}`;
 		const res = await fetch(url, {
 			method: 'POST',
