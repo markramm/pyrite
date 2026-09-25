@@ -119,6 +119,11 @@ class TestUnrelatedDeleteAndAddAreNotLinked:
         c_public = repo.commit("delete secret, add public")
         return repo, c_secret, c_public
 
+    @pytest.mark.control(
+        reason="Guards a regression this PR's earlier round introduced (-M10%), "
+        "not a bug on dev: dev's --follow uses git's default threshold. "
+        "Red when -M10% is put back (mutation-checked)."
+    )
     def test_file_log_of_the_added_file_starts_at_its_add(self, m10):
         repo, c_secret, c_public = m10
         log = GitService.get_file_log(repo.kb, "public.md")
@@ -129,6 +134,11 @@ class TestUnrelatedDeleteAndAddAreNotLinked:
         statuses = GitService.get_commit_file_statuses(repo.kb, c_public)
         assert ("A", "public.md") in statuses
 
+    @pytest.mark.control(
+        reason="Guards a regression this PR's earlier round introduced (-M10%), "
+        "not a bug on dev: dev's --follow uses git's default threshold. "
+        "Red when -M10% is put back (mutation-checked)."
+    )
     def test_attribution_does_not_give_the_new_entry_the_deleted_ones_history(self, m10):
         repo, c_secret, c_public = m10
         repo.index()
@@ -378,6 +388,11 @@ class TestReadFileAtRefusesUnsafePaths:
         assert GitService.read_file_at(repo.kb, c, "../outside.md") is None
         assert GitService.read_file_at(repo.kb, c, "/a.md") is None
 
+    @pytest.mark.control(
+        reason="Dev reads the absolute index path, which git cannot find; the "
+        "stand-in read only became possible with this PR's KB-relative "
+        "rewrite. Red when the rel_path None check is removed (mutation-checked)."
+    )
     def test_an_index_path_outside_the_kb_is_not_read_as_a_kb_file(self, repo):
         """An entry whose indexed path is not under the KB, with a version
         row that has no stored path, has no KB-relative path to read: it is
