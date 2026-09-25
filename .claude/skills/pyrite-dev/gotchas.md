@@ -516,9 +516,14 @@ now refuses any save that drops a KB it was not told to remove, but sandbox
 probes anyway -- HOME and both directories in temp dirs:
 
 ```bash
-T=$(mktemp -d); HOME=$T/home PYRITE_CONFIG_DIR=$T/cfg PYRITE_DATA_DIR=$T/data \
+T=$(mktemp -d); HOME=$T/home PYRITE_CONFIG_DIR=$T/cfg PYRITE_DATA_DIR=$T/cfg \
   .venv/bin/python -c '...'
 ```
+
+Point both at the **same** directory. `PYRITE_DATA_DIR` wins when both are set,
+so with two directories `config.yaml` is read from the data dir and a seed file
+put in the config dir is silently ignored -- a probe that "passes" against a
+file the code never read (the #387 delta read lost its first repro this way).
 
 `PYRITE_CONFIG_DIR` alone now moves the index too (it defaults beside
 `config.yaml`); before #377 it did not.

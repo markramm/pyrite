@@ -50,7 +50,19 @@ ephemeral expiry, unsubscribe), which name what they remove and check before
 deleting anything. A `config.yaml` that cannot be parsed is not overwritten
 either. Code that means to drop KBs passes `save_config(config, removed=[...])`
 or `allow_drop=True`. A write through a symlinked `config.yaml` logs the real
-file it changed.
+file it changed. Saves are atomic: the new file is written beside the old one
+and renamed over it, so a crash never leaves a half-written or empty file.
+
+When a long-running server refuses a save because `config.yaml` changed since
+it started (for example after `pyrite-admin kb add` from a shell), restart the
+server so it reads the current file.
+
+Known limits: only the list of knowledge bases is protected. A save from a
+process whose config is out of date still overwrites `repositories:` and
+`settings` with its own copy, and can bring back a KB another process removed.
+There is no lock between two processes saving at the same moment, and a
+repository subscribe that is refused at its final save is not rolled back
+(unsubscribe it and retry).
 
 ## Server
 
