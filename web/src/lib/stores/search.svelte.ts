@@ -11,6 +11,7 @@ class SearchStore {
 	mode = $state<'keyword' | 'semantic' | 'hybrid'>('keyword');
 
 	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+	private requestId = 0;
 
 	setQuery(q: string) {
 		this.query = q;
@@ -33,6 +34,7 @@ class SearchStore {
 		} = {}
 	) {
 		if (!this.query.trim()) return;
+		const requestId = ++this.requestId;
 		this.loading = true;
 		this.error = null;
 		try {
@@ -44,11 +46,13 @@ class SearchStore {
 				date_to: options.date_to,
 				tags: options.tags,
 			});
-			this.results = res.results;
+			if (requestId === this.requestId) this.results = res.results;
 		} catch (e) {
-			this.error = e instanceof Error ? e.message : 'Search failed';
+			if (requestId === this.requestId) {
+				this.error = e instanceof Error ? e.message : 'Search failed';
+			}
 		} finally {
-			this.loading = false;
+			if (requestId === this.requestId) this.loading = false;
 		}
 	}
 
