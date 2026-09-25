@@ -464,36 +464,23 @@ byte-identical except where a line below says otherwise. Order:
   - An engine adds a dependency, a policy language contributors must learn,
     and a deployment story, for no expressiveness Pyrite needs.
 
-## Open questions (the maintainer's)
+## Decisions recorded (maintainer, 2026-09-25)
 
-1. **REST error wire shape.** Two options:
-   - (a) Keep `{"detail": {"code", "message", "retryable", "hint"?}}`. It is
-     what 91 of 124 endpoint sites, the write refusals, `/api/repos` and the
-     web client already speak. The docs would be corrected to match.
-   - (b) Move REST to the canonical `{"error", "error_code", "retryable", "suggestion"?}`
-     that the docs claim and that CLI/MCP use.
+1. **REST error wire shape: (a).** REST keeps `{"detail": {"code", "message",
+   "retryable", "hint"?}}`, which the web client already speaks.
+   `docs/json-contracts.md` is corrected to match (theme 2).
+2. **One code per exception, and REST's code wins.** The class code is REST's
+   more specific one. For one release, MCP keeps emitting its current code in
+   a `legacy_error_code` field, then switches. This goes in the release notes.
+3. **Services take a principal: later.** This is revisited once the security
+   review reports.
+4. **Scheduling: (a).** Themes 0–3a are pulled into 0.26, so the definition of
+   done's structural guard is the §5 guard with a shrinking allowlist, not a
+   guard on today's mechanisms. Themes 3b–5 follow in 0.27.
+5. **`REPO_EGRESS`:** theme 3c maps it to today's tiers exactly. Splitting it
+   out is still ADR-0031's decision.
 
-   Recommendation: (a). Fewer callers break, and field names already differ
-   by transport convention.
-2. **One code per exception across transports.** Unifying (REST's
-   `KB_NOT_FOUND` vs MCP's `NOT_FOUND`, and three more pairs) changes one
-   side's contract. Agents match on MCP codes. Recommendation: the class
-   code is REST's more specific one. MCP keeps emitting its current code for
-   one release under a `legacy_error_code` field, then switches. That is a
-   release-note item.
-3. **Services take a principal: now, later, or never?** Recommendation:
-   later, gated on the security review's findings (§1, Alternatives).
-4. **Scheduling.** The 0.26 DoD needs a structural guard. There are two ways
-   to meet it:
-   - (a) Pull themes 0–3a into 0.26, so the guard lands as §5 with a
-     shrinking allowlist.
-   - (b) Land a guard on today's mechanisms in 0.26, as the review item's
-     step 4 describes, and do this ADR in 0.27, where #383 already sits.
-
-   (b) is cheaper now, but builds a guard that theme 5 then replaces.
-5. **The `REPO_EGRESS` capability.** Theme 3c maps it to today's tiers
-   exactly. Splitting it from the ladder is ADR-0031's decision, not this
-   one's.
+The ADR's status stays `proposed` until the maintainer accepts it.
 
 ---
 
