@@ -1958,6 +1958,10 @@ class TestNewAdrGoesThroughPipeline:
         with patch("pyrite_software_kb.cli.load_config", return_value=env["config"]):
             return runner.invoke(sw_app, args)
 
+    @pytest.mark.control(
+        reason="the pre-pipeline direct write already produced this filename/content; "
+        "pins the pipeline keeps the convention, not the write-pipeline bug itself"
+    )
     def test_creates_adr_file_with_the_conventional_filename(self, env):
         result = self._run(env, ["new-adr", "Use PostgreSQL", "--kb", "sw-kb"])
         assert result.exit_code == 0, result.output
@@ -1974,6 +1978,10 @@ class TestNewAdrGoesThroughPipeline:
         assert "## Decision" in content
         assert "## Consequences" in content
 
+    @pytest.mark.control(
+        reason="#17's original fix already stripped this punctuation via the "
+        "shared slug; pins file_pattern's {title} keeps using it, not the #391 fix"
+    )
     def test_title_punctuation_never_reaches_the_filename(self, env):
         """`/` and `:` in a title used to land in the ADR filename (#17):
         `adrs/0001-use-a/b-testing.md` crashed with FileNotFoundError, and a
@@ -2037,6 +2045,10 @@ class TestNewAdrGoesThroughPipeline:
         assert "adr_number: 2" in expected_file.read_text()
         assert "id: adr-0002" in expected_file.read_text()
 
+    @pytest.mark.control(
+        reason="_resolve_adr_kb's single-KB fallback predates #391 and was "
+        "already correct; pins it still works, not the write-pipeline fix"
+    )
     def test_resolves_single_kb_without_kb_flag(self, env):
         """Without --kb, new-adr must write into the (single) configured KB's
         adrs/ dir. Regression for new-adr-writes-to-cwd-without-kb-flag."""

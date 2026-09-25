@@ -144,6 +144,10 @@ class TestResolveFilenameEntryFieldPlaceholders:
         with pytest.raises(ValidationError):
             schema.resolve_filename(entry)
 
+    @pytest.mark.control(
+        reason="the fixed id/slug/date/title/type placeholders already resolved "
+        "before this change; pins they still do, not the new entry-field support"
+    )
     def test_existing_placeholders_keep_working(self):
         """id/slug/date/title/type must still resolve after adding entry-field
         placeholder support -- this is a regression guard, not new behaviour."""

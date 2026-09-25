@@ -527,6 +527,7 @@ class TestCoreIntegration:
         # Both provide presets
         presets = registry.get_all_kb_presets()
         assert "zettelkasten" in presets
+        assert "social" in presets
 
 
 # =========================================================================
@@ -581,6 +582,10 @@ class TestMcpPostGoesThroughPipeline:
         assert len(found) <= 1, found
         return found[0] if found else None
 
+    @pytest.mark.control(
+        reason="the old direct IndexManager.index_entry call already indexed "
+        "immediately; this pins that the pipeline keeps doing so, not the bug"
+    )
     def test_new_post_is_indexed_immediately(self, env, plugin):
         result = plugin._mcp_post(
             {

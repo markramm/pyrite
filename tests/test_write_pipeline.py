@@ -509,6 +509,12 @@ def test_cli_add_keeps_the_files_declared_type_in_a_plugin_kb(software_env):
     assert "type: note" in text and "adr_number" not in text, text
 
 
+@pytest.mark.control(
+    reason="unrelated to #391 -- this test's own assertion was made robust to "
+    "a pre-existing, separately-filed bug (#468) that #391's file_pattern "
+    "change surfaced (a `note` create silently resolves to ADREntry in a "
+    "software-type KB); it does not pin #391's write-pipeline behaviour"
+)
 def test_rest_create_accepts_the_web_forms_default_payload_in_pyrites_own_kb(software_env):
     """Review blocker 2. The New-entry form defaults to `note` and offers every
     core and plugin type; the web client sends `allow_undeclared: true` on every
