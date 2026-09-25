@@ -1,7 +1,7 @@
 """Unified cross-KB search with result correlation.
 
-Searches across multiple KBs and groups results both by KB
-and by entity identity (title matching).
+Searches across multiple KBs and groups results by KB
+and by entity identity using entry IDs and normalized title matches.
 """
 
 from collections import defaultdict
@@ -81,16 +81,16 @@ def cross_kb_search(
 def correlate_results(
     flat_results: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Correlate results by entry ID first, then by normalized title.
-    Matching IDs can identify the same entity even when its title differs
-    between KBs. Results not grouped by ID fall back to case-insensitive title
-    matching with repeated whitespace collapsed.
+    """Correlate results transitively by entry ID or normalized title.
+
+    A result can connect an ID-matched result to another result that matches
+    by title, so both keys participate in the same equivalence groups.
     """
     if not flat_results:
         return []
 
     def make_group(entries: list[dict[str, Any]], correlated_by: str) -> dict[str, Any]:
-        title = entries[0].get("title", "")
+        title = entries[0].get("title") or ""
         kb_names = {entry.get("kb_name", "") for entry in entries}
         max_importance = max(int(entry.get("importance", 5)) for entry in entries)
         appearances = [
@@ -110,31 +110,52 @@ def correlate_results(
             "appearances": appearances,
         }
 
-    by_id: dict[str, list[tuple[int, dict[str, Any]]]] = defaultdict(list)
+    parents = list(range(len(flat_results)))
+    ranks = [0] * len(flat_results)
+
+    def find(index: int) -> int:
+        while parents[index] != index:
+            parents[index] = parents[parents[index]]
+            index = parents[index]
+        return index
+
+    def union(first: int, second: int) -> None:
+        first_root = find(first)
+        second_root = find(second)
+        if first_root == second_root:
+            return
+        if ranks[first_root] < ranks[second_root]:
+            first_root, second_root = second_root, first_root
+        parents[second_root] = first_root
+        if ranks[first_root] == ranks[second_root]:
+            ranks[first_root] += 1
+
+    by_id: dict[str, list[int]] = defaultdict(list)
+    by_title: dict[str, list[int]] = defaultdict(list)
     for index, result in enumerate(flat_results):
         entry_id = result.get("id")
-        if entry_id is not None and str(entry_id).strip():
-            by_id[str(entry_id)].append((index, result))
-    groups = []
-    grouped_indices: set[int] = set()
-    for indexed_entries in by_id.values():
-        if len(indexed_entries) < 2:
-            continue
-        groups.append(make_group([entry for _, entry in indexed_entries], "entry_id"))
-        grouped_indices.update(index for index, _ in indexed_entries)
-    by_title: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for index, result in enumerate(flat_results):
-        if index in grouped_indices:
-            continue
+        normalized_id = str(entry_id).strip() if entry_id is not None else ""
+        if normalized_id:
+            by_id[normalized_id].append(index)
         title = str(result.get("title") or "")
         normalized_title = " ".join(title.split()).casefold()
         if normalized_title:
-            by_title[normalized_title].append(result)
-        else:
-            # An empty title does not identify an entity; keep this result alone.
-            groups.append(make_group([result], "title"))
-    for entries in by_title.values():
-        groups.append(make_group(entries, "title"))
+            by_title[normalized_title].append(index)
+
+    for key_groups in (by_id.values(), by_title.values()):
+        for indexes in key_groups:
+            for index in indexes[1:]:
+                union(indexes[0], index)
+
+    id_linked_roots = {find(indexes[0]) for indexes in by_id.values() if len(indexes) > 1}
+    components: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for index, result in enumerate(flat_results):
+        components[find(index)].append(result)
+
+    groups = [
+        make_group(entries, "entry_id" if root in id_linked_roots else "title")
+        for root, entries in components.items()
+    ]
     # Sort by KB appearance count descending, then importance descending.
     groups.sort(key=lambda group: (group["kb_count"], group["max_importance"]), reverse=True)
     return groups

@@ -282,7 +282,7 @@ class TestCorrelationKeys:
                     "importance": 7,
                 },
                 {
-                    "id": "palantir-technologies",
+                    "id": " palantir-technologies ",
                     "kb_name": "surveillance-industrial-complex",
                     "title": "Palantir Technologies firm",
                     "entry_type": "firm",
@@ -317,20 +317,18 @@ class TestCorrelationKeys:
         assert correlated[0]["correlated_by"] == "title"
         assert correlated[0]["kb_count"] == 2
 
-    def test_id_group_is_not_reused_by_title_fallback(self):
+    def test_id_and_title_matches_are_transitive(self):
         correlated = correlate_results(
             [
-                {"id": "shared-id", "kb_name": "kb-a", "title": "Same report"},
-                {"id": "shared-id", "kb_name": "kb-b", "title": "Renamed report"},
-                {"id": "other-id", "kb_name": "kb-c", "title": "Same report"},
+                {"id": "x", "kb_name": "kb-a", "title": "Palantir"},
+                {"id": "x", "kb_name": "kb-b", "title": "Palantir"},
+                {"id": "y", "kb_name": "kb-c", "title": "Palantir"},
             ]
         )
-        id_group = next(group for group in correlated if group["correlated_by"] == "entry_id")
-        title_group = next(group for group in correlated if group["correlated_by"] == "title")
-        assert id_group["kb_count"] == 2
-        assert len(id_group["appearances"]) == 2
-        assert title_group["kb_count"] == 1
-        assert [item["id"] for item in title_group["appearances"]] == ["other-id"]
+        assert len(correlated) == 1
+        assert correlated[0]["correlated_by"] == "entry_id"
+        assert correlated[0]["kb_count"] == 3
+        assert [item["id"] for item in correlated[0]["appearances"]] == ["x", "x", "y"]
 
     def test_shared_entry_id_counts_three_knowledge_bases(self):
         correlated = correlate_results(
@@ -344,3 +342,8 @@ class TestCorrelationKeys:
         assert correlated[0]["correlated_by"] == "entry_id"
         assert correlated[0]["kb_count"] == 3
         assert len(correlated[0]["appearances"]) == 3
+
+    def test_none_title_is_displayed_as_empty_text(self):
+        correlated = correlate_results([{"id": "untitled", "kb_name": "kb-a", "title": None}])
+        assert len(correlated) == 1
+        assert correlated[0]["title"] == ""
