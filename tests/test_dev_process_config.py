@@ -736,9 +736,101 @@ class TestRunningTheTestsDoc:
         assert "PYRITE_PUSH_WORKERS" in section and "PYRITE_PUSH_WORKERS" in hook["entry"]
         script = (REPO / "scripts" / "test-affected").read_text()
         assert "PYRITE_PUSH_FULL" in section and '"PYRITE_PUSH_FULL"' in script
+        assert "PYRITE_PUSH_FORCE" in section and '"PYRITE_PUSH_FORCE"' in script
+
+    def test_the_last_failed_rerun_is_documented(self, section):
+        assert "scripts/test-affected --run -- --lf" in section
 
     def test_the_documented_commands_exist(self, section):
         assert "scripts/test-affected --run" in section
         assert (REPO / "scripts" / "test-affected").exists()
         assert (REPO / "scripts" / "run_tutorial.sh").exists()
         assert "--dist loadfile" in section and (REPO / "tests" / "e2e").is_dir()
+
+
+class TestDevPushReusesTheMergeQueuesPass:
+    """Each commit is tested once (maintainer, 2026-09-25).
+
+    The merge queue runs the full matrix and the frontend on the exact commit
+    that then lands on dev -- its head_sha is the push's SHA. The push to dev
+    used to run both again on that same commit. Now a successful merge_group
+    run for the SHA skips them on the push; smoke still runs (the queue does
+    not run it), and main and workflow_dispatch never skip.
+    """
+
+    @pytest.fixture(scope="class")
+    def step(self, ci) -> dict:
+        (step,) = [s for s in ci["jobs"]["changes"]["steps"] if s.get("id") == "queue"]
+        return step
+
+    def test_the_check_runs_only_on_a_push_to_dev(self, step):
+        # Not on main (it only moves to a proven SHA and always runs
+        # everything), not on workflow_dispatch, never on a PR.
+        cond = " ".join(str(step["if"]).split())
+        assert cond == "github.event_name == 'push' && github.ref == 'refs/heads/dev'", cond
+
+    def test_the_classifier_exposes_the_answer(self, ci):
+        assert ci["jobs"]["changes"]["outputs"]["queue_passed"] == (
+            "${{ steps.queue.outputs.passed }}"
+        )
+
+    def test_the_classifier_may_read_workflow_runs(self, ci):
+        assert ci["jobs"]["changes"]["permissions"].get("actions") == "read"
+
+    def test_it_asks_for_a_successful_merge_group_run_of_this_sha(self, step):
+        run = step["run"]
+        assert "actions/workflows/ci.yml/runs" in run
+        assert "event=merge_group" in run and "head_sha=$GITHUB_SHA" in run
+        assert '.conclusion == \\"success\\"' in run
+
+    @pytest.mark.parametrize("name", ["test", "frontend"])
+    def test_test_and_frontend_skip_when_the_queue_passed(self, ci, name):
+        cond = str(ci["jobs"][name]["if"])
+        assert "needs.changes.outputs.queue_passed != 'true'" in cond, cond
+        # The skip is ANDed onto the existing condition, never ORed.
+        assert cond.startswith("(") and ") && needs.changes.outputs.queue_passed" in cond, cond
+
+    @pytest.mark.control(reason="pins that the skip stays off jobs that never had it")
+    @pytest.mark.parametrize("name", ["smoke", "kb", "gate"])
+    def test_smoke_kb_and_gate_do_not_skip(self, ci, name):
+        assert "queue_passed" not in str(ci["jobs"][name].get("if", "")), name
+
+    @pytest.fixture
+    def run_step(self, step, tmp_path):
+        """Run the step's script with a stub `gh` that prints a given count,
+        or fails; return what it wrote to GITHUB_OUTPUT."""
+        import os
+        import subprocess
+
+        def run(gh_body: str) -> str:
+            bindir = tmp_path / "bin"
+            bindir.mkdir(exist_ok=True)
+            gh = bindir / "gh"
+            gh.write_text(f"#!/bin/sh\n{gh_body}\n")
+            gh.chmod(0o755)
+            out = tmp_path / "out"
+            out.write_text("")
+            env = {
+                **os.environ,
+                "PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}",
+                "GITHUB_REPOSITORY": "o/r",
+                "GITHUB_SHA": "a" * 40,
+                "GITHUB_OUTPUT": str(out),
+                "GH_TOKEN": "x",
+            }
+            subprocess.run(["bash", "-e", "-o", "pipefail", "-c", step["run"]], env=env, check=True)
+            return out.read_text()
+
+        return run
+
+    def test_a_successful_queue_run_skips(self, run_step):
+        assert run_step("echo 1") == "passed=true\n"
+
+    def test_no_queue_run_runs_everything(self, run_step):
+        assert run_step("echo 0") == "passed=false\n"
+
+    def test_an_api_failure_runs_everything(self, run_step):
+        assert run_step("echo 'Not Found' >&2; exit 1") == "passed=false\n"
+
+    def test_garbage_from_the_api_runs_everything(self, run_step):
+        assert run_step('echo \'{"message": "x"}\'') == "passed=false\n"
