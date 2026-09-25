@@ -34,13 +34,12 @@
  *    Vite's proxy and that proxy has one target. `web/vite.e2e-auth.config.ts`
  *    supplies the second target without touching the shared `vite.config.ts`.
  *
- * The seeded user is created through the REST API rather than the CLI: there
- * is no `pyrite user` command (checked — `pyrite auth` is GitHub OAuth only),
- * and `AuthService.register` is the only code path that produces the bcrypt
- * hash the login endpoint verifies against. That means this seed has two
- * phases: the KB/entries phase runs at config-module scope like A's, and the
- * user phase has to run once the backend is up, which is what
- * `auth.setup.ts` (a Playwright setup project) does.
+ * The seeded user is the world's admin, created the way an operator creates
+ * one: `pyrite-admin user create --role admin`. With auth on, web registration
+ * stays closed until an admin exists and nobody becomes admin by registering
+ * first, so the CLI is the only way in. It runs here, at
+ * config-module scope, before the backend starts; `auth.setup.ts` then checks
+ * against the running backend that the user can sign in and is admin.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
@@ -89,11 +88,10 @@ export const AUTH_BASE_URL = `http://localhost:${AUTH_WEB_PORT}`;
 export const AUTH_BACKEND_URL = `http://127.0.0.1:${AUTH_BACKEND_PORT}`;
 
 /**
- * The user `auth.setup.ts` registers and `auth.spec.ts` logs in as.
+ * The user `seedAuthWorld()` creates and `auth.spec.ts` logs in as.
  *
- * The first user to register gets role `admin`
- * (`AuthService.register`), which is what makes the post-login app shell
- * render the same surface the auth-disabled world's specs see.
+ * Created with role `admin` by the CLI, which is what makes the post-login
+ * app shell render the same surface the auth-disabled world's specs see.
  */
 export const SEEDED_USER = {
 	username: 'e2e-auth-user',
@@ -116,7 +114,8 @@ export const UNKNOWN_USER = {
  * login page renders only when `allow_registration` is true — an assertion
  * that must not depend on the config default). The offline/embedding/rate-limit
  * settings are copied for the same reasons A documents: no network, no model
- * download, and no 429 from several workers sharing one client IP.
+ * download, and no 429 from several workers sharing one client IP -- which for
+ * `/auth/login` and `/auth/register` means their own limits, raised here.
  */
 export const AUTH_E2E_ENV: Record<string, string> = {
 	PYRITE_DATA_DIR: AUTH_E2E_DATA_DIR,
@@ -127,10 +126,14 @@ export const AUTH_E2E_ENV: Record<string, string> = {
 	PYRITE_SEARCH_MODE: 'keyword',
 	HF_HUB_OFFLINE: '1',
 	TRANSFORMERS_OFFLINE: '1',
-	RATELIMIT_ENABLED: 'false'
+	RATELIMIT_ENABLED: 'false',
+	PYRITE_AUTH_LOGIN_RATE_LIMIT: '10000/minute',
+	PYRITE_AUTH_LOGIN_RATE_LIMIT_PER_USERNAME: '10000/minute',
+	PYRITE_AUTH_REGISTER_RATE_LIMIT: '10000/minute'
 };
 
 const PYRITE_BIN = join(REPO_ROOT, '.venv', 'bin', 'pyrite');
+const PYRITE_ADMIN_BIN = join(REPO_ROOT, '.venv', 'bin', 'pyrite-admin');
 
 /**
  * Marker so the seed runs exactly once per `playwright test` invocation.
@@ -143,12 +146,7 @@ const PYRITE_BIN = join(REPO_ROOT, '.venv', 'bin', 'pyrite');
 const SEED_MARKER = 'PYRITE_E2E_AUTH_SEEDED';
 
 /**
- * Wipe and rebuild the auth-enabled world's data directory and KB.
- *
- * Only the KB: the user cannot be created here, because creating it requires
- * `AuthService` to hash the password, and the only supported way in is
- * `POST /auth/register` against a running backend. `auth.setup.ts` does that
- * part once the backend this seed prepared has started.
+ * Wipe and rebuild the auth-enabled world's data directory, KB and admin.
  */
 export function seedAuthWorld(): void {
 	if (process.env[SEED_MARKER] === '1' || process.env.TEST_WORKER_INDEX !== undefined) {
@@ -169,15 +167,34 @@ export function seedAuthWorld(): void {
 	preflightPort(AUTH_WEB_PORT, 'auth e2e Vite dev server');
 
 	// A fresh world every run, including a fresh index.db — which is where the
-	// user table lives, so this is also what guarantees `auth.setup.ts`'s
-	// register call is the FIRST registration (and therefore gets admin) on
-	// every run rather than only the first.
+	// user table lives, so the admin created below is the only user.
 	rmSync(AUTH_E2E_DATA_DIR, { recursive: true, force: true });
 	mkdirSync(AUTH_E2E_DATA_DIR, { recursive: true });
 
 	execFileSync(
 		PYRITE_BIN,
 		['init', '-t', 'research', '-p', AUTH_E2E_KB_PATH, '-n', AUTH_E2E_KB, '--no-examples'],
+		{
+			cwd: REPO_ROOT,
+			env: { ...process.env, ...AUTH_E2E_ENV },
+			encoding: 'utf8',
+			stdio: ['ignore', 'pipe', 'pipe']
+		}
+	);
+
+	execFileSync(
+		PYRITE_ADMIN_BIN,
+		[
+			'user',
+			'create',
+			SEEDED_USER.username,
+			'--role',
+			'admin',
+			'--display-name',
+			SEEDED_USER.displayName,
+			'--password',
+			SEEDED_USER.password
+		],
 		{
 			cwd: REPO_ROOT,
 			env: { ...process.env, ...AUTH_E2E_ENV },

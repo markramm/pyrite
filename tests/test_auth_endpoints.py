@@ -14,6 +14,7 @@ from pyrite.config import AuthConfig, KBConfig, OAuthProviderConfig, PyriteConfi
 from pyrite.server.api import create_app, get_config, get_db
 from pyrite.services.oauth_providers import OAuthProfile, OAuthToken
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_user
 
 
 def _make_client(tmpdir, auth_enabled=True, allow_registration=True, providers=None):
@@ -38,6 +39,13 @@ def _make_client(tmpdir, auth_enabled=True, allow_registration=True, providers=N
     db = PyriteDB(db_path)
     application.dependency_overrides[get_config] = lambda: config
     application.dependency_overrides[get_db] = lambda: db
+    if auth_enabled:
+        # Sign-up is closed until an operator-created admin exists (#13).
+        from pyrite.services.auth_service import AuthService
+        from tests.auth_seed import seed_user
+
+        if not AuthService(db, config.settings.auth).admin_exists():
+            seed_user(db, "root", "rootpass123", role="admin")
 
     return TestClient(application), config, db
 
@@ -77,7 +85,7 @@ class TestAuthConfig:
 
 
 class TestRegisterEndpoint:
-    def test_register_first_user(self, auth_client):
+    def test_register_user(self, auth_client):
         r = auth_client.post(
             "/auth/register",
             json={
@@ -88,7 +96,7 @@ class TestRegisterEndpoint:
         assert r.status_code == 200
         data = r.json()
         assert data["username"] == "alice"
-        assert data["role"] == "admin"
+        assert data["role"] == "read"
 
     def test_register_sets_cookie(self, auth_client):
         r = auth_client.post(
@@ -420,13 +428,7 @@ class TestOAuthEndpoints:
     def test_me_includes_kb_permissions(self, tmpdir):
         client, config, db = _make_client(tmpdir)
         # Register and login as admin
-        client.post(
-            "/auth/register",
-            json={
-                "username": "admin",
-                "password": "password123",
-            },
-        )
+        seed_user(db, "admin", "password123", role="admin")
         client.post(
             "/auth/login",
             json={
@@ -503,14 +505,8 @@ class TestOAuthEndpoints:
 class TestEphemeralKBEndpoint:
     def test_ephemeral_kb_create(self, tmpdir):
         client, config, db = _make_client(tmpdir)
-        # Register admin (first user gets admin role which >= write)
-        client.post(
-            "/auth/register",
-            json={
-                "username": "admin",
-                "password": "password123",
-            },
-        )
+        # Seed an admin (the operator path; admin >= write)
+        seed_user(db, "admin", "password123", role="admin")
         client.post(
             "/auth/login",
             json={
@@ -527,14 +523,8 @@ class TestEphemeralKBEndpoint:
 
     def test_ephemeral_kb_limit(self, tmpdir):
         client, config, db = _make_client(tmpdir)
-        # Register admin
-        client.post(
-            "/auth/register",
-            json={
-                "username": "admin",
-                "password": "password123",
-            },
-        )
+        # Seed an admin
+        seed_user(db, "admin", "password123", role="admin")
         client.post(
             "/auth/login",
             json={
@@ -560,13 +550,7 @@ class TestEphemeralKBEndpoint:
 class TestKBPermissionsCRUD:
     def _setup_admin(self, tmpdir):
         client, config, db = _make_client(tmpdir)
-        client.post(
-            "/auth/register",
-            json={
-                "username": "admin",
-                "password": "password123",
-            },
-        )
+        seed_user(db, "admin", "password123", role="admin")
         client.post(
             "/auth/login",
             json={

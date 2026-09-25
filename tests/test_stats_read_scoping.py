@@ -19,6 +19,7 @@ from pyrite.config import AuthConfig, KBConfig, PyriteConfig, Settings
 from pyrite.server.api import create_app, get_config, get_db
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_and_sign_in
 
 PUBLIC, PRIVATE = "public-kb", "private-kb"
 
@@ -71,13 +72,17 @@ def env():
         )
 
         def client_for(username):
+            # A global-read user (seeded the operator's way): the persona
+            # denied a default_role: none KB below.
             c = TestClient(app)
             if username:
-                r = c.post("/auth/register", json={"username": username, "password": "password123"})
-                assert r.status_code == 200, r.text
+                seed_and_sign_in(c, username, "password123", role="read")
             return c
 
-        admin = client_for("admin-user")  # first registered user is admin
+        admin = TestClient(app)
+        seed_and_sign_in(
+            admin, "admin-user", "password123"
+        )  # the sole admin, via the operator path
         peer = client_for("peer")
         anon = client_for(None)
         try:

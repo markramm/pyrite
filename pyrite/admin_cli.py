@@ -40,12 +40,14 @@ index_app = typer.Typer(help="Search index management")
 repo_app = typer.Typer(help="Repository collaboration")
 auth_app = typer.Typer(help="Authentication (GitHub OAuth)")
 config_app = typer.Typer(help="Configuration management")
+user_app = typer.Typer(help="Web users (auth-enabled servers)")
 
 app.add_typer(kb_app, name="kb")
 app.add_typer(index_app, name="index")
 app.add_typer(repo_app, name="repo")
 app.add_typer(auth_app, name="auth")
 app.add_typer(config_app, name="config")
+app.add_typer(user_app, name="user")
 
 
 # =============================================================================
@@ -646,6 +648,49 @@ def mcp_setup(
     console.print("  pyrite-write — Read + create/update/delete entries")
     console.print("  pyrite-admin — Write + KB management, indexing, repos, config")
     console.print("\nRestart Claude Code to load the new MCP servers.")
+
+
+# =============================================================================
+# Web users
+# =============================================================================
+
+
+@user_app.command("create")
+def user_create(
+    username: str = typer.Argument(..., help="Login name"),
+    role: str = typer.Option("read", "--role", "-r", help="Global role: read, write or admin"),
+    display_name: str | None = typer.Option(None, "--display-name", help="Shown in the web UI"),
+    password: str = typer.Option(
+        ...,
+        prompt=True,
+        hide_input=True,
+        confirmation_prompt=True,
+        help="Prompted for when omitted (at least 8 characters)",
+    ),
+):
+    """Create a web user in this server's index.
+
+    The documented way to make the first admin: with auth enabled, web
+    registration and OAuth sign-up stay closed until an admin exists, and
+    nobody becomes admin by registering first.
+
+        pyrite-admin user create alice --role admin
+    """
+    from .services.auth_service import AuthService
+    from .storage import PyriteDB
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    try:
+        user = AuthService(db, config.settings.auth).create_user(
+            username, password, role=role, display_name=display_name
+        )
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
+    finally:
+        db.close()
+    console.print(f"[green]Created user[/green] {user['username']} (role: {user['role']})")
 
 
 def main():

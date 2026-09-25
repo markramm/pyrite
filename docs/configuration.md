@@ -21,6 +21,37 @@ config file at all.
 3. a `.pyrite/config.yaml` in the current directory or a parent
 4. `~/.pyrite`
 
+**A repo-local `.pyrite/config.yaml` (3) is not trusted.** It may have come with
+a cloned or downloaded tree, so Pyrite reads only what stays inside that tree:
+`knowledge_bases` whose paths resolve inside it (keys `name`, `path`,
+`kb_type`, `description`, `read_only`, `shortname`, and `default_role` only
+when it is `none`), and `settings.index_path` (inside it), `auto_embed`,
+`search_mode` and `summary_length`. (`workspace_path` is never read from any
+`config.yaml`.) KBs registered in that tree's index are held to the same rule:
+one whose path is outside the tree is not loaded, `pyrite kb add` refuses a
+path outside the tree before creating anything, and a `default_role` stored in
+the tree's index is ignored unless it is `none`. Under such a config an admin
+cannot publish a KB either (`default_role` `read` or `write` is refused):
+publishing needs a trusted config. Note that the KB listing (`GET /api/kbs`,
+`pyrite kb list`) still shows the `default_role` stored in the index, while
+every access decision ignores it. An untrusted config with no `index_path`, or
+one whose `index_path` is refused, uses `.pyrite/index.db` inside its own
+tree, never your own index; an index your own config publishes KBs from is
+only ever used through a trusted config (`~/.pyrite` or `PYRITE_CONFIG_DIR`). Anything else (the
+embedding model, editor, AI and server settings, auth, API keys, other
+`default_role` values, repositories, subscriptions) is ignored with a warning,
+and GitHub credentials are never read from or written to it. When Pyrite saves
+such a config (`pyrite kb add` in that tree), it writes back only the KB
+registry and the file's own allowed settings -- never credentials or values
+that came from the environment -- so any other key in the file is dropped from
+it on save. To use a directory's config in full, point `PYRITE_CONFIG_DIR`
+at it. The configs `scripts/new-worktree.sh` writes need nothing more.
+
+A local embedding model is named by an absolute path in your own config. A
+bare model name that is also a directory under the working directory is
+refused, and a model directory whose `modules.json` names code outside
+sentence-transformers is not loaded.
+
 **Where the index goes**, first match wins:
 
 1. `$PYRITE_DATA_DIR/index.db`
@@ -154,9 +185,57 @@ to an auth-disabled instance without API keys and to one with
 |---|---|---|
 | `PYRITE_AUTH_ENABLED` | `false` | Turn on user accounts and per-KB permissions |
 | `PYRITE_AUTH_ANONYMOUS_TIER` | unset | What an unauthenticated request may do when auth is enabled: `read`, `write`, or `none` for nothing. Any other value, including `admin`, is refused at startup. It is a ceiling: on each KB the visitor gets the lower of this and the KB's `default_role` (a `default_role: none` KB stays hidden, a `default_role: read` KB stays read-only, and `default_role: write` never lifts a `read` visitor to write). Unset falls back to the API-key role. |
-| `PYRITE_AUTH_ALLOW_REGISTRATION` | `false` | Let people create accounts |
+| `PYRITE_AUTH_ALLOW_REGISTRATION` | `true` | Let people create accounts on the web (still closed until an admin exists; see below) |
+| `PYRITE_AUTH_LOGIN_RATE_LIMIT` | `20/minute;200/hour` | `/auth/login` attempts per client (`settings.auth.login_rate_limit`) |
+| `PYRITE_AUTH_LOGIN_RATE_LIMIT_PER_USERNAME` | `5/minute;30/hour` | Failed `/auth/login` attempts per username (`settings.auth.login_rate_limit_per_username`) |
+| `PYRITE_AUTH_REGISTER_RATE_LIMIT` | `5/minute;20/hour` | `/auth/register` attempts per client (`settings.auth.register_rate_limit`) |
 | `PYRITE_GITHUB_CLIENT_ID` / `PYRITE_GITHUB_CLIENT_SECRET` | unset | GitHub OAuth login |
 | `PYRITE_ENCRYPTION_KEY` | unset | If set, stored GitHub access tokens are encrypted at rest with it. Set it on any shared instance. |
+
+**The first admin comes from the CLI.** With auth enabled, web registration and
+GitHub sign-up are refused until an admin exists, and nobody becomes admin by
+signing up first. On the server's data directory:
+
+```bash
+pyrite-admin user create alice --role admin     # prompts for the password
+```
+
+`settings.auth.require_invite_code: true` makes registration need a code an
+admin created; the new user gets the code's role. GitHub sign-up obeys the same
+switches: with registration off or needing an invite code, a first GitHub
+login creates an account only for a member of the provider's `allowed_orgs` or
+of an org in its `org_tier_map`. `pyrite serve` warns at startup when
+registration is open, naming the KBs a stranger could read by signing up.
+
+Rate limits use the same syntax as slowapi (`"5/minute"`, several joined by
+`;`); an over-limit request gets 429 with `Retry-After`. Know their limits:
+
+- They are counted in memory, per server process, and keyed on the address of
+  the connection's peer. Behind a reverse proxy every client arrives from the
+  proxy's address and shares one budget; several worker processes each keep
+  their own count.
+- The per-username limit counts failed logins, so anyone who knows a username
+  can lock that account's password login for about a minute.
+- An IPv6 client is keyed by its full address, so one host with many
+  addresses in its prefix gets a budget per address.
+
+**What a self-registered user can read.** Someone who signs up without an
+invite code (or through GitHub without an `allowed_orgs` or `org_tier_map`
+match) can read, and never write, KBs whose `default_role` is set to `read` or
+`write`, plus whatever an admin grants them per KB. A KB with no `default_role`
+stays closed to them. Users an operator created or vetted -- the CLI, an invite
+code, an org rule -- keep the old rule: their global role applies to every KB
+without a `default_role`. Changing a user's role does not change this; an
+admin grants or removes it explicitly, for now only through the role API
+(`"global_access": true|false` in `PUT /auth/users/{id}/role`; `GET
+/auth/users` shows each user's value). Users inserted by the
+`deploy/*/create-user.py` scripts get public-KB access only until an admin
+grants it. Migration v26 marks every user that existed before it with global
+access; its rollback is a no-op, so rolling back and migrating up again grants
+global access to every user present at that time, self-registered ones
+included. To share a KB with every signed-in user,
+set its `default_role` to `read` (which also puts it on the public site, below),
+or grant it per user.
 
 Per-KB access: each KB in `config.yaml` may carry `default_role: read` (public
 to any authenticated user), `write`, or `none` (private: explicit grants only).

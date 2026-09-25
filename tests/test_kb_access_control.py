@@ -22,6 +22,7 @@ from pyrite.services.auth_service import AuthService
 from pyrite.services.kb_registry_service import KBRegistryService
 from pyrite.storage.database import PyriteDB
 from pyrite.storage.migrations import CURRENT_VERSION, MIGRATIONS, MigrationManager
+from tests.auth_seed import seed_user
 
 
 # =========================================================================
@@ -236,10 +237,10 @@ class TestListUsers:
 
     def test_list_users_returns_all(self, setup):
         """list_users returns all local users."""
-        auth, _ = setup
-        # Register two users
-        auth.register("alice", "password123", "Alice")
-        auth.register("bob", "password456", "Bob")
+        auth, db = setup
+        # Seed two users via the operator path (the first is admin).
+        seed_user(db, "alice", "password123", display_name="Alice")
+        seed_user(db, "bob", "password456", display_name="Bob")
         users = auth.list_users()
         usernames = {u["username"] for u in users}
         assert "alice" in usernames
@@ -247,16 +248,16 @@ class TestListUsers:
 
     def test_list_users_excludes_password(self, setup):
         """list_users does not include password_hash."""
-        auth, _ = setup
-        auth.register("alice", "secret12345", "Alice")
+        auth, db = setup
+        seed_user(db, "alice", "secret12345", display_name="Alice")
         users = auth.list_users()
         for u in users:
             assert "password_hash" not in u
 
     def test_list_users_includes_expected_fields(self, setup):
         """list_users returns expected field set."""
-        auth, _ = setup
-        auth.register("alice", "secret12345", "Alice")
+        auth, db = setup
+        seed_user(db, "alice", "secret12345", display_name="Alice")
         users = auth.list_users()
         alice = next(u for u in users if u["username"] == "alice")
         assert "id" in alice
@@ -265,8 +266,8 @@ class TestListUsers:
 
     def test_set_role_changes_user_role(self, setup):
         """set_role updates a user's global role."""
-        auth, _ = setup
-        user = auth.register("alice", "password123", "Alice")
+        auth, db = setup
+        user = seed_user(db, "alice", "password123", display_name="Alice")
         user_id = user["id"]
         assert auth.set_role(user_id, "admin") is True
         users = auth.list_users()
@@ -275,15 +276,15 @@ class TestListUsers:
 
     def test_set_role_rejects_invalid_role(self, setup):
         """set_role raises ValueError for invalid roles."""
-        auth, _ = setup
-        user = auth.register("alice", "password123", "Alice")
+        auth, db = setup
+        user = seed_user(db, "alice", "password123", display_name="Alice")
         with pytest.raises(ValueError, match="Invalid role"):
             auth.set_role(user["id"], "superadmin")
 
     def test_get_user_kb_permissions(self, setup):
         """get_user_kb_permissions returns explicit grants."""
-        auth, _ = setup
-        user = auth.register("alice", "password123", "Alice")
+        auth, db = setup
+        user = seed_user(db, "alice", "password123", display_name="Alice")
         auth.grant_kb_permission(user["id"], "test", "write", user["id"])
         perms = auth.get_user_kb_permissions(user["id"])
         assert perms == {"test": "write"}

@@ -29,6 +29,7 @@ from pyrite.server.api import create_app, get_config, get_db, get_repo_service
 from pyrite.services.auth_service import AuthService
 from pyrite.services.repo_service import RepoService
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_user
 
 PUBLIC, PRIVATE = "public-kb", "private-kb"
 SECRET_REPO, OPEN_REPO, MISSING_REPO = "owner/secret", "owner/open", "owner/no-such-repo"
@@ -73,16 +74,16 @@ def env(tmp_path: Path, monkeypatch):
 
     def client_for(username, *, role="write", grant=None):
         c = TestClient(app)
-        r = c.post("/auth/register", json={"username": username, "password": "password123"})
-        assert r.status_code == 200, r.text
-        user = db.execute_sql("SELECT id FROM local_user WHERE username = :u", {"u": username})[0]
-        if role:
-            auth.set_role(user["id"], role)
+        user = seed_user(db, username, "password123", role=role)
         if grant:
             auth.grant_kb_permission(user["id"], PRIVATE, grant, user["id"])
+        c.cookies.set(
+            "pyrite_session",
+            AuthService(db, config.settings.auth).login(username, "password123")[1],
+        )
         return c
 
-    clients = {"admin": client_for("admin-user", role=None)}  # first user: admin
+    clients = {"admin": client_for("admin-user", role="admin")}  # seeded as admin
     clients["peer"] = client_for("peer")  # global write, no grant on PRIVATE
     clients["reader"] = client_for("reader", grant="read")
     clients["writer"] = client_for("writer", grant="write")

@@ -30,6 +30,7 @@ from pyrite.services.ephemeral_service import EphemeralKBService, InvalidEphemer
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
 from pyrite.storage.index import IndexManager
+from tests.auth_seed import seed_and_sign_in
 
 PRIVATE = "priv"
 SECRET = "the source is Alice"
@@ -166,21 +167,15 @@ def server(monkeypatch):
             PRIVATE, "source-identity", "Source identity", "note", SECRET
         )
         owner = TestClient(app)
-        assert (
-            owner.post(
-                "/auth/register", json={"username": "owner", "password": "password123"}
-            ).status_code
-            == 200
-        )
+        seed_and_sign_in(owner, "owner", "password123")  # the sole admin, via the operator path
         writer = TestClient(app)
-        r = writer.post("/auth/register", json={"username": "mallory", "password": "password123"})
-        assert r.status_code == 200, r.text
-        AuthService(db, config.settings.auth).set_role(r.json()["id"], "write")
+        mallory = seed_and_sign_in(writer, "mallory", "password123")
+        AuthService(db, config.settings.auth).set_role(mallory["id"], "write")
         try:
             yield {
                 "tmp": tmp,
                 "writer": writer,
-                "writer_id": r.json()["id"],
+                "writer_id": mallory["id"],
                 "config": config,
                 "db": db,
             }

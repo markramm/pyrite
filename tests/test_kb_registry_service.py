@@ -175,6 +175,10 @@ class TestGetKBConfig:
 
         # Override config to return None for this KB
         registry.config.get_kb.side_effect = lambda name: None
+        # The mock config builds registry rows the way a real, trusted one does.
+        registry.config.kb_config_from_registry_row.side_effect = (
+            PyriteConfig().kb_config_from_registry_row
+        )
 
         cfg = registry.get_kb_config("cfg-test")
         assert cfg is not None

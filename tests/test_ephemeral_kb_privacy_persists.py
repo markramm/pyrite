@@ -22,6 +22,7 @@ from pyrite.server.api import create_app
 from pyrite.services.auth_service import AuthService
 from pyrite.services.ephemeral_service import EphemeralKBService
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_user
 
 
 def _fresh_config(tmp: Path) -> PyriteConfig:
@@ -37,11 +38,23 @@ def _fresh_config(tmp: Path) -> PyriteConfig:
     return config
 
 
-def _register(app, username) -> dict:
-    client = TestClient(app)
-    r = client.post("/auth/register", json={"username": username, "password": "password123"})
-    assert r.status_code == 200, r.text
-    return {"pyrite_session": r.cookies["pyrite_session"]}
+def _register(app, config, username) -> dict:
+    """Seed a user the way an operator would, and sign them in: the first
+    user in the database becomes admin, later ones get ``read`` covering
+    every KB -- what a registrant used to get.
+
+    Seeding and login use their own direct ``PyriteDB`` connection rather
+    than ``auth_seed.app_db``/``sign_in``: this app has no test-supplied
+    ``get_db`` override, so the dependency FastAPI finds is ``create_app``'s
+    own generator function, not a plain callable returning a ``PyriteDB``.
+    """
+    db = PyriteDB(config.settings.index_path)
+    try:
+        seed_user(db, username, "password123")
+        _, token = AuthService(db, config.settings.auth).login(username, "password123")
+    finally:
+        db.close()
+    return {"pyrite_session": token}
 
 
 @pytest.fixture
@@ -49,7 +62,7 @@ def first_boot(tmp_path):
     """Boot 1: alice (write) creates an ephemeral KB and writes an entry in it."""
     config = _fresh_config(tmp_path)
     app = create_app(config=config)
-    cookies = {name: _register(app, name) for name in ("admin", "alice", "bob")}
+    cookies = {name: _register(app, config, name) for name in ("admin", "alice", "bob")}
     db = PyriteDB(config.settings.index_path)
     try:
         auth = AuthService(db, config.settings.auth)
@@ -136,8 +149,8 @@ class TestGrantCommitsWithTheKB:
         config = _fresh_config(tmp_path)
         db = PyriteDB(config.settings.index_path)
         auth = AuthService(db, config.settings.auth)
-        auth.register("admin", "password123")  # first user: the sole admin
-        user = auth.register("alice", "password123")
+        seed_user(db, "admin", role="admin")  # the sole admin, seeded via the operator path
+        user = seed_user(db, "alice", role="read")
         auth.set_role(user["id"], "write")
         return config, db, auth, user
 
@@ -215,8 +228,10 @@ class TestRepairOfEphemeralKBsWithoutPolicy:
 
     def test_legacy_ephemeral_kb_is_hidden_from_other_users_through_the_app(self, tmp_path):
         self._write_legacy_config(tmp_path)
-        app = create_app(config=load_config())
-        bob = TestClient(app, cookies=_register(app, "admin") and _register(app, "bob"))
+        config = load_config()
+        app = create_app(config=config)
+        _register(app, config, "admin")
+        bob = TestClient(app, cookies=_register(app, config, "bob"))
         assert bob.get("/api/kbs/old").status_code == 404
 
 
@@ -263,7 +278,7 @@ class TestRepairOfEphemeralRegistryRowsWithoutConfig:
         )
         save_config(config)
         app = create_app(config=config)
-        cookies = {name: _register(app, name) for name in ("admin", "alice", "bob")}
+        cookies = {name: _register(app, config, name) for name in ("admin", "alice", "bob")}
         db = PyriteDB(config.settings.index_path)
         try:
             auth = AuthService(db, config.settings.auth)

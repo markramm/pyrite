@@ -24,6 +24,7 @@ from ..config import (
     Repository,
     auto_discover_kbs,
     load_config,
+    open_registration_warning,
     save_config,
 )
 from ..exceptions import (
@@ -432,6 +433,8 @@ def serve(
     import uvicorn
 
     config = load_config()
+    if warning := open_registration_warning(config):
+        console.print(f"[yellow]Warning:[/yellow] {warning}")
     host = host or config.settings.host or "127.0.0.1"
     port = port or config.settings.port or 8088
 

@@ -324,6 +324,13 @@ class AuthConfig:
     max_sessions_per_user: int = 5
     allow_registration: bool = True
     require_invite_code: bool = False
+    # Rate limits on the unauthenticated auth endpoints, in the `limits`
+    # syntax slowapi uses ("5/minute", several joined by ";"). Login is
+    # limited per client (every attempt) and per username (failed attempts);
+    # registration per client.
+    login_rate_limit: str = "20/minute;200/hour"
+    login_rate_limit_per_username: str = "5/minute;30/hour"
+    register_rate_limit: str = "5/minute;20/hour"
     providers: dict[str, OAuthProviderConfig] = field(default_factory=dict)
     ephemeral_min_tier: str = "write"
     ephemeral_max_per_user: int = 1
@@ -471,6 +478,9 @@ class PyriteConfig:
 
     # Fallback lookup for DB-registered KBs not in config.yaml
     _db_kb_cache: dict[str, KBConfig] = field(default_factory=dict, repr=False)
+    # Set by load_config for an untrusted repo-local config: every KB, from
+    # the yaml or from the index's registry, must resolve inside this tree.
+    _confine_root: Path | None = field(default=None, repr=False)
 
     def get_kb(self, name: str) -> KBConfig | None:
         """Get a KB by name (config.yaml first, then DB-registered KBs)."""
@@ -478,6 +488,73 @@ class PyriteConfig:
         if kb:
             return kb
         return self._db_kb_cache.get(name)
+
+    def confined_default_role(self, value: str | None) -> str | None:
+        """A default_role as this config may honour it. Under an untrusted
+        repo-local config only "none" is kept: anything that opens a KB would
+        come from the tree (its yaml or its own index), not from an operator
+        of this server. Publishing a KB needs a trusted config."""
+        if self._confine_root is not None and value != "none":
+            return None
+        return value
+
+    def refuse_outside_tree(self, path: Path | str, what: str) -> None:
+        """Raise ConfigError when an untrusted config would reach outside its tree."""
+        if self._confine_root is None:
+            return
+        if not Path(path).expanduser().resolve().is_relative_to(self._confine_root):
+            raise ConfigError(
+                f"Refusing {what}: {path} is outside {self._confine_root}, the tree of the "
+                "untrusted repo-local config in use. Point PYRITE_CONFIG_DIR at your own "
+                "config to work outside it."
+            )
+
+    def kb_config_from_registry_row(self, kb_data: dict) -> KBConfig | None:
+        """The one way an index registry row becomes a KBConfig.
+
+        Returns None -- with a warning -- for a row that must not be used: no
+        name or path, a path that cannot be resolved, or, under an untrusted
+        repo-local config, a path outside that config's tree. Under such a
+        config the row's default_role goes through confined_default_role.
+        Every caller that turns a registry row into a KBConfig uses this, so a
+        row refused at load is not found anywhere else either.
+        """
+        name = kb_data.get("name", "")
+        path = kb_data.get("path", "")
+        if not name or not path:
+            return None
+        default_role = kb_data.get("default_role")
+        try:
+            _refuse_unresolvable(Path(path))
+            if self._confine_root is not None:
+                if not Path(path).expanduser().resolve().is_relative_to(self._confine_root):
+                    logger.warning(
+                        "Not loading registry KB %r: its path is outside the tree of "
+                        "the untrusted repo-local config (%s)",
+                        name,
+                        self._confine_root,
+                    )
+                    return None
+                default_role = self.confined_default_role(default_role)
+            return KBConfig(
+                name=name,
+                path=Path(path),
+                kb_type=kb_data.get("kb_type") or "generic",
+                description=kb_data.get("description") or "",
+                default_role=default_role,
+            )
+        except (OSError, RuntimeError, ValueError):
+            # A registry path that cannot be resolved (an unknown ~user, a
+            # symlink loop) must not stop the load -- this runs while every
+            # entry point is constructed. The KB is left out: unreachable,
+            # never open.
+            logger.warning(
+                "Registry KB %r has a path that cannot be resolved (%s); not loading it",
+                name,
+                path,
+                exc_info=True,
+            )
+            return None
 
     def register_db_kbs(self, db_kbs: list[dict]) -> int:
         """Register DB-added KBs as a fallback lookup (not added to knowledge_bases).
@@ -493,29 +570,8 @@ class PyriteConfig:
             name = kb_data.get("name", "")
             if not name or name in self._kb_by_name:
                 continue
-            path = kb_data.get("path", "")
-            if not path:
-                continue
-            try:
-                _refuse_unresolvable(Path(path))
-                kb = KBConfig(
-                    name=name,
-                    path=Path(path),
-                    kb_type=kb_data.get("kb_type", "generic"),
-                    description=kb_data.get("description", ""),
-                    default_role=kb_data.get("default_role"),
-                )
-            except (OSError, RuntimeError, ValueError):
-                # A registry path that cannot be resolved (an unknown ~user, a
-                # symlink loop) must not stop the load -- this runs while every
-                # entry point is constructed. The KB is left out: unreachable,
-                # never open.
-                logger.warning(
-                    "Registry KB %r has a path that cannot be resolved (%s); not loading it",
-                    name,
-                    path,
-                    exc_info=True,
-                )
+            kb = self.kb_config_from_registry_row(kb_data)
+            if kb is None:
                 continue
             self._db_kb_cache[name] = kb
             added += 1
@@ -688,6 +744,10 @@ class PyriteConfig:
                 "session_ttl_hours": self.settings.auth.session_ttl_hours,
                 "max_sessions_per_user": self.settings.auth.max_sessions_per_user,
                 "allow_registration": self.settings.auth.allow_registration,
+                "require_invite_code": self.settings.auth.require_invite_code,
+                "login_rate_limit": self.settings.auth.login_rate_limit,
+                "login_rate_limit_per_username": self.settings.auth.login_rate_limit_per_username,
+                "register_rate_limit": self.settings.auth.register_rate_limit,
                 "ephemeral_min_tier": self.settings.auth.ephemeral_min_tier,
                 "ephemeral_max_per_user": self.settings.auth.ephemeral_max_per_user,
                 "ephemeral_default_ttl": self.settings.auth.ephemeral_default_ttl,
@@ -774,7 +834,7 @@ class PyriteConfig:
 
         # Load GitHub auth from secure file if referenced
         github_auth = None
-        github_auth_file = CONFIG_DIR / "github_auth.yaml"
+        github_auth_file = trusted_config_dir() / "github_auth.yaml"
         if github_auth_file.exists():
             try:
                 auth_data = load_yaml_file(github_auth_file)
@@ -835,6 +895,14 @@ class PyriteConfig:
                 session_ttl_hours=auth_data.get("session_ttl_hours", 168),
                 max_sessions_per_user=auth_data.get("max_sessions_per_user", 5),
                 allow_registration=auth_data.get("allow_registration", True),
+                require_invite_code=auth_data.get("require_invite_code", False),
+                login_rate_limit=auth_data.get("login_rate_limit", AuthConfig.login_rate_limit),
+                login_rate_limit_per_username=auth_data.get(
+                    "login_rate_limit_per_username", AuthConfig.login_rate_limit_per_username
+                ),
+                register_rate_limit=auth_data.get(
+                    "register_rate_limit", AuthConfig.register_rate_limit
+                ),
                 providers=providers,
                 ephemeral_min_tier=auth_data.get("ephemeral_min_tier", "write"),
                 ephemeral_max_per_user=auth_data.get("ephemeral_max_per_user", 1),
@@ -871,43 +939,78 @@ DEFAULT_CONFIG_DIR = Path("~/.pyrite").expanduser().resolve()
 LOCAL_CONFIG_DIRNAME = ".pyrite"
 
 
-def resolve_config_dir(start: Path | None = None) -> Path:
-    """Where this process reads its config from.
+def _home_config_dir() -> Path:
+    return Path("~/.pyrite").expanduser().resolve()
 
-    1. ``PYRITE_DATA_DIR`` or ``PYRITE_CONFIG_DIR`` when set -- explicit wins.
+
+def resolve_config_source(start: Path | None = None) -> tuple[Path, bool]:
+    """Where this process reads its config from, and whether it is trusted.
+
+    1. ``PYRITE_DATA_DIR`` or ``PYRITE_CONFIG_DIR`` when set -- explicit wins,
+       and is trusted: the user named it.
     2. A repo-local ``.pyrite/config.yaml``, searched upward from ``start``
        (the cwd). A worktree per session (ADR-0032) needs a KB registry that
        points at *that* checkout's ``kb/``; through ``~/.pyrite`` every
        worker's ``pyrite update`` landed in the main checkout instead.
-    3. ``~/.pyrite``.
+       **Untrusted**: it may belong to a cloned or downloaded tree, so only
+       the keys :func:`_restrict_untrusted` lets through are used.
+    3. ``~/.pyrite``, trusted.
     """
     explicit = os.environ.get("PYRITE_DATA_DIR") or os.environ.get("PYRITE_CONFIG_DIR")
     if explicit:
-        return Path(explicit).expanduser().resolve()
+        return Path(explicit).expanduser().resolve(), True
+    home = _home_config_dir()
     here = (start or Path.cwd()).resolve()
     for candidate in (here, *here.parents):
         local = candidate / LOCAL_CONFIG_DIRNAME
         if (local / "config.yaml").is_file():
-            return local.resolve()
-    return Path("~/.pyrite").expanduser().resolve()
+            local = local.resolve()
+            return local, local == home
+    return home, True
 
 
-CONFIG_DIR = resolve_config_dir()
+def resolve_config_dir(start: Path | None = None) -> Path:
+    """The config directory :func:`resolve_config_source` picks."""
+    return resolve_config_source(start)[0]
+
+
+CONFIG_DIR, _import_trusted = resolve_config_source()
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
+# The repo-local directory CONFIG_DIR was resolved to at import, when it was
+# one: a process started inside a tree must not trust that tree's config just
+# because the lookup happened early.
+_UNTRUSTED_IMPORT_DIR: Path | None = None if _import_trusted else CONFIG_DIR
+del _import_trusted
+
+
+def current_config_source() -> tuple[Path, bool]:
+    """The config file for *this call*, and whether it is trusted.
+
+    The module-level CONFIG_DIR is fixed at import. If something pinned it --
+    an env var, a repo-local directory found at import, or a test
+    monkeypatching it away from ~/.pyrite -- honour that. Otherwise resolve
+    again from the cwd, so a process that started elsewhere and `cd`ed into
+    a worktree still finds that worktree's `.pyrite/config.yaml`.
+    """
+    if CONFIG_DIR != _home_config_dir():
+        return CONFIG_FILE, CONFIG_DIR != _UNTRUSTED_IMPORT_DIR
+    config_dir, trusted = resolve_config_source()
+    return config_dir / "config.yaml", trusted
 
 
 def current_config_file() -> Path:
-    """The config file for *this call*.
+    """The config file for *this call* (see :func:`current_config_source`)."""
+    return current_config_source()[0]
 
-    The module-level CONFIG_DIR is fixed at import. If something pinned it --
-    an env var, or a test monkeypatching it away from ~/.pyrite -- honour
-    that. Otherwise resolve again from the cwd, so a process that started
-    elsewhere and `cd`ed into a worktree still finds that worktree's
-    `.pyrite/config.yaml`.
-    """
-    if CONFIG_DIR != Path("~/.pyrite").expanduser().resolve():
-        return CONFIG_FILE
-    return resolve_config_dir() / "config.yaml"
+
+def trusted_config_dir() -> Path:
+    """Where credentials live: CONFIG_DIR, unless that is an untrusted
+    repo-local directory, in which case ``~/.pyrite``. A tree's
+    ``.pyrite/`` neither supplies the user's GitHub credentials nor receives
+    them."""
+    if CONFIG_DIR == _UNTRUSTED_IMPORT_DIR:
+        return _home_config_dir()
+    return CONFIG_DIR
 
 
 def default_data_dir() -> Path:
@@ -961,6 +1064,12 @@ def _apply_env_overrides(config: PyriteConfig) -> None:
         )
     if val := env("PYRITE_AUTH_ALLOW_REGISTRATION"):
         config.settings.auth.allow_registration = val.lower() in ("true", "1", "yes")
+    if val := env("PYRITE_AUTH_LOGIN_RATE_LIMIT"):
+        config.settings.auth.login_rate_limit = val
+    if val := env("PYRITE_AUTH_LOGIN_RATE_LIMIT_PER_USERNAME"):
+        config.settings.auth.login_rate_limit_per_username = val
+    if val := env("PYRITE_AUTH_REGISTER_RATE_LIMIT"):
+        config.settings.auth.register_rate_limit = val
     if val := env("PYRITE_CORS_ORIGINS"):
         config.settings.cors_origins = [s.strip() for s in val.split(",")]
     if val := env("PYRITE_ALLOWED_HOSTS"):
@@ -990,18 +1099,130 @@ def _apply_env_overrides(config: PyriteConfig) -> None:
         config.settings.workspace_path = data_path / "repos"
 
 
+# What a repo-local (untrusted) config may set. Everything
+# here stays inside the tree the config came from, or is a harmless switch;
+# anything that changes what code runs (the embedding model, the editor, AI
+# providers), where Pyrite reads or writes outside the tree, or how a server
+# is exposed (host, auth, API keys, CORS) is ignored. Widening this list is a
+# security decision.
+_UNTRUSTED_TOP_KEYS = frozenset({"version", "knowledge_bases", "settings"})
+_UNTRUSTED_KB_KEYS = frozenset({"name", "path", "kb_type", "description", "read_only", "shortname"})
+# default_role is an exposure setting: from an untrusted source only "none"
+# (which can only close a KB) is kept.
+_UNTRUSTED_SETTINGS_KEYS = frozenset({"index_path", "auto_embed", "search_mode", "summary_length"})
+
+
+def _untrusted_settings_defaults() -> dict[str, Any]:
+    """Settings as ``to_dict`` writes them for a fresh config: a file Pyrite
+    saved back holds these, and holding them changes nothing."""
+    return PyriteConfig().to_dict()["settings"]
+
+
+def _untrusted_kb_entry(kb: dict[str, Any], ignored: list[str] | None = None) -> dict[str, Any]:
+    """A KB entry reduced to what an untrusted config may set."""
+    kept = {k: v for k, v in kb.items() if k in _UNTRUSTED_KB_KEYS}
+    if kb.get("default_role") == "none":
+        kept["default_role"] = "none"
+    if ignored is not None:
+        for key, value in kb.items():
+            if key in kept or value in (None, "", False, []):
+                continue
+            ignored.append(f"knowledge_bases[{kb.get('name')}].{key}")
+    return kept
+
+
+def _restrict_untrusted(data: Any, config_file: Path) -> tuple[dict[str, Any], list[str]]:
+    """Keep only the keys an untrusted config may set. Returns the filtered
+    data and the names of ignored keys whose value would have changed
+    something (a key holding its default is dropped silently)."""
+    if not isinstance(data, dict):
+        return {}, []
+    ignored: list[str] = []
+    kept: dict[str, Any] = {}
+    for key, value in data.items():
+        if key in _UNTRUSTED_TOP_KEYS:
+            kept[key] = value
+        elif value:
+            ignored.append(key)
+
+    kbs = []
+    for kb in kept.get("knowledge_bases") or []:
+        if not isinstance(kb, dict):
+            continue
+        kbs.append(_untrusted_kb_entry(kb, ignored))
+    if "knowledge_bases" in kept:
+        kept["knowledge_bases"] = kbs
+
+    settings = kept.get("settings")
+    if isinstance(settings, dict):
+        defaults = _untrusted_settings_defaults()
+        for key, value in settings.items():
+            if key not in _UNTRUSTED_SETTINGS_KEYS and value != defaults.get(key, None):
+                ignored.append(f"settings.{key}")
+        kept["settings"] = {k: v for k, v in settings.items() if k in _UNTRUSTED_SETTINGS_KEYS}
+    elif "settings" in kept:
+        kept["settings"] = {}
+    return kept, ignored
+
+
+def _contain_untrusted_paths(config: PyriteConfig, root: Path) -> list[str]:
+    """Drop KBs, and reset an index path, that resolve outside ``root``
+    (symlinks followed). Returns what was refused."""
+    refused: list[str] = []
+
+    def inside(path: Path) -> bool:
+        return Path(path).resolve().is_relative_to(root)
+
+    keep = []
+    for kb in config.knowledge_bases:
+        if inside(kb.path):
+            keep.append(kb)
+        else:
+            refused.append(f"knowledge base {kb.name!r} (path outside {root})")
+    if len(keep) != len(config.knowledge_bases):
+        config.knowledge_bases = keep
+        config._rebuild_index()
+
+    # workspace_path is never read from config.yaml, so it is always the
+    # default beside this config file: inside the tree.
+    if not inside(config.settings.index_path):
+        refused.append("settings.index_path (outside the tree)")
+        config.settings.index_path = Settings().index_path
+    return refused
+
+
 def load_config() -> PyriteConfig:
     """
     Load configuration from config.yaml.
 
-    Creates default config if it doesn't exist.
+    Creates default config if it doesn't exist. A repo-local config is
+    untrusted (see :func:`resolve_config_source`): only the keys in
+    ``_UNTRUSTED_*_KEYS`` are read from it, and only paths inside its own
+    tree; the rest is ignored with a warning.
     """
     ensure_config_dir()
 
-    config_file = current_config_file()
+    config_file, trusted = current_config_source()
     if config_file.exists():
         data = load_yaml_file(config_file)
+        ignored: list[str] = []
+        if not trusted:
+            data, ignored = _restrict_untrusted(data, config_file)
         config = PyriteConfig.from_dict(data)
+        if not trusted:
+            root = config_file.parent.parent.resolve()
+            config._confine_root = root
+            ignored += _contain_untrusted_paths(config, root)
+            if ignored:
+                logger.warning(
+                    "Ignoring %s from the untrusted repo-local config %s: a config "
+                    "found by searching up from the working directory may only name "
+                    "paths inside its own tree. To trust it in full, point "
+                    "PYRITE_CONFIG_DIR at %s.",
+                    ", ".join(ignored),
+                    config_file,
+                    config_file.parent,
+                )
     else:
         # Create default config
         config = PyriteConfig()
@@ -1014,6 +1235,37 @@ def load_config() -> PyriteConfig:
         kb.load_kb_yaml()
 
     return config
+
+
+def open_registration_warning(config: PyriteConfig) -> str | None:
+    """The startup warning for an auth-enabled server anyone can sign up to.
+
+    None unless auth is on and registration needs no invite code. A
+    self-registered user reads only KBs whose ``default_role`` is read or
+    write, so the warning names those: they are what a
+    stranger gets by creating an account.
+    """
+    auth = config.settings.auth
+    if not auth.enabled or not auth.allow_registration or auth.require_invite_code:
+        return None
+    public = sorted(kb.name for kb in config.all_kbs() if kb.default_role in ("read", "write"))
+    readable = (
+        f"they can read (never write) KBs with default_role read or write: {', '.join(public)}"
+        if public
+        else "no KB has default_role read or write, so they can read nothing until granted"
+    )
+    github = any(p.client_id for p in auth.providers.values())
+    how = "an account (on the web form or through GitHub sign-in)" if github else "an account"
+    advice = "Set settings.auth.allow_registration: false or require_invite_code: true to close it"
+    if github:
+        advice += (
+            "; GitHub sign-up then creates accounts only for members of the provider's "
+            "allowed_orgs or of an org in its org_tier_map"
+        )
+    return (
+        "Auth is enabled with open registration: anyone who can reach this server "
+        f"can create {how}, and {readable}. {advice}."
+    )
 
 
 def _repair_ephemeral_default_role(kb: KBConfig) -> None:
@@ -1136,7 +1388,36 @@ def save_config(
     real_file = config_file.resolve()
     if real_file != config_file.absolute():
         logger.warning("Writing Pyrite config %s through symlink %s", real_file, config_file)
-    dump_yaml_file(config.to_dict(), config_file)
+    trusted = current_config_source()[1]
+    dump_yaml_file(
+        config.to_dict() if trusted else _untrusted_save_data(config, config_file), config_file
+    )
+
+
+def _untrusted_save_data(config: PyriteConfig, config_file: Path) -> dict[str, Any]:
+    """What may be written back to an untrusted repo-local config.
+
+    The KB registry (allowlisted keys only), and the file's own allowlisted
+    settings exactly as they were on disk. Nothing from memory beyond the
+    registry: credentials and environment-sourced values are never written.
+    """
+    on_disk: dict[str, Any] = {}
+    if config_file.exists():
+        try:
+            loaded = load_yaml_file(config_file)
+            if isinstance(loaded, dict) and isinstance(loaded.get("settings"), dict):
+                on_disk = loaded["settings"]
+        except Exception:
+            logger.warning("Could not re-read %s; saving no settings", config_file)
+    full = config.to_dict()
+    data: dict[str, Any] = {
+        "version": full.get("version", "1.0"),
+        "knowledge_bases": [_untrusted_kb_entry(kb) for kb in full.get("knowledge_bases", [])],
+    }
+    settings = {k: v for k, v in on_disk.items() if k in _UNTRUSTED_SETTINGS_KEYS}
+    if settings:
+        data["settings"] = settings
+    return data
 
 
 def auto_discover_kbs(search_paths: list[Path] | None = None) -> list[KBConfig]:

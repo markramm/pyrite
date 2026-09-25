@@ -20,6 +20,7 @@ from pyrite.services.auth_service import AuthService
 from pyrite.services.kb_service import KBService
 from pyrite.services.link_discovery_service import LinkDiscoveryService
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_and_sign_in
 
 PUBLIC, PRIVATE = "public-kb", "private-kb"
 
@@ -77,14 +78,18 @@ def env():
         )
 
         def client_for(username):
+            # A global-read user (seeded the operator's way): its read role
+            # covers every KB without a default_role, and it must still be
+            # denied the default_role: none KB.
             c = TestClient(app)
             if username:
-                r = c.post("/auth/register", json={"username": username, "password": "password123"})
-                assert r.status_code == 200, r.text
+                seed_and_sign_in(c, username, "password123", role="read")
             return c
 
-        admin = client_for("admin-user")  # first registered user is admin
-        peer = client_for("peer")  # second: plain read-tier user
+        # admin and peer are seeded via the operator path.
+        admin = TestClient(app)
+        seed_and_sign_in(admin, "admin-user", "password123", role="admin")
+        peer = client_for("peer")
         anon = client_for(None)
         try:
             yield {"admin": admin, "peer": peer, "anon": anon, "db": db, "config": config}

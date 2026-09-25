@@ -23,7 +23,7 @@ try:
 except ImportError:
     HAS_HTTPX = False
 
-from .config import CONFIG_DIR, GitHubAuth, ensure_config_dir
+from .config import GitHubAuth, trusted_config_dir
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,11 @@ CALLBACK_PATH = "/callback"
 
 def get_auth_file_path() -> Path:
     """Get path to GitHub auth credentials file."""
-    ensure_config_dir()
-    return CONFIG_DIR / "github_auth.yaml"
+    # Never a repo-local .pyrite/: a tree the user merely works in neither
+    # supplies their GitHub credentials nor receives them.
+    config_dir = trusted_config_dir()
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir / "github_auth.yaml"
 
 
 def load_github_auth() -> GitHubAuth | None:

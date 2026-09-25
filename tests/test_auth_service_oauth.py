@@ -14,6 +14,8 @@ def db_and_service(tmp_path):
     with PyriteDB(db_path) as db:
         config = AuthConfig(enabled=True, allow_registration=True)
         service = AuthService(db, config)
+        # Sign-up is closed until an operator-created admin exists (#13).
+        service.create_user("root", "rootpass123", role="admin")
         yield db, service
 
 
@@ -47,7 +49,7 @@ class TestOAuthLoginNewUser:
         assert user["username"] == "octocat"
         assert user["auth_provider"] == "github"
         assert user["avatar_url"] == "https://avatars.githubusercontent.com/u/12345"
-        assert user["role"] == "admin"  # first user gets admin
+        assert user["role"] == "read"  # the provider's default tier, never auto-admin
         assert token  # non-empty
 
     def test_second_oauth_user_gets_default_tier(self, db_and_service, provider_config):
@@ -131,8 +133,6 @@ class TestTierFromOrgMap:
     def test_tier_from_org_map(self, db_and_service, github_profile, provider_config):
         _, service = db_and_service
         provider_config.org_tier_map = {"my-org": "write", "other-org": "read"}
-        # First create a local user so this one isn't admin
-        service.register("localuser", "password123")
 
         user, _ = service.oauth_login(github_profile, provider_config)
         assert user["role"] == "write"  # highest match
@@ -140,8 +140,6 @@ class TestTierFromOrgMap:
     def test_tier_highest_wins(self, db_and_service, provider_config):
         _, service = db_and_service
         provider_config.org_tier_map = {"org-a": "read", "org-b": "admin"}
-        # Seed a local user first so OAuth user isn't auto-admin
-        service.register("seeduser", "password123")
 
         profile = OAuthProfile(
             provider="github",

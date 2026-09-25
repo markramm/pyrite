@@ -16,6 +16,7 @@ from pyrite.server.api import create_app, get_config, get_db
 from pyrite.services.auth_service import AuthService
 from pyrite.storage.database import PyriteDB
 from pyrite.storage.migrations import MigrationManager
+from tests.auth_seed import seed_and_sign_in, seed_user
 
 
 @pytest.fixture
@@ -120,8 +121,8 @@ class TestMigrationV14:
 
 class TestAuthServiceTokenMethods:
     def test_store_and_retrieve_token(self, auth_env):
-        service, _ = auth_env
-        user = service.register("alice", "password123")
+        service, db = auth_env
+        user = seed_user(db, "alice", "password123")
 
         service.store_github_token(user["id"], "ghp_test_token_123", "public_repo")
         token, scopes = service.get_github_token_for_user(user["id"])
@@ -136,15 +137,15 @@ class TestAuthServiceTokenMethods:
         assert scopes is None
 
     def test_get_token_no_token_stored(self, auth_env):
-        service, _ = auth_env
-        user = service.register("bob", "password123")
+        service, db = auth_env
+        user = seed_user(db, "bob", "password123")
         token, scopes = service.get_github_token_for_user(user["id"])
         assert token is None
         assert scopes is None
 
     def test_clear_token(self, auth_env):
-        service, _ = auth_env
-        user = service.register("charlie", "password123")
+        service, db = auth_env
+        user = seed_user(db, "charlie", "password123")
         service.store_github_token(user["id"], "ghp_token", "public_repo")
 
         result = service.clear_github_token(user["id"])
@@ -179,8 +180,8 @@ class TestGitHubStatusEndpoint:
 
     def test_status_logged_in_no_token(self, tmpdir):
         client, _, _ = _make_github_client(tmpdir)
-        # Register and login
-        client.post("/auth/register", json={"username": "alice", "password": "password123"})
+        # The sole admin, seeded via the operator path, and signed in.
+        seed_and_sign_in(client, "alice", "password123")
         r = client.get("/auth/github/status")
         assert r.status_code == 200
         data = r.json()
@@ -195,7 +196,7 @@ class TestGitHubConnectEndpoint:
 
     def test_connect_redirects_to_github(self, tmpdir):
         client, _, _ = _make_github_client(tmpdir)
-        client.post("/auth/register", json={"username": "alice", "password": "password123"})
+        seed_and_sign_in(client, "alice", "password123")
         r = client.get("/auth/github/connect", follow_redirects=False)
         assert r.status_code == 302
         location = r.headers["location"]
@@ -218,8 +219,8 @@ class TestGitHubDisconnectEndpoint:
 
     def test_disconnect_clears_token(self, tmpdir):
         client, config, db = _make_github_client(tmpdir)
-        # Register and login
-        client.post("/auth/register", json={"username": "alice", "password": "password123"})
+        # The sole admin, seeded via the operator path, and signed in.
+        seed_and_sign_in(client, "alice", "password123")
 
         # Manually store a token
         auth_service = AuthService(db, config.settings.auth)

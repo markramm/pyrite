@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from pyrite.config import AuthConfig, KBConfig, PyriteConfig, Settings, UsageTierConfig
 from pyrite.server.api import create_app, get_config, get_db
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_and_sign_in
 
 
 def _mock_anthropic_module():
@@ -71,7 +72,9 @@ def quota_env():
         app.dependency_overrides[get_db] = lambda: db
 
         client = TestClient(app)
-        client.post("/auth/register", json={"username": "alice", "password": "password123"})
+        seed_and_sign_in(
+            client, "alice", "password123"
+        )  # the sole admin, seeded via the operator path
 
         # Seed one entry to summarize, plus a second so suggest-links has a
         # non-self candidate to find via search.

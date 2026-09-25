@@ -33,11 +33,18 @@ from pyrite.server.api import create_app
 from pyrite.services.auth_service import AuthService
 from pyrite.services.clipper import ClipperService, ClipResult
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_user
 
 PRIVATE = "p"  # default_role none
 READONLY = "k"  # default_role read
 OPEN = "w"  # no default_role: the caller's global role (anonymous: anonymous_tier)
 MISSING = "no-such-kb"
+
+
+def _token(db, config, username, password="password123") -> str:
+    """A session token for a seeded user (the app's own requests read the
+    same database file)."""
+    return AuthService(db, config.settings.auth).login(username, password)[1]
 
 
 @pytest.fixture
@@ -63,17 +70,18 @@ def _build(tmp: Path, anonymous_tier: str | None):
         ),
     )
     app = create_app(config=config)
-    tokens = {}
-    for name in ("admin", "alice"):
-        r = TestClient(app).post(
-            "/auth/register", json={"username": name, "password": "password123"}
-        )
-        assert r.status_code == 200, r.text
-        tokens[name] = r.cookies["pyrite_session"]
     db = PyriteDB(config.settings.index_path)
+    # Seed via the operator path: registration is closed
+    # until an admin exists, and a self-registered user no longer reads every
+    # KB. admin is the first user seeded; alice gets global "write" (covering
+    # every KB the way a registrant used to), matching what this test needs.
+    seed_user(db, "admin", "password123", role="admin")
+    seed_user(db, "alice", "password123", role="write")
+    tokens = {
+        "admin": _token(db, config, "admin", "password123"),
+        "alice": _token(db, config, "alice", "password123"),
+    }
     auth = AuthService(db, config.settings.auth)
-    users = {u["username"]: u["id"] for u in auth.list_users()}
-    auth.set_role(users["alice"], "write")
     reviews = {}
     for kb in (PRIVATE, READONLY, OPEN):
         db.register_kb(kb, "generic", str(tmp / kb))

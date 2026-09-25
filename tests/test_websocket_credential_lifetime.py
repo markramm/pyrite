@@ -33,6 +33,7 @@ from pyrite.server.websocket import manager
 from pyrite.services.auth_service import AuthService
 from pyrite.services.clipper import ClipperService, ClipResult
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_and_sign_in
 
 PUBLIC, PRIVATE = "public-kb", "private-kb"
 MARKER = {"type": "kb_synced", "entry_id": "", "kb_name": ""}
@@ -105,7 +106,13 @@ def env(stub_clip):
     with tempfile.TemporaryDirectory() as d:
         config = _config(Path(d), api_key=OPERATOR_KEY)
         app = create_app(config=config)
-        tokens = {name: _register(app, name) for name in ("admin-user", "alice", "bob")}
+        # admin-user is seeded via the operator path;
+        # alice and bob then self-register for real and get explicit grants
+        # below, so global_access is not needed for what this test checks.
+        admin_client = TestClient(app)
+        seed_and_sign_in(admin_client, "admin-user", "password123", role="admin")
+        tokens = {"admin-user": admin_client.cookies["pyrite_session"]}
+        tokens.update({name: _register(app, name) for name in ("alice", "bob")})
 
         def setup(auth):
             users = {u["username"]: u["id"] for u in auth.list_users()}
@@ -197,7 +204,7 @@ class TestLogout:
         with tempfile.TemporaryDirectory() as d:
             config = _config(Path(d), max_sessions=1)
             app = create_app(config=config)
-            _register(app, "admin-user")
+            seed_and_sign_in(TestClient(app), "admin-user", "password123", role="admin")
             old = _register(app, "alice")
             with TestClient(app) as c:
                 with c.websocket_connect("/ws", headers=_cookie(old)) as ws:
@@ -381,7 +388,9 @@ class TestUnaffectedSockets:
     def test_anonymous_socket_survives_a_users_logout(self, stub_clip):
         with tempfile.TemporaryDirectory() as d:
             app = create_app(config=_config(Path(d), anonymous_tier="read"))
-            token = _register(app, "admin-user")
+            admin_client = TestClient(app)
+            seed_and_sign_in(admin_client, "admin-user", "password123", role="admin")
+            token = admin_client.cookies["pyrite_session"]
             with TestClient(app) as c, c.websocket_connect("/ws") as anon:
                 c.post("/auth/logout", headers=_cookie(token))
                 _assert_open(anon, c)

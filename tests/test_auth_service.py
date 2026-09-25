@@ -10,19 +10,21 @@ from pyrite.storage.database import PyriteDB
 
 @pytest.fixture
 def auth_env(tmp_path):
-    """Create a fresh DB + AuthService for each test."""
+    """A fresh DB + AuthService with an operator-created admin ("root"):
+    registration is closed until one exists."""
     db_path = tmp_path / "index.db"
     with PyriteDB(db_path) as db:
         config = AuthConfig(enabled=True)
         service = AuthService(db, config)
+        service.create_user("root", "rootpass123", role="admin")
         yield service, db
 
 
 class TestRegister:
-    def test_first_user_is_admin(self, auth_env):
+    def test_registrant_is_read_not_admin(self, auth_env):
         service, _ = auth_env
         user = service.register("alice", "password123")
-        assert user["role"] == "admin"
+        assert user["role"] == "read"
         assert user["username"] == "alice"
 
     def test_second_user_is_read(self, auth_env):
@@ -116,7 +118,7 @@ class TestSessions:
         with PyriteDB(tmp_path / "index.db") as db:
             config = AuthConfig(enabled=True, max_sessions_per_user=2)
             service = AuthService(db, config)
-            service.register("alice", "password123")
+            service.create_user("alice", "password123")
             _, t1 = service.login("alice", "password123")
             _, t2 = service.login("alice", "password123")
             _, t3 = service.login("alice", "password123")
@@ -139,7 +141,7 @@ class TestRoles:
 
     def test_set_role(self, auth_env):
         service, _ = auth_env
-        service.register("alice", "password123")  # first user: the sole admin
+        service.register("alice", "password123")  # "root" is the sole admin
         reg = service.register("bob", "password456")
         assert service.set_role(reg["id"], "write") is True
         user = service.get_user(reg["id"])

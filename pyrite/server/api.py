@@ -695,7 +695,9 @@ def resolve_kb_default_role(config: PyriteConfig, db: PyriteDB, kb_name: str) ->
     if kb_config and kb_config.default_role is not None:
         return kb_config.default_role
     row = db._raw_conn.execute("SELECT default_role FROM kb WHERE name = ?", (kb_name,)).fetchone()
-    return row[0] if row else None
+    # Under an untrusted config the index belongs to the tree: a value in it
+    # that opens a KB is ignored (see PyriteConfig.confined_default_role).
+    return config.confined_default_role(row[0]) if row else None
 
 
 async def resolve_effective_kb_role(
@@ -1548,7 +1550,11 @@ def main():
     """Run the API server."""
     import uvicorn
 
+    from ..config import open_registration_warning
+
     config = load_config()
+    if warning := open_registration_warning(config):
+        logger.warning(warning)
     uvicorn.run(
         "pyrite.server.api:app",
         host=config.settings.host,

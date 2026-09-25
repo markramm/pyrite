@@ -13,6 +13,8 @@ tags: [core, config]
 
 The configuration system manages multi-KB setups, global application settings, repository definitions, and GitHub authentication. Configuration is loaded from `~/.pyrite/config.yaml` (or `$PYRITE_CONFIG_DIR`), with per-KB overrides in each KB's `kb.yaml` file and environment variable fallbacks.
 
+A repo-local `.pyrite/config.yaml` found by searching up from the cwd (the ADR-0032 worktree registry) is untrusted: `load_config` reads only the `_UNTRUSTED_*_KEYS` allowlist from it (KB registry entries inside its tree, `index_path` inside its tree, a few switches) and warns about the rest; credentials always come from `trusted_config_dir()`. `~/.pyrite` and an explicit `PYRITE_CONFIG_DIR`/`PYRITE_DATA_DIR` are trusted in full.
+
 ## Key Files
 
 | File | Purpose |

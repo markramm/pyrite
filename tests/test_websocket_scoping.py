@@ -34,6 +34,7 @@ from pyrite.server.websocket import manager, origin_allowed
 from pyrite.services.auth_service import AuthService
 from pyrite.services.clipper import ClipperService, ClipResult
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_and_sign_in
 
 PUBLIC, PRIVATE = "public-kb", "private-kb"
 MARKER = {"type": "kb_synced", "entry_id": "", "kb_name": ""}
@@ -54,15 +55,6 @@ def _config(tmp: Path, *, auth: bool, anonymous_tier=None, api_key="") -> Pyrite
             auth=AuthConfig(enabled=auth, allow_registration=True, anonymous_tier=anonymous_tier),
         ),
     )
-
-
-def _register(app, username) -> str:
-    """Register through the real route; return the session token it set."""
-    r = TestClient(app).post(
-        "/auth/register", json={"username": username, "password": "password123"}
-    )
-    assert r.status_code == 200, r.text
-    return r.cookies["pyrite_session"]
 
 
 def _cookie(token):
@@ -86,12 +78,22 @@ def secured(stub_clip):
     with tempfile.TemporaryDirectory() as d:
         config = _config(Path(d), auth=True)
         app = create_app(config=config)
-        tokens = {name: _register(app, name) for name in ("admin-user", "granted", "peer")}
+        # Seeded the operator's way. granted and peer hold the global read
+        # role (covering every KB without a default_role), so peer is the
+        # persona denied the default_role: none KB; granted gets a grant.
+        tokens = {}
+        admin_client = TestClient(app)
+        admin_user = seed_and_sign_in(admin_client, "admin-user", "password123", role="admin")
+        tokens["admin-user"] = admin_client.cookies["pyrite_session"]
+        for name in ("granted", "peer"):
+            c = TestClient(app)
+            seed_and_sign_in(c, name, "password123", role="read")
+            tokens[name] = c.cookies["pyrite_session"]
         db = PyriteDB(config.settings.index_path)
         try:
             auth = AuthService(db, config.settings.auth)
             users = {u["username"]: u["id"] for u in auth.list_users()}
-            auth.grant_kb_permission(users["granted"], PRIVATE, "read", users["admin-user"])
+            auth.grant_kb_permission(users["granted"], PRIVATE, "read", admin_user["id"])
         finally:
             db.close()
         yield {"app": app, "tokens": tokens}
@@ -246,7 +248,9 @@ class TestOtherIdentities:
     def test_anonymous_tier_admits_visitor_scoped_to_public(self, stub_clip):
         with tempfile.TemporaryDirectory() as d:
             app = create_app(config=_config(Path(d), auth=True, anonymous_tier="read"))
-            admin_token = _register(app, "admin-user")
+            admin_client = TestClient(app)
+            seed_and_sign_in(admin_client, "admin-user", "password123", role="admin")
+            admin_token = admin_client.cookies["pyrite_session"]
             with TestClient(app) as c, c.websocket_connect("/ws") as anon:
                 _clip(c, PRIVATE, headers=_cookie(admin_token))
                 public_id = _clip(c, PUBLIC, headers=_cookie(admin_token))

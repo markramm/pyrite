@@ -20,6 +20,7 @@ from pyrite.server.api import create_app, get_config, get_db
 from pyrite.services.auth_service import AuthService
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_and_sign_in
 
 PUBLIC, PRIVATE = "public-kb", "private-kb"
 SECRET = "the source is Alice"
@@ -92,7 +93,8 @@ def env():
                 AuthService(db, config.settings.auth).set_role(r.json()["id"], role)
             return c, r.json()["id"]
 
-        admin, _ = client_for("owner")  # first registered user is admin
+        admin = TestClient(app)
+        seed_and_sign_in(admin, "owner", "password123")  # the sole admin, via the operator path
         writer, writer_id = client_for("mallory", role="write")
         try:
             yield {
