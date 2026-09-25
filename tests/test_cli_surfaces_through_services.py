@@ -19,6 +19,10 @@ from pyrite.storage.index import IndexManager
 
 runner = CliRunner()
 
+pytestmark = pytest.mark.control(
+    reason="characterization for #380: pins behaviour before it moves behind a service, so it passes with and without the change by design"
+)
+
 
 def _config(tmp_path, *, indexed=True):
     kb_path = tmp_path / "notes"

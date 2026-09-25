@@ -106,6 +106,11 @@ RULES = (
 )
 
 
+_SELF_TEST = pytest.mark.control(
+    reason="tests the ratchet itself (its scanner, allowlist bookkeeping or the shared inventory), which this PR adds: true on either side of the change"
+)
+
+
 def find_reaches(source: str, rel: str) -> dict[tuple[str, str], int]:
     """{(``rel::qualname``, rule): count} for every reach in ``source``."""
     found: dict[tuple[str, str], int] = {}
@@ -208,6 +213,7 @@ def test_no_surface_reaches_past_the_services(reaches):
     )
 
 
+@_SELF_TEST
 def test_allowlist_has_no_stale_entries(reaches):
     stale = sorted(f"{where} [{rule}]" for where, rule in ALLOWLIST if (where, rule) not in reaches)
     assert not stale, (
@@ -216,6 +222,7 @@ def test_allowlist_has_no_stale_entries(reaches):
     )
 
 
+@_SELF_TEST
 def test_allowlist_only_shrinks():
     assert len(ALLOWLIST) == ALLOWLIST_SIZE, (
         f"ALLOWLIST has {len(ALLOWLIST)} entries but ALLOWLIST_SIZE is {ALLOWLIST_SIZE}. "
@@ -238,6 +245,7 @@ def test_composition_roots_are_real_and_needed(reaches):
 # -- The rules themselves: each catches what it says it does -----------------
 
 
+@_SELF_TEST
 @pytest.mark.parametrize(
     ("snippet", "rule"),
     [
@@ -256,6 +264,7 @@ def test_each_rule_catches_its_reach(snippet, rule):
     assert found == {("pyrite/server/endpoints/new_endpoint.py::h", rule): 1}
 
 
+@_SELF_TEST
 def test_a_new_endpoint_touching_db_fails_the_ratchet(reaches):
     """The ticket's acceptance: the test fails when a new endpoint touches `.db.`."""
     new = find_reaches(
@@ -267,6 +276,7 @@ def test_a_new_endpoint_touching_db_fails_the_ratchet(reaches):
         test_no_surface_reaches_past_the_services(combined)
 
 
+@_SELF_TEST
 @pytest.mark.parametrize(
     "snippet",
     [
@@ -281,6 +291,7 @@ def test_what_the_rules_do_not_catch(snippet):
     assert find_reaches(snippet, "pyrite/cli/x.py") == {}
 
 
+@_SELF_TEST
 def test_the_provider_module_may_take_get_db_and_build_auth_service():
     src = "def get_x(db=Depends(get_db)):\n    return AuthService(db, None)\n"
     assert find_reaches(src, PROVIDER_MODULE) == {}
@@ -300,6 +311,7 @@ def _is_scanned(source: Path | None) -> bool:
     return rel.startswith("pyrite/") and not rel.startswith(LAYERS_BELOW_THE_SURFACES)
 
 
+@_SELF_TEST
 def test_every_rest_operation_is_in_a_scanned_module():
     ops = rest_operations()
     assert len(ops) > 100  # the walk found the app, not a stub
@@ -307,6 +319,7 @@ def test_every_rest_operation_is_in_a_scanned_module():
     assert not unscanned, "REST handlers outside the scanned surfaces:\n  " + "\n  ".join(unscanned)
 
 
+@_SELF_TEST
 def test_every_mcp_tool_is_in_a_scanned_module_or_an_extension():
     with mcp_server() as server:
         tools = mcp_tools(server)

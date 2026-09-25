@@ -151,6 +151,9 @@ def test_admin_can_export_private_kb(env):
     assert SECRET in _bare_repo_history(bare)
 
 
+@pytest.mark.control(
+    reason="characterization for #380: pins behaviour before it moves behind a service, so it passes with and without the change by design"
+)
 def test_export_hands_the_signed_in_users_github_token_to_the_service(env, monkeypatch):
     """Characterizes #380's move of the token lookup to the auth provider: a
     signed-in caller's stored GitHub token reaches the export service, and a

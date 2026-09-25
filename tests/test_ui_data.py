@@ -16,6 +16,10 @@ from pyrite.models.core_types import EventEntry, NoteEntry
 from pyrite.storage.database import PyriteDB
 from pyrite.storage.index import IndexManager
 
+pytestmark = pytest.mark.control(
+    reason="characterization for #380: pins behaviour before it moves behind a service, so it passes with and without the change by design"
+)
+
 
 def _passthrough(*args, **kwargs):
     if len(args) == 1 and callable(args[0]) and not kwargs:

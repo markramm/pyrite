@@ -101,6 +101,9 @@ class TestBlocksAPI:
         paths = resp.json()["paths"]
         assert "/api/entries/{entry_id}/blocks" in paths
 
+    @pytest.mark.control(
+        reason="characterization for #380: pins behaviour before it moves behind a service, so it passes with and without the change by design"
+    )
     def test_get_entry_blocks_filter_by_block_id(self, client):
         """Filter by block_id returns exactly that block (characterizes #380's move)."""
         all_blocks = client.get("/api/entries/test-note/blocks?kb=test-kb").json()["blocks"]
@@ -109,6 +112,9 @@ class TestBlocksAPI:
         assert resp.status_code == 200
         assert resp.json()["blocks"] == [target]
 
+    @pytest.mark.control(
+        reason="characterization for #380: pins behaviour before it moves behind a service, so it passes with and without the change by design"
+    )
     def test_get_entry_blocks_filters_combine(self, client):
         resp = client.get(
             "/api/entries/test-note/blocks?kb=test-kb&heading=Details&block_type=paragraph"
@@ -118,6 +124,9 @@ class TestBlocksAPI:
         assert data["blocks"][0]["content"].startswith("Some details")
 
 
+@pytest.mark.control(
+    reason="characterization for #380: pins behaviour before it moves behind a service, so it passes with and without the change by design"
+)
 class TestResolveFragments:
     """`/entries/resolve` with a `#heading` or `^block-id` fragment returns the
     matching block's content (characterizes #380's move to BlockService)."""

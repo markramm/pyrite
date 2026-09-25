@@ -12,6 +12,10 @@ from pyrite.config import KBConfig, PyriteConfig, Settings
 from pyrite.server.mcp_server import PyriteMCPServer
 from pyrite.storage.database import PyriteDB
 
+pytestmark = pytest.mark.control(
+    reason="characterization for #380: pins behaviour before it moves behind a service, so it passes with and without the change by design"
+)
+
 
 @pytest.fixture
 def server(tmp_path):

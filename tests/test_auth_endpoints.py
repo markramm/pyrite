@@ -625,6 +625,9 @@ class TestKBPermissionsCRUD:
         assert r.json()["permissions"] == []
 
 
+@pytest.mark.control(
+    reason="characterization for #380: pins behaviour before it moves behind a service, so it passes with and without the change by design"
+)
 class TestKBPermissionsForKBAdmins:
     """The non-global-admin branch of /api/kbs/{name}/permissions: a KB admin
     by grant or by the KB's default role may manage grants, anyone else gets
