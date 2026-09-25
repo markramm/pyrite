@@ -373,6 +373,186 @@ class TestSubdirectoryKB:
         assert "Version 1" in content
 
 
+# ---------------------------------------------------------------------------
+# #432: a server write records a version, readable immediately -- and a
+# renamed entry's pre-rename version is readable.
+# ---------------------------------------------------------------------------
+
+
+class TestRecordCommit:
+    """VersionService.record_commit(kb_name, commit_hash) turns a commit's
+    changed entry files into entry_version rows, called from
+    ExportService.commit_kb after a successful commit (#432)."""
+
+    @pytest.fixture
+    def kb_setup(self, tmp_path):
+        """A git-backed KB with one committed entry, indexed but with no
+        entry_version rows recorded -- as if committed through the server
+        before #432, where nothing wrote a version row."""
+        kb_path = tmp_path / "test-kb"
+        kb_path.mkdir()
+        subprocess.run(["git", "init"], cwd=str(kb_path), capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=str(kb_path),
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=str(kb_path), capture_output=True
+        )
+
+        entry_file = kb_path / "a.md"
+        entry_file.write_text("---\nid: entry-1\ntitle: V1\ntype: note\n---\n\nVersion 1")
+        subprocess.run(["git", "add", "."], cwd=str(kb_path), capture_output=True)
+        subprocess.run(["git", "commit", "-m", "v1"], cwd=str(kb_path), capture_output=True)
+        commit1 = _git(kb_path, "rev-parse", "HEAD")
+
+        config = PyriteConfig(
+            knowledge_bases=[KBConfig(name="test-kb", path=kb_path)],
+            settings=Settings(index_path=tmp_path / "index.db"),
+        )
+        db = PyriteDB(tmp_path / "index.db")
+
+        from pyrite.storage.index import IndexManager
+
+        idx = IndexManager(db, config)
+        idx.index_all()
+
+        svc = VersionService(config, db)
+        yield svc, db, config, kb_path, commit1
+        db.close()
+
+    def test_server_commit_recorded_and_readable_immediately(self, kb_setup):
+        svc, db, config, kb_path, commit1 = kb_setup
+
+        # No reindex -- record_commit is called right after the commit,
+        # the way ExportService.commit_kb will call it.
+        n = svc.record_commit("test-kb", commit1)
+        assert n == 1
+
+        versions = svc.get_entry_versions("entry-1", "test-kb")
+        assert len(versions) == 1
+        assert versions[0]["commit_hash"] == commit1
+
+        content = svc.get_entry_at_version("entry-1", "test-kb", commit1)
+        assert content is not None
+        assert "Version 1" in content
+
+    def test_commit_touching_two_entries_records_two_rows(self, kb_setup):
+        """A server write indexes on save (KBService._prepare_and_save ->
+        DocumentManager.save_entry), before the commit happens -- so by the
+        time record_commit runs, a newly-written entry is already in the
+        index. Reindex here mirrors that ordering, not a raw file write."""
+        svc, db, config, kb_path, commit1 = kb_setup
+        svc.record_commit("test-kb", commit1)
+
+        (kb_path / "b.md").write_text("---\nid: entry-2\ntitle: B\ntype: note\n---\n\nB1")
+        (kb_path / "a.md").write_text("---\nid: entry-1\ntitle: V2\ntype: note\n---\n\nVersion 2")
+
+        from pyrite.storage.index import IndexManager
+
+        IndexManager(db, config).index_all()
+
+        _git(kb_path, "add", ".")
+        _git(kb_path, "commit", "-m", "two entries")
+        commit2 = _git(kb_path, "rev-parse", "HEAD")
+
+        n = svc.record_commit("test-kb", commit2)
+        assert n == 2
+        assert svc.db.entry_version_exists("entry-1", "test-kb", commit2)
+        assert svc.db.entry_version_exists("entry-2", "test-kb", commit2)
+
+    def test_commit_touching_only_non_entry_files_records_none(self, kb_setup):
+        svc, db, config, kb_path, commit1 = kb_setup
+
+        (kb_path / "README.md.txt").write_text("not an entry")
+        (kb_path / "notes.txt").write_text("also not an entry")
+        _git(kb_path, "add", ".")
+        _git(kb_path, "commit", "-m", "non-entry files")
+        commit2 = _git(kb_path, "rev-parse", "HEAD")
+
+        n = svc.record_commit("test-kb", commit2)
+        assert n == 0
+
+    def test_commit_touching_an_md_file_that_is_not_an_indexed_entry_records_none(self, kb_setup):
+        """A .md file the KB repository skips or never indexed (here:
+        README.md, which KBRepository.list_files always excludes) must not
+        produce a row -- it never resolves to an entry id, unlike the
+        .md-suffix filter alone, which this isolates from."""
+        svc, db, config, kb_path, commit1 = kb_setup
+
+        (kb_path / "README.md").write_text("# Not an entry\n")
+        _git(kb_path, "add", ".")
+        _git(kb_path, "commit", "-m", "add README")
+        commit2 = _git(kb_path, "rev-parse", "HEAD")
+
+        n = svc.record_commit("test-kb", commit2)
+        assert n == 0
+
+    def test_recording_is_idempotent(self, kb_setup):
+        svc, db, config, kb_path, commit1 = kb_setup
+        svc.record_commit("test-kb", commit1)
+        svc.record_commit("test-kb", commit1)
+
+        versions = svc.get_entry_versions("entry-1", "test-kb")
+        assert len(versions) == 1
+
+    def test_renamed_entry_pre_rename_version_is_readable(self, kb_setup):
+        """git mv a.md b.md, commit, run attribution indexing: the list
+        shows both commits, and reading the pre-rename hash returns the
+        content as of that commit (#432 -- today this 404s because
+        get_entry_at_version reads `git show <c>:./<current path>`, and the
+        entry's current path is now b.md, which didn't exist at commit1)."""
+        svc, db, config, kb_path, commit1 = kb_setup
+        svc.record_commit("test-kb", commit1)
+
+        _git(kb_path, "mv", "a.md", "b.md")
+        _git(kb_path, "commit", "-m", "rename a.md to b.md")
+        commit2 = _git(kb_path, "rev-parse", "HEAD")
+
+        from pyrite.services.git_service import GitService
+        from pyrite.storage.index import IndexManager
+
+        idx = IndexManager(db, config)
+        idx.index_with_attribution("test-kb", GitService)
+
+        versions = svc.get_entry_versions("entry-1", "test-kb")
+        hashes = {v["commit_hash"] for v in versions}
+        assert commit1 in hashes
+        assert commit2 in hashes
+
+        pre_rename_content = svc.get_entry_at_version("entry-1", "test-kb", commit1)
+        assert pre_rename_content is not None
+        assert "Version 1" in pre_rename_content
+
+        post_rename_content = svc.get_entry_at_version("entry-1", "test-kb", commit2)
+        assert post_rename_content is not None
+        assert "Version 1" in post_rename_content
+
+    def test_foreign_commit_to_different_entrys_old_path_still_404s(self, kb_setup):
+        """#415 must hold across the rename fix: a commit that touched a
+        *different* entry's old path is not this entry's version, even if
+        that old path happens to collide with something readable."""
+        svc, db, config, kb_path, commit1 = kb_setup
+        svc.record_commit("test-kb", commit1)
+
+        (kb_path / "c.md").write_text("---\nid: entry-3\ntitle: C\ntype: note\n---\n\nC1")
+        _git(kb_path, "add", ".")
+        _git(kb_path, "commit", "-m", "add entry-3")
+        _git(kb_path, "mv", "c.md", "d.md")
+        _git(kb_path, "commit", "-m", "rename c.md to d.md")
+        foreign_rename_commit = _git(kb_path, "rev-parse", "HEAD")
+
+        from pyrite.services.git_service import GitService
+        from pyrite.storage.index import IndexManager
+
+        idx = IndexManager(db, config)
+        idx.index_with_attribution("test-kb", GitService)
+
+        # entry-1 never had this commit as one of its own versions.
+        assert svc.get_entry_at_version("entry-1", "test-kb", foreign_rename_commit) is None
+
+
 class TestGitEnvIsolation:
     """Both subprocess calls in get_entry_at_version must run with the
     leak-isolated git environment (#415), so a parent git process's

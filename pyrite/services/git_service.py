@@ -349,6 +349,11 @@ class GitService:
             logger.warning("Failed to get HEAD commit for %s", local_path, exc_info=True)
         return ""
 
+    # A marker unlikely to appear in a commit subject, used to split a
+    # `--name-status` log into per-commit blocks without an intermediate
+    # empty-line convention that a multi-line commit message could confuse.
+    _LOG_COMMIT_MARKER = "\x1e"
+
     @staticmethod
     def get_file_log(
         local_path: Path,
@@ -356,15 +361,22 @@ class GitService:
         since_commit: str | None = None,
     ) -> list[dict]:
         """
-        Get git log for a specific file.
+        Get git log for a specific file, following renames.
 
-        Returns list of dicts with: hash, author_name, author_email, date, message
+        Returns list of dicts with: hash, author_name, author_email, date,
+        message, file_path -- `file_path` is the path this file had *at
+        that commit* (its tree), which for commits before a rename is the
+        old name, not the name passed in (#432: reading a pre-rename
+        commit at the current path 404s, because that path did not exist
+        yet).
         """
+        marker = GitService._LOG_COMMIT_MARKER
         cmd = [
             "git",
             "log",
             "--follow",
-            "--format=%H|%an|%ae|%aI|%s",
+            f"--format={marker}%H|%an|%ae|%aI|%s",
+            "--name-status",
             "--",
             file_path,
         ]
@@ -384,12 +396,29 @@ class GitService:
                 return []
 
             entries = []
-            for line in result.stdout.strip().split("\n"):
-                if not line:
+            for block in result.stdout.split(marker):
+                block = block.strip("\n")
+                if not block:
                     continue
-                parts = line.split("|", 4)
+                lines = block.split("\n")
+                header = lines[0]
+                parts = header.split("|", 4)
                 if len(parts) < 5:
                     continue
+                # The name-status line(s) that follow the header: for a
+                # plain change, "M\tpath"; for a rename, "R100\told\tnew" --
+                # the path that existed in *this* commit's tree is always
+                # the last field (new name on a rename, the only name
+                # otherwise).
+                commit_file_path = file_path
+                for status_line in lines[1:]:
+                    status_line = status_line.strip()
+                    if not status_line:
+                        continue
+                    fields = status_line.split("\t")
+                    if len(fields) >= 2:
+                        commit_file_path = fields[-1]
+                    break
                 entries.append(
                     {
                         "hash": parts[0],
@@ -397,11 +426,90 @@ class GitService:
                         "author_email": parts[2],
                         "date": parts[3],
                         "message": parts[4],
+                        "file_path": commit_file_path,
                     }
                 )
             return entries
         except (subprocess.SubprocessError, OSError):
             logger.warning("Failed to parse git log for %s", file_path, exc_info=True)
+            return []
+
+    @staticmethod
+    def get_commit_info(local_path: Path, commit_hash: str) -> dict | None:
+        """Get author/date/message for a single commit.
+
+        Returns None if the commit cannot be read. Used alongside
+        `get_commit_files` to record entry_version rows for a commit the
+        server just made (#432), without a full `get_file_log` walk.
+        """
+        try:
+            result = subprocess.run(
+                [
+                    "git",
+                    "show",
+                    "--no-patch",
+                    "--format=%H|%an|%ae|%aI|%s",
+                    "--end-of-options",
+                    commit_hash,
+                ],
+                cwd=str(local_path),
+                capture_output=True,
+                text=True,
+                timeout=30,
+                env=_git_env(),
+            )
+            if result.returncode != 0:
+                return None
+            line = result.stdout.strip()
+            parts = line.split("|", 4)
+            if len(parts) < 5:
+                return None
+            return {
+                "hash": parts[0],
+                "author_name": parts[1],
+                "author_email": parts[2],
+                "date": parts[3],
+                "message": parts[4],
+            }
+        except (subprocess.SubprocessError, OSError):
+            logger.warning(
+                "Failed to get commit info for %s at %s", local_path, commit_hash, exc_info=True
+            )
+            return None
+
+    @staticmethod
+    def get_commit_files(local_path: Path, commit_hash: str) -> list[str]:
+        """Get the paths (repo-relative) that a single commit changed.
+
+        Unlike `get_changed_files` (a range diff against HEAD), this is one
+        commit's own change set -- what a server write's commit just
+        touched, for recording entry_version rows right after that commit
+        (#432). Works for the root commit (no parent) as well as ordinary
+        commits: `git show --name-only` handles both.
+        """
+        try:
+            result = subprocess.run(
+                [
+                    "git",
+                    "show",
+                    "--name-only",
+                    "--format=",
+                    "--end-of-options",
+                    commit_hash,
+                ],
+                cwd=str(local_path),
+                capture_output=True,
+                text=True,
+                timeout=30,
+                env=_git_env(),
+            )
+            if result.returncode != 0:
+                return []
+            return [line for line in result.stdout.strip().split("\n") if line]
+        except (subprocess.SubprocessError, OSError):
+            logger.warning(
+                "Failed to get commit files for %s at %s", local_path, commit_hash, exc_info=True
+            )
             return []
 
     @staticmethod

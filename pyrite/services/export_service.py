@@ -239,6 +239,27 @@ class ExportService:
         success, result = GitService.commit(kb.path, message, paths=paths, sign_off=sign_off)
 
         if success:
+            # Record entry_version rows for this commit so the version list
+            # and read endpoints serve it immediately, without a reindex
+            # (#432). Every commit path (REST, MCP, CLI, KBService.publish)
+            # goes through this method, so recording here covers them all.
+            commit_hash = result.get("commit_hash")
+            if commit_hash:
+                try:
+                    from .version_service import VersionService
+
+                    VersionService(self.config, self.db).record_commit(kb_name, commit_hash)
+                except Exception:
+                    # A recording failure must not turn a successful commit
+                    # into a reported failure -- the commit already
+                    # happened. The next `index build --with-attribution`
+                    # still recovers these rows.
+                    logger.warning(
+                        "Failed to record entry_version rows for %s@%s",
+                        kb_name,
+                        commit_hash,
+                        exc_info=True,
+                    )
             return {"success": True, **result}
         return {"success": False, "error": result.get("error", "Unknown error")}
 

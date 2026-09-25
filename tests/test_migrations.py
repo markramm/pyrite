@@ -145,3 +145,70 @@ class TestMigrationStructure:
         """Migration v2 has rollback SQL."""
         v2 = [m for m in MIGRATIONS if m.version == 2][0]
         assert "DROP TABLE" in v2.down
+
+
+class TestEntryVersionFilePathMigration:
+    """v25 adds entry_version.file_path so a stored version can be read at
+    the path it had at commit time, not just the entry's current path
+    (#432): an existing DB's entry_version rows survive the upgrade, and a
+    fresh column is added to old (pre-#432) rows without one."""
+
+    def test_v25_adds_file_path_column(self, temp_db):
+        # Build the schema as it existed before v25: run migrations up to
+        # v24, then create entry_version by hand the way v2's SQL did (no
+        # file_path column), simulating an existing database.
+        mgr = MigrationManager(temp_db)
+        mgr.migrate(target_version=24)
+        cols_before = {row[1] for row in temp_db.execute("PRAGMA table_info(entry_version)")}
+        assert "file_path" not in cols_before
+
+        mgr.migrate()
+
+        assert mgr.get_current_version() == CURRENT_VERSION
+        cols_after = {row[1] for row in temp_db.execute("PRAGMA table_info(entry_version)")}
+        assert "file_path" in cols_after
+
+    def test_v25_preserves_existing_rows(self, temp_db):
+        mgr = MigrationManager(temp_db)
+        mgr.migrate(target_version=24)
+        temp_db.execute("""
+            INSERT INTO entry_version
+                (entry_id, kb_name, commit_hash, author_name, author_email,
+                 commit_date, message, change_type)
+            VALUES ('e1', 'kb1', 'deadbeef', 'A', 'a@x.com', '2026-01-01', 'msg', 'modified')
+        """)
+        temp_db.commit()
+
+        mgr.migrate()
+
+        row = temp_db.execute(
+            "SELECT entry_id, commit_hash, file_path FROM entry_version WHERE entry_id = 'e1'"
+        ).fetchone()
+        assert row is not None
+        assert row["commit_hash"] == "deadbeef"
+        assert row["file_path"] is None
+
+    def test_v25_is_idempotent(self, temp_db):
+        mgr = MigrationManager(temp_db)
+        mgr.migrate(target_version=24)
+        mgr.migrate()
+        # Re-running (e.g. a second migrate() call, or applying on a DB that
+        # already had the column from ORM create_all) must not error.
+        mgr.migrate()
+        cols = {row[1] for row in temp_db.execute("PRAGMA table_info(entry_version)")}
+        assert "file_path" in cols
+
+    def test_v25_does_not_error_when_orm_create_all_already_added_the_column(self, temp_db):
+        """A fresh install goes through Base.metadata.create_all() (the ORM
+        model already declares file_path), then MigrationManager.migrate()
+        for older tables -- so _apply_v25 must tolerate the column already
+        being there, not just tolerate being called twice."""
+        mgr = MigrationManager(temp_db)
+        mgr.migrate(target_version=24)
+        # Simulate what ORM create_all() would have already done.
+        temp_db.execute("ALTER TABLE entry_version ADD COLUMN file_path TEXT")
+        temp_db.commit()
+
+        mgr.migrate()  # must not raise (duplicate column)
+
+        assert mgr.get_current_version() == CURRENT_VERSION

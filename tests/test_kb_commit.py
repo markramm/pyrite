@@ -223,6 +223,38 @@ class TestExportServiceCommit:
         assert result["commit_hash"]
         assert result["files_changed"] >= 1
 
+    def test_commit_kb_records_a_readable_version(self, git_kb):
+        """#432: a server write (ExportService.commit_kb, reached from REST
+        POST /kbs/{kb}/commit, MCP kb_commit and KBService.publish) records
+        a version, readable immediately -- no reindex in between."""
+        export_svc = git_kb["export_svc"]
+        db = git_kb["db"]
+        config = git_kb["config"]
+        kb_path = git_kb["kb_path"]
+
+        entry_file = kb_path / "entry-1.md"
+        entry_file.write_text("---\nid: entry-1\ntitle: Entry\ntype: note\n---\n\nContent")
+
+        # The entry must be indexed for record_commit to resolve its path
+        # to an entry id -- the same way a server write flow indexes on
+        # save, before ever calling commit.
+        IndexManager(db, config).index_all()
+
+        result = export_svc.commit_kb("test-kb", message="Add entry-1")
+        assert result["success"]
+        commit_hash = result["commit_hash"]
+
+        from pyrite.services.version_service import VersionService
+
+        version_svc = VersionService(config, db)
+        versions = version_svc.get_entry_versions("entry-1", "test-kb")
+        assert len(versions) == 1
+        assert versions[0]["commit_hash"] == commit_hash
+
+        content = version_svc.get_entry_at_version("entry-1", "test-kb", commit_hash)
+        assert content is not None
+        assert "Content" in content
+
     def test_commit_kb_not_found(self, git_kb):
         export_svc = git_kb["export_svc"]
         with pytest.raises(KBNotFoundError):
@@ -350,6 +382,39 @@ class TestRESTCommitEndpoints:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"]
+
+    def test_commit_endpoint_records_readable_version(self, git_kb):
+        """#432 over HTTP: POST /kbs/{kb}/commit then GET the entry's
+        versions and content immediately, no reindex in between."""
+        from starlette.testclient import TestClient
+
+        kb_path = git_kb["kb_path"]
+        config = git_kb["config"]
+        db = git_kb["db"]
+
+        entry_file = kb_path / "entry-1.md"
+        entry_file.write_text("---\nid: entry-1\ntitle: API\ntype: note\n---\n\nAPI entry")
+        IndexManager(db, config).index_all()
+
+        app = self._make_app(config, db)
+        client = TestClient(app)
+        resp = client.post(
+            "/api/kbs/test-kb/commit",
+            json={"message": "API commit"},
+        )
+        assert resp.status_code == 200
+        commit_hash = resp.json()["commit_hash"]
+
+        versions_resp = client.get("/api/entries/entry-1/versions", params={"kb": "test-kb"})
+        assert versions_resp.status_code == 200
+        versions = versions_resp.json()["versions"]
+        assert any(v["commit_hash"] == commit_hash for v in versions), versions
+
+        content_resp = client.get(
+            f"/api/entries/entry-1/versions/{commit_hash}", params={"kb": "test-kb"}
+        )
+        assert content_resp.status_code == 200
+        assert "API entry" in content_resp.json()["content"]
 
     def test_commit_endpoint_kb_not_found(self, git_kb):
         from starlette.testclient import TestClient

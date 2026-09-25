@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 24
+CURRENT_VERSION = 25
 
 
 @dataclass
@@ -490,6 +490,16 @@ MIGRATIONS: list[Migration] = [
         -- user_id column remains.
         """,
     ),
+    Migration(
+        version=25,
+        description="Add file_path to entry_version so a pre-rename version reads at its own path (#432)",
+        # Actual ALTER TABLE handled conditionally in _apply_v25() since the
+        # column may already exist from ORM create_all.
+        up="",
+        down="""
+        -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
+        """,
+    ),
 ]
 
 
@@ -769,6 +779,20 @@ class MigrationManager:
             if self.conn.in_transaction:
                 self.conn.execute("ROLLBACK")
             raise
+
+    def _apply_v25(self) -> None:
+        """Conditionally add file_path to entry_version (#432)."""
+        table_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='entry_version'"
+        ).fetchone()
+        if not table_exists:
+            return
+        existing = {
+            row[1] for row in self.conn.execute("PRAGMA table_info(entry_version)").fetchall()
+        }
+        if "file_path" not in existing:
+            self.conn.execute("ALTER TABLE entry_version ADD COLUMN file_path TEXT")
+        self.conn.commit()
 
     def _apply_v21(self) -> None:
         """Conditionally add content_hash column to entry for hash-based staleness."""

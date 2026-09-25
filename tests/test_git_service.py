@@ -167,18 +167,46 @@ class TestGetFileLog:
 
     @patch("pyrite.services.git_service.subprocess.run")
     def test_get_file_log(self, mock_run):
+        marker = GitService._LOG_COMMIT_MARKER
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout=(
-                "abc123|Alice|alice@example.com|2025-01-20T10:00:00|Initial commit\n"
-                "def456|Bob|bob@example.com|2025-01-21T11:00:00|Update entry\n"
+                f"{marker}abc123|Alice|alice@example.com|2025-01-20T10:00:00|Initial commit\n"
+                "A\tactors/test.md\n"
+                f"{marker}def456|Bob|bob@example.com|2025-01-21T11:00:00|Update entry\n"
+                "M\tactors/test.md\n"
             ),
         )
         log = GitService.get_file_log(Path("/tmp/test"), "actors/test.md")
         assert len(log) == 2
         assert log[0]["hash"] == "abc123"
         assert log[0]["author_name"] == "Alice"
+        assert log[0]["file_path"] == "actors/test.md"
         assert log[1]["message"] == "Update entry"
+
+    @patch("pyrite.services.git_service.subprocess.run")
+    def test_get_file_log_reports_the_path_at_each_commit(self, mock_run):
+        """A commit before a rename reports the *old* path -- what
+        get_entry_at_version needs to read at that commit's tree (#432),
+        not the path passed in to follow the file's history."""
+        marker = GitService._LOG_COMMIT_MARKER
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=(
+                f"{marker}c2|Alice|alice@example.com|2025-01-22T10:00:00|After rename\n"
+                "M\tb.md\n"
+                f"{marker}c1|Alice|alice@example.com|2025-01-21T10:00:00|Rename\n"
+                "R100\ta.md\tb.md\n"
+                f"{marker}c0|Alice|alice@example.com|2025-01-20T10:00:00|Initial\n"
+                "A\ta.md\n"
+            ),
+        )
+        log = GitService.get_file_log(Path("/tmp/test"), "b.md")
+        assert [(entry["hash"], entry["file_path"]) for entry in log] == [
+            ("c2", "b.md"),
+            ("c1", "b.md"),
+            ("c0", "a.md"),
+        ]
 
     @patch("pyrite.services.git_service.subprocess.run")
     def test_get_file_log_empty(self, mock_run):
