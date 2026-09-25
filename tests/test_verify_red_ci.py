@@ -1,23 +1,22 @@
-"""The CI `verify-red` job and the script behind it (#352).
+"""verify-red: do a pull request's new tests notice its change? (#352, redesigned in 0.26)
 
-The review lane proves by hand that a PR's new tests fail without its fix
-(`scripts/verify-red.sh`, review.md). `scripts/verify_red_ci.py` does it for
-every pull request: it splits the PR's changed files into tests and
-implementation, runs each changed test file with the implementation reverted
-to the merge base (through `verify-red.sh`, so the revert/restore, stale-.pyc
-and wrong-tree guards are the same ones), and classifies each test.
+`scripts/verify_red_ci.py` never touches the developer's tree. It checks out the
+merge base into a throwaway `git worktree` under $TMPDIR, overlays the PR's
+test-side files (committed or not) and runs the PR's new and edited tests: that
+is the run *without the fix*. Then it overlays the rest of the change and runs
+them again *with the fix*. The tree is removed; nothing is ever restored.
 
-It is a SIGNAL, not a gate: "passes without the fix" is a warning annotation,
-and the job fails only on its own infrastructure errors. The last class in this
-module pins the job's shape in `ci.yml` -- pull_request only, not in `gate`'s
-needs, read-only, bounded -- the way `test_dev_process_config.py` pins the hooks.
+Every scenario here builds a real git repository in tmp and runs the real
+script and real pytest subprocesses. The developer's tree is compared byte for
+byte before and after each run, including one killed with SIGKILL.
 """
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import json
 import os
-import shutil
 import re
 import signal
 import subprocess
@@ -47,273 +46,274 @@ def vr():
 
 
 # ---------------------------------------------------------------------------
-# Pure decisions: which files are tests, which tests the PR touched, and how a
-# pair of runs (with the fix, without it) classifies a test.
+# Pure decisions
 # ---------------------------------------------------------------------------
 
 
-class TestSplitChangedFiles:
-    def test_tests_and_implementation_are_separated(self, vr):
-        tests, impl = vr.split_changed(
-            [
-                "pyrite/services/kb_service.py",
-                "tests/test_kb_service.py",
-                "tests/unit/test_nested.py",
-                "extensions/cascade/src/pyrite_cascade/plugin.py",
-                "extensions/cascade/tests/test_plugin.py",
-                "tests/conftest.py",  # not a test module: nothing to run
-                "tests/fixtures/data.py",  # nor this
-                "scripts/release.py",  # neither side
-                "kb/backlog/x.md",
-                "pyrite/static/app.css",  # not Python
-                "extensions/cascade/pyproject.toml",
-            ]
-        )
-        assert tests == [
-            "extensions/cascade/tests/test_plugin.py",
-            "tests/test_kb_service.py",
-            "tests/unit/test_nested.py",
-        ]
-        assert impl == [
-            "extensions/cascade/src/pyrite_cascade/plugin.py",
-            "pyrite/services/kb_service.py",
-        ]
+class TestTestSide:
+    """Test-side files are overlaid into the run without the fix; everything
+    else the PR changes is the fix."""
 
-    def test_nothing_on_either_side(self, vr):
-        assert vr.split_changed(["README.md", "kb/x.md"]) == ([], [])
+    @pytest.mark.parametrize(
+        ("path", "test_side"),
+        [
+            ("tests/test_x.py", True),
+            ("tests/unit/helpers.py", True),
+            ("tests/fixtures/data.json", True),
+            ("conftest.py", True),
+            ("extensions/cascade/tests/test_plugin.py", True),
+            ("extensions/cascade/tests/conftest.py", True),
+            ("pyrite/services/kb_service.py", False),
+            ("extensions/cascade/src/pyrite_cascade/plugin.py", False),
+            ("scripts/release.py", False),
+            (".github/workflows/ci.yml", False),
+            ("pyproject.toml", False),
+            ("kb/backlog/x.md", False),
+            ("pyrite/tests_util.py", False),
+        ],
+    )
+    def test_split(self, vr, path, test_side):
+        assert vr.is_test_side(path) is test_side
+
+    def test_only_test_modules_are_run(self, vr):
+        assert vr.is_test_file("tests/unit/test_nested.py")
+        assert vr.is_test_file("extensions/cascade/tests/test_plugin.py")
+        assert not vr.is_test_file("tests/conftest.py")
+        assert not vr.is_test_file("tests/fixtures/data.py")
+        assert not vr.is_test_file("pyrite/test_mode.py")
 
 
+# Kept from the old runner, so these pass without this change too: controls.
+@pytest.mark.control
 class TestWhichTestsThePRTouched:
     BASE = (
-        "def test_old():\n    assert 1\n\n\n"
+        "def test_same():\n    assert 1\n\n\n"
         "def test_edited():\n    assert 1\n\n\n"
-        "class TestK:\n    def test_m(self):\n        assert 1\n\n\n"
-        "def helper():\n    return 1\n"
-    )
-    HEAD = (
-        "# a comment and reformatting do not make a test 'changed'\n"
-        "def test_old():\n    assert  1\n\n\n"
-        "def test_edited():\n    assert 2\n\n\n"
-        "class TestK:\n    def test_m(self):\n        assert 1\n\n"
-        "    def test_new_method(self):\n        assert 1\n\n\n"
-        "def test_new():\n    assert 1\n\n\n"
-        "def helper():\n    return 2\n"
+        "class TestK:\n    def test_m(self):\n        assert 1\n"
     )
 
     def test_new_and_edited_tests_only(self, vr):
-        assert vr.touched_tests(self.BASE, self.HEAD) == {
-            ("test_edited",),
-            ("TestK", "test_new_method"),
-            ("test_new",),
-        }
+        head = (
+            "def test_same():\n    assert 1\n\n\n"
+            "def test_edited():\n    assert 2\n\n\n"
+            "class TestK:\n    def test_m(self):\n        assert 1\n\n"
+            "    def test_n(self):\n        assert 1\n"
+        )
+        assert vr.touched_tests(self.BASE, head) == {("test_edited",), ("TestK", "test_n")}
 
-    def test_a_file_new_in_the_pr_touches_every_test(self, vr):
-        assert vr.touched_tests(None, self.HEAD) == {
-            ("test_old",),
-            ("test_edited",),
-            ("TestK", "test_m"),
-            ("TestK", "test_new_method"),
-            ("test_new",),
-        }
+    def test_formatting_only_edits_are_not_edits(self, vr):
+        reformatted = (
+            "# a comment\n\ndef test_same():\n    assert (1)  # why\n\n\n\n"
+            "def test_edited():\n    assert 1\n"
+            "class TestK:\n    def test_m(self):\n\n        assert 1\n"
+        )
+        assert vr.touched_tests(self.BASE, reformatted) == set()
 
     def test_a_decorator_change_is_a_change(self, vr):
-        base = "def test_p(x):\n    assert x\n"
-        head = (
-            "import pytest\n\n\n@pytest.mark.parametrize('x', [1])\ndef test_p(x):\n    assert x\n"
-        )
-        assert vr.touched_tests(base, head) == {("test_p",)}
+        head = self.BASE.replace("def test_same", "@pytest.mark.slow\ndef test_same")
+        assert vr.touched_tests(self.BASE, head) == {("test_same",)}
+
+    def test_a_new_file_touches_every_test(self, vr):
+        assert vr.touched_tests(None, self.BASE) == {
+            ("test_same",),
+            ("test_edited",),
+            ("TestK", "test_m"),
+        }
 
     def test_a_base_that_does_not_parse_counts_as_absent(self, vr):
-        assert vr.touched_tests("def (:\n", "def test_a():\n    pass\n") == {("test_a",)}
+        assert vr.touched_tests("def (:\n", self.BASE) == vr.touched_tests(None, self.BASE)
+
+
+class TestAddedIdentifiers:
+    def test_names_the_change_defines_that_the_base_did_not(self, vr):
+        base = "def old():\n    pass\n\n\nclass C:\n    def m(self):\n        pass\n"
+        head = (
+            base
+            + "\n\ndef new_fn():\n    pass\n\n\nclass C2:\n    attr = 1\n\n"
+            + "    def meth(self):\n        pass\n\n\nCONST = 3\n"
+        )
+        added = vr.defined_names(head) - vr.defined_names(base)
+        assert added == {"new_fn", "C2", "attr", "meth", "CONST"}
+
+    def test_a_new_module_adds_its_dotted_name(self, vr):
+        assert vr.module_names("pyrite/services/newmod.py") == {
+            "pyrite.services.newmod",
+            "newmod",
+        }
+        assert vr.module_names("extensions/x/src/pyrite_x/sub/__init__.py") == {
+            "pyrite_x.sub",
+            "sub",
+        }
+
+
+def _exc(types: list[str], *texts: str) -> dict:
+    return {"types": types, "args": list(texts)}
+
+
+PASSED = {"outcome": "passed"}
 
 
 class TestClassify:
-    P = ("passed", "")
+    ADDED = frozenset({"helper", "pyrite.newmod", "newmod"})
 
-    def test_red_without_the_fix(self, vr):
-        label, _ = vr.classify(self.P, ("failed", "assert 3 == 4"), collection_error=False)
-        assert label == vr.RED
+    def verdict(self, vr, with_fix, without, *, collect_failed=False, control=False):
+        return vr.classify(
+            with_fix, without, collect_failed=collect_failed, control=control, added=self.ADDED
+        )[0]
 
-    def test_an_import_error_is_a_weak_red(self, vr):
-        for msg in (
-            "ImportError: cannot import name 'x' from 'pyrite.a'",
-            "ModuleNotFoundError: No module named 'pyrite.new_module'",
-        ):
-            label, _ = vr.classify(self.P, ("failed", msg), collection_error=False)
-            assert label == vr.RED_IMPORT, msg
-
-    def test_a_missing_module_attribute_is_a_weak_red(self, vr):
-        # monkeypatch.setattr on a name the fix adds, in a fixture or the body.
-        for state, msg in (
-            (
-                "error",
-                "failed on setup with \"AttributeError: <module 'pyrite.a' from "
-                "'/x/pyrite/a.py'> has no attribute '_loop'\"",
-            ),
-            ("failed", "AttributeError: module 'pyrite.a' has no attribute 'new_helper'"),
-        ):
-            label, _ = vr.classify(self.P, (state, msg), collection_error=False)
-            assert label == vr.RED_IMPORT, msg
-
-    def test_an_attribute_error_on_an_object_is_a_real_red(self, vr):
-        msg = "AttributeError: 'NoneType' object has no attribute 'title'"
-        label, _ = vr.classify(self.P, ("failed", msg), collection_error=False)
-        assert label == vr.RED
-
-    def test_a_collection_error_is_a_weak_red_for_every_test_in_the_file(self, vr):
-        label, _ = vr.classify(self.P, None, collection_error=True)
-        assert label == vr.RED_IMPORT
+    def test_red(self, vr):
+        failed = {"outcome": "failed", "exc": _exc(["AssertionError"], "assert 0 == 4")}
+        assert self.verdict(vr, PASSED, failed) == vr.RED
 
     def test_passes_without_the_fix(self, vr):
-        label, _ = vr.classify(self.P, self.P, collection_error=False)
-        assert label == vr.PASSES
+        assert self.verdict(vr, PASSED, PASSED) == vr.UNEXPECTED
 
-    def test_a_test_that_does_not_pass_with_the_fix_proves_nothing(self, vr):
-        for head in (("failed", "boom"), ("skipped", "no postgres"), ("error", "fixture")):
-            label, _ = vr.classify(head, ("failed", "x"), collection_error=False)
-            assert label == vr.NOT_VERIFIABLE, head
+    def test_a_declared_control_is_not_a_warning(self, vr):
+        assert self.verdict(vr, PASSED, PASSED, control=True) == vr.CONTROL
 
-    def test_skipped_without_the_fix_proves_nothing(self, vr):
-        label, _ = vr.classify(self.P, ("skipped", "x"), collection_error=False)
-        assert label == vr.NOT_VERIFIABLE
+    def test_a_collection_failure_without_the_fix_is_import_only(self, vr):
+        assert self.verdict(vr, PASSED, None, collect_failed=True) == vr.IMPORT_ONLY
 
+    def test_an_import_error_naming_an_added_name_is_import_only(self, vr):
+        exc = _exc(["ImportError", "Exception"], "cannot import name 'helper' from 'pyrite'")
+        assert self.verdict(vr, PASSED, {"outcome": "failed", "exc": exc}) == vr.IMPORT_ONLY
 
-def test_junit_node_ids_keep_classes_and_parameters(vr, tmp_path: Path) -> None:
-    xml = tmp_path / "r.xml"
-    xml.write_text(
-        "<testsuites><testsuite>"
-        '<testcase classname="extensions.x.tests.test_y.TestA.TestB" name="test_p[1-a]" />'
-        '<testcase classname="extensions.x.tests.test_y" name="test_f">'
-        '<failure message="assert 1 == 2">tb</failure></testcase>'
-        '<testcase classname="x.tests.test_y" name="test_s"><skipped message="pg" /></testcase>'
-        "</testsuite></testsuites>"
+    def test_a_missing_module_the_pr_adds_is_import_only(self, vr):
+        exc = _exc(
+            ["ModuleNotFoundError", "ImportError"],
+            "No module named 'pyrite.newmod'",
+        )
+        assert self.verdict(vr, PASSED, {"outcome": "failed", "exc": exc}) == vr.IMPORT_ONLY
+
+    def test_an_attribute_error_on_a_name_the_pr_does_not_add_is_red(self, vr):
+        exc = _exc(["AttributeError"], "'NoneType' object has no attribute 'upper'")
+        assert self.verdict(vr, PASSED, {"outcome": "failed", "exc": exc}) == vr.RED
+
+    def test_an_assertion_that_quotes_an_added_name_is_still_red(self, vr):
+        # #368: the old pattern searched the whole failure message.
+        exc = _exc(["AssertionError"], "module 'pyrite' has no attribute 'helper'")
+        assert self.verdict(vr, PASSED, {"outcome": "failed", "exc": exc}) == vr.RED
+
+    @pytest.mark.parametrize(
+        ("with_fix", "without", "detail"),
+        [
+            ({"outcome": "failed"}, PASSED, "failed with the fix"),
+            ({"outcome": "skipped"}, PASSED, "skipped with the fix"),
+            (None, PASSED, "not run with the fix"),
+            (PASSED, {"outcome": "skipped"}, "skipped without the fix"),
+            (PASSED, None, "not run without the fix"),
+        ],
     )
-    report = vr.read_junit(xml, "extensions/x/tests/test_y.py")
-    assert report.outcomes == {
-        "extensions/x/tests/test_y.py::TestA::TestB::test_p[1-a]": ("passed", ""),
-        "extensions/x/tests/test_y.py::test_f": ("failed", "assert 1 == 2"),
-        # a different rootdir shortens the dotted prefix; the node id is the same shape
-        "extensions/x/tests/test_y.py::test_s": ("skipped", "pg"),
-    }
-    assert report.keys["extensions/x/tests/test_y.py::TestA::TestB::test_p[1-a]"] == (
-        "TestA",
-        "TestB",
-        "test_p",
+    def test_no_claim(self, vr, with_fix, without, detail):
+        verdict, text = vr.classify(
+            with_fix, without, collect_failed=False, control=False, added=self.ADDED
+        )
+        assert verdict == vr.NA
+        assert detail in text
+
+
+def test_the_summary_line(vr):
+    counts = {vr.RED: 3, vr.IMPORT_ONLY: 0, vr.UNEXPECTED: 0, vr.NA: 1, vr.CONTROL: 0}
+    assert vr.summary_line(counts) == (
+        "verify-red: 3 red · 0 import-only · 0 unexpected pass · 1 n/a"
     )
-    assert not report.collection_error
+    counts[vr.CONTROL] = 2
+    assert vr.summary_line(counts).endswith(" · 2 control")
 
 
-def test_a_missing_report_is_an_infrastructure_error(vr, tmp_path: Path) -> None:
-    with pytest.raises(vr.InfraError):
-        vr.read_junit(tmp_path / "absent.xml", "tests/test_x.py")
+# ---------------------------------------------------------------------------
+# A real repository: `dev` has a broken `pyrite.add`, the branch fixes it.
+# ---------------------------------------------------------------------------
+
+BROKEN = (
+    "def add(a, b):\n    return a - b\n\n\ndef make():\n    return None\n\n\nclass C:\n    pass\n"
+)
+FIXED = (
+    "def add(a, b):\n    return a + b\n\n\n"
+    "def make():\n    return 'x'\n\n\n"
+    "class C:\n    def method(self):\n        return 1\n\n\n"
+    "def helper():\n    return 1\n"
+)
+OLD_TESTS = "from pyrite import add\n\n\ndef test_unchanged():\n    assert add(0, 0) == 0\n"
+# test_unchanged is reformatted only: the AST is the same, so it is pre-existing.
+PR_TESTS = """\
+import pytest
+
+from pyrite import add, make
 
 
-MONKEYPATCH_TESTS = """\
-import json
+def test_unchanged():
+    assert add(0, 0) == (0)
+
+
+def test_real():
+    assert add(2, 2) == 4
+
+
+def test_vacuous():
+    assert callable(add)
+
+
+@pytest.mark.control
+def test_declared_control():
+    assert add(0, 0) == 0
+
+
+def test_lazy_import():
+    from pyrite import helper
+
+    assert helper() == 1
+
+
+def test_attribute_on_a_value():
+    assert make().upper() == "X"
+
+
+def test_assertion_quoting_an_added_name():
+    assert add(2, 3) == 5, "module 'pyrite' has no attribute 'helper'"
+
+
+@pytest.mark.parametrize("n", ["a::b"])  # a parameter id holding "::"
+def test_param(n):
+    assert add(2, 2) == 4
+"""
+NEW_FILE_TESTS = "from pyrite import helper\n\n\ndef test_helper():\n    assert helper() == 1\n"
+PATCH_TESTS = """\
+from unittest import mock
 
 import pytest
 
-import t_mp
+import pyrite
 
 
 @pytest.fixture
-def patched_in_setup(monkeypatch):
-    monkeypatch.setattr("json.nope_helper", 1)
+def patched(monkeypatch):
+    monkeypatch.setattr("pyrite.helper", lambda: 2)
 
 
-def test_string_target(monkeypatch):
-    monkeypatch.setattr("json.nope_helper", 1)
+def test_mock_patch_string():
+    with mock.patch("pyrite.helper", return_value=2):
+        assert pyrite.add(1, 1) == 2
 
 
-def test_class_target(monkeypatch):
-    monkeypatch.setattr(t_mp.C, "helper", 1)
+def test_mock_patch_object():
+    with mock.patch.object(pyrite.C, "method", return_value=2):
+        assert pyrite.add(1, 1) == 2
 
 
-def test_module_object_target(monkeypatch):
-    monkeypatch.setattr(json, "nope_helper", 1)
+def test_monkeypatch_setattr_string(monkeypatch):
+    monkeypatch.setattr("pyrite.helper", lambda: 2)
+    assert pyrite.add(1, 1) == 2
 
 
-def test_module_attribute_read():
-    json.nope_helper
+def test_monkeypatch_delattr(monkeypatch):
+    monkeypatch.delattr(pyrite.C, "method")
+    assert pyrite.add(1, 1) == 2
 
 
-def test_in_setup(patched_in_setup):
-    pass
-
-
-def test_class_attribute_read():
-    t_mp.C.helper
-
-
-def test_object_attribute_read():
-    None.title
+def test_patched_in_a_fixture(patched):
+    assert pyrite.add(1, 1) == 2
 """
-
-
-@pytest.fixture(scope="module")
-def junit_attribute_errors(vr, tmp_path_factory) -> dict[str, tuple[str, str]]:
-    """The failure messages the job actually parses: a real pytest run, its JUnit report."""
-    d = tmp_path_factory.mktemp("attr")
-    (d / "pytest.ini").write_text("[pytest]\npythonpath = .\n")
-    (d / "t_mp.py").write_text("class C:\n    pass\n")
-    (d / "test_mp.py").write_text(MONKEYPATCH_TESTS)
-    env = {k: v for k, v in os.environ.items() if k != "PYTEST_ADDOPTS"}
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "test_mp.py",
-            "-q",
-            "-p",
-            "no:cacheprovider",
-            f"--junitxml={d / 'r.xml'}",
-            "-o",
-            "junit_family=xunit1",
-        ],
-        cwd=d,
-        env=env,
-        capture_output=True,
-    )
-    report = vr.read_junit(d / "r.xml", "test_mp.py")
-    return {nodeid.split("::")[-1]: outcome for nodeid, outcome in report.outcomes.items()}
-
-
-@pytest.mark.parametrize(
-    ("test", "weak"),
-    [
-        ("test_string_target", True),  # 'module' object at json has no attribute
-        ("test_class_target", True),  # <class 't_mp.C'> has no attribute
-        ("test_module_object_target", True),  # <module 'json' ...> has no attribute
-        ("test_module_attribute_read", True),  # module 'json' has no attribute
-        ("test_in_setup", True),  # the same, raised in a fixture: an <error>
-        ("test_class_attribute_read", False),  # type object 'C' has no attribute: behaviour
-        ("test_object_attribute_read", False),  # 'NoneType' object has no attribute
-    ],
-)
-def test_attribute_errors_as_the_junit_report_carries_them(
-    vr, junit_attribute_errors, test: str, weak: bool
-) -> None:
-    outcome = junit_attribute_errors[test]
-    assert outcome[0] in ("failed", "error"), outcome
-    label, _ = vr.classify(("passed", ""), outcome, collection_error=False)
-    assert label == (vr.RED_IMPORT if weak else vr.RED), outcome
-
-
-# ---------------------------------------------------------------------------
-# End to end against a real repository: a base commit with a broken
-# implementation in `pyrite/`, a PR branch that fixes it and adds tests.
-# ---------------------------------------------------------------------------
-
-BROKEN = "def add(a, b):\n    return a - b\n"
-FIXED = "def add(a, b):\n    return a + b\n\n\ndef helper():\n    return 1\n"
-OLD_TESTS = "from pyrite import add\n\n\ndef test_unchanged():\n    assert add(0, 0) == 0\n"
-PR_TESTS = OLD_TESTS + (
-    "\n\ndef test_real():\n    assert add(2, 2) == 4\n"
-    "\n\ndef test_vacuous():\n    assert callable(add)\n"
-    "\n\ndef test_lazy_import():\n    from pyrite import helper\n\n    assert helper() == 1\n"
-)
-NEW_FILE_TESTS = "from pyrite import helper\n\n\ndef test_helper():\n    assert helper() == 1\n"
 
 
 def git(repo: Path, *args: str) -> str:
@@ -322,17 +322,19 @@ def git(repo: Path, *args: str) -> str:
     ).stdout.strip()
 
 
-@pytest.fixture
-def repo(tmp_path: Path) -> Path:
-    r = tmp_path / "repo"
+def make_repo(root: Path) -> Path:
+    r = root / "repo"
     (r / "pyrite").mkdir(parents=True)
     (r / "tests").mkdir()
     git(r, "init", "-q", "-b", "dev")
     git(r, "config", "user.email", "t@example.com")
     git(r, "config", "user.name", "t")
-    (r / ".gitignore").write_text("__pycache__/\n*.xml\n")
-    # pythonpath=. so the tests import THIS tree's `pyrite`, not the installed one.
-    (r / "pytest.ini").write_text("[pytest]\npythonpath = .\n")
+    (r / ".gitignore").write_text("__pycache__/\n")
+    # The repo's own --tb=short (pyproject), and no `pythonpath`: the script must
+    # make the tests import the throwaway tree, not this interpreter's installed
+    # Pyrite (#189). --strict-markers, and no `control` marker registered: the
+    # merge base of a real PR predates the marker too.
+    (r / "pytest.ini").write_text("[pytest]\naddopts = -v --tb=short --strict-markers\n")
     (r / "pyrite" / "__init__.py").write_text(BROKEN)
     (r / "tests" / "test_add.py").write_text(OLD_TESTS)
     git(r, "add", ".")
@@ -341,206 +343,288 @@ def repo(tmp_path: Path) -> Path:
     return r
 
 
-def run_ci(
-    repo: Path, tmp_path: Path, *extra: str, env_extra: dict[str, str] | None = None
-) -> tuple[subprocess.CompletedProcess[str], str]:
-    summary = tmp_path / "summary.md"
+@pytest.fixture
+def repo(tmp_path: Path) -> Path:
+    return make_repo(tmp_path)
+
+
+def commit_all(repo: Path, msg: str = "fix: add adds") -> None:
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", msg)
+
+
+def _env(tmp: Path, extra: dict[str, str] | None = None) -> dict[str, str]:
+    (tmp / "tmpdir").mkdir(exist_ok=True)
     env = {
         **os.environ,
-        "GITHUB_STEP_SUMMARY": str(summary),
-        "VERIFY_RED_PYTHON": sys.executable,
-        **(env_extra or {}),
+        "TMPDIR": str(tmp / "tmpdir"),  # the throwaway tree lands here, where a test can see it
+        "GITHUB_STEP_SUMMARY": str(tmp / "summary.md"),
+        "GITHUB_ACTIONS": "true",
+        **(extra or {}),
     }
-    env.pop("PYTEST_ADDOPTS", None)
+    for var in ("PYTEST_ADDOPTS", "PYTEST_XDIST_WORKER", "PYTEST_CURRENT_TEST"):
+        env.pop(var, None)
+    return env
+
+
+def run_vr(
+    repo: Path, tmp: Path, *args: str, env: dict[str, str] | None = None, cwd: Path | None = None
+) -> tuple[subprocess.CompletedProcess[str], str]:
+    summary = tmp / "summary.md"
+    summary.unlink(missing_ok=True)
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), "--base", "dev", *extra],
-        cwd=repo,
-        env=env,
+        [sys.executable, str(SCRIPT), "--base", "dev", "--python", sys.executable, *args],
+        cwd=cwd or repo,
+        env=env or _env(tmp),
         capture_output=True,
         text=True,
+        timeout=180,
     )
     return result, summary.read_text() if summary.exists() else ""
 
 
-def row(summary: str, test: str) -> str:
-    lines = [ln for ln in summary.splitlines() if ln.startswith(f"| `{test}`")]
-    assert len(lines) == 1, (test, summary)
-    return lines[0]
+def snapshot(repo: Path) -> tuple[str, str, dict[str, str]]:
+    """The index, `git status` and every file's bytes outside .git: what the developer has."""
+    index = hashlib.sha256((repo / ".git" / "index").read_bytes()).hexdigest()
+    status = git(repo, "status", "--porcelain=v1", "-uall", "--ignored")
+    files = {
+        str(p.relative_to(repo)): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in sorted(repo.rglob("*"))
+        if p.is_file() and ".git" not in p.relative_to(repo).parts
+    }
+    return index, status, files
 
 
-def test_a_pr_is_classified_test_by_test(vr, repo: Path, tmp_path: Path) -> None:
+def worktrees(repo: Path) -> list[str]:
+    return [
+        ln
+        for ln in git(repo, "worktree", "list", "--porcelain").splitlines()
+        if ln.startswith("worktree ")
+    ]
+
+
+def verdict_of(summary: str, test: str) -> str:
+    """The verdict cell of a table row; 'red' when the test has no row (red is not listed)."""
+    rows = [ln for ln in summary.splitlines() if ln.startswith(f"| `{test}`")]
+    assert len(rows) <= 1, rows
+    return rows[0].split("|")[2].strip() if rows else "red"
+
+
+# ---------------------------------------------------------------------------
+# One realistic PR, run once, read by several tests.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def pr_run(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("pr")
+    repo = make_repo(tmp)
     (repo / "pyrite" / "__init__.py").write_text(FIXED)
     (repo / "tests" / "test_add.py").write_text(PR_TESTS)
     (repo / "tests" / "test_helper.py").write_text(NEW_FILE_TESTS)
-    git(repo, "add", ".")
-    git(repo, "commit", "-q", "-m", "fix: add adds")
-
-    result, summary = run_ci(repo, tmp_path)
+    (repo / "tests" / "test_patch.py").write_text(PATCH_TESTS)
+    (repo / "tests" / "test_broken.py").write_text(
+        "import not_a_module_anywhere  # noqa: F401\n\n\ndef test_broken():\n    pass\n"
+    )
+    commit_all(repo)
+    before = snapshot(repo)
+    result, summary = run_vr(repo, tmp, "--json", str(tmp / "evidence.json"))
+    # Everything below reads this run: a run that did nothing must not pass them.
     assert result.returncode == 0, (result.stdout, result.stderr)
+    return {
+        "repo": repo,
+        "tmp": tmp,
+        "result": result,
+        "summary": summary,
+        "before": before,
+        "after": snapshot(repo),
+        "evidence": json.loads((tmp / "evidence.json").read_text())
+        if (tmp / "evidence.json").exists()
+        else None,
+    }
 
-    assert vr.RED in row(summary, "tests/test_add.py::test_real")
-    assert vr.PASSES in row(summary, "tests/test_add.py::test_vacuous")
-    assert vr.RED_IMPORT in row(summary, "tests/test_add.py::test_lazy_import")
-    assert vr.RED_IMPORT in row(summary, "tests/test_helper.py::test_helper")
-    # The unchanged test is reported apart from the PR's own tests, and never warned about.
-    assert "<details>" in summary
-    assert "tests/test_add.py::test_unchanged" in summary.split("<details>", 1)[1]
 
-    warnings = [ln for ln in result.stdout.splitlines() if ln.startswith("::warning")]
-    assert len(warnings) == 1, result.stdout
+def test_the_run_succeeds(pr_run):
+    assert pr_run["result"].returncode == 0, (pr_run["result"].stdout, pr_run["result"].stderr)
+
+
+def test_the_summary_line_counts_only_the_prs_own_tests(pr_run):
+    line = "verify-red: 4 red · 7 import-only · 1 unexpected pass · 1 n/a · 1 control"
+    assert line in pr_run["summary"], pr_run["summary"]
+    assert line in pr_run["result"].stdout
+    assert "1 pre-existing test" in pr_run["summary"]
+
+
+@pytest.mark.parametrize(
+    ("test", "verdict"),
+    [
+        ("tests/test_add.py::test_real", "red"),
+        ("tests/test_add.py::test_param[a::b]", "red"),
+        ("tests/test_add.py::test_attribute_on_a_value", "red"),
+        ("tests/test_add.py::test_assertion_quoting_an_added_name", "red"),
+        ("tests/test_add.py::test_vacuous", "unexpected pass"),
+        ("tests/test_add.py::test_declared_control", "control"),
+        ("tests/test_add.py::test_lazy_import", "import-only"),
+        ("tests/test_helper.py::test_helper", "import-only"),
+        ("tests/test_patch.py::test_mock_patch_string", "import-only"),
+        ("tests/test_patch.py::test_mock_patch_object", "import-only"),
+        ("tests/test_patch.py::test_monkeypatch_setattr_string", "import-only"),
+        ("tests/test_patch.py::test_monkeypatch_delattr", "import-only"),
+        ("tests/test_patch.py::test_patched_in_a_fixture", "import-only"),
+    ],
+)
+def test_each_new_test_gets_its_verdict(pr_run, test, verdict):
+    assert verdict_of(pr_run["summary"], test) == verdict, pr_run["summary"]
+
+
+def test_a_file_that_does_not_collect_with_the_fix_is_no_claim(pr_run):
+    row = [ln for ln in pr_run["summary"].splitlines() if "test_broken.py::test_broken" in ln]
+    assert row and "n/a" in row[0] and "does not collect with the fix" in row[0], row
+
+
+def test_pre_existing_tests_are_a_count_not_rows(pr_run):
+    assert "test_unchanged" not in pr_run["summary"]
+
+
+def test_only_an_unexpected_pass_is_annotated(pr_run):
+    warnings = [ln for ln in pr_run["result"].stdout.splitlines() if ln.startswith("::warning")]
+    assert len(warnings) == 1, warnings
     assert "tests/test_add.py::test_vacuous" in warnings[0]
     assert "file=tests/test_add.py" in warnings[0]
 
-    # The tree is exactly as it was: the fix is back, nothing is left over.
-    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
-    assert git(repo, "status", "--porcelain") == ""
+
+def test_the_developers_tree_is_untouched(pr_run):
+    assert pr_run["after"] == pr_run["before"]
 
 
-def test_no_implementation_change_is_nothing_to_verify(repo: Path, tmp_path: Path) -> None:
-    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
-    git(repo, "commit", "-q", "-am", "test: more tests")
-    result, summary = run_ci(repo, tmp_path)
+def test_the_throwaway_tree_is_gone(pr_run):
+    assert len(worktrees(pr_run["repo"])) == 1
+    assert list((pr_run["tmp"] / "tmpdir").iterdir()) == []
+
+
+def test_the_evidence_file(pr_run):
+    ev = pr_run["evidence"]
+    assert ev["verify_red"] == {
+        "red": 4,
+        "import-only": 7,
+        "unexpected pass": 1,
+        "n/a": 1,
+        "control": 1,
+        "pre-existing": 1,
+    }
+    assert ev["merge_base"] == git(pr_run["repo"], "merge-base", "dev", "HEAD")
+    assert ev["head"] == git(pr_run["repo"], "rev-parse", "HEAD")
+    assert ev["fix_commits"] == 1
+    assert ev["diff_coverage"] is None
+
+
+# ---------------------------------------------------------------------------
+# Scenarios, one repository each
+# ---------------------------------------------------------------------------
+
+
+def test_uncommitted_work_is_what_is_verified(repo: Path, tmp_path: Path) -> None:
+    # A worker before its first commit: the fix is an unstaged edit, the test an
+    # untracked file. Both are overlaid; neither is touched.
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_new.py").write_text(
+        "from pyrite import add\n\n\ndef test_new():\n    assert add(2, 2) == 4\n"
+    )
+    before = snapshot(repo)
+    result, summary = run_vr(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "verify-red: 1 red · 0 import-only · 0 unexpected pass · 0 n/a" in summary, summary
+    assert snapshot(repo) == before
+
+
+def test_the_merge_base_not_the_bases_tip(repo: Path, tmp_path: Path) -> None:
+    # dev fixed `add` too after the branch was cut. Against dev's tip the PR's test
+    # would pass without the PR's fix; against the merge base it is red.
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_new.py").write_text(
+        "from pyrite import add\n\n\ndef test_new():\n    assert add(2, 2) == 4\n"
+    )
+    commit_all(repo)
+    git(repo, "checkout", "-q", "dev")
+    (repo / "pyrite" / "__init__.py").write_text(FIXED + "\n# dev's own fix\n")
+    commit_all(repo, "fix: dev fixes add")
+    git(repo, "checkout", "-q", "fix/add")
+    result, summary = run_vr(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "verify-red: 1 red" in summary, summary
+
+
+def test_a_renamed_test_file_is_not_all_new(repo: Path, tmp_path: Path) -> None:
+    # #368: a rename is not an edit of every test in the file.
+    git(repo, "mv", "tests/test_add.py", "tests/test_sum.py")
+    (repo / "tests" / "test_sum.py").write_text(
+        OLD_TESTS + "\n\ndef test_real():\n    assert add(2, 2) == 4\n"
+    )
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    commit_all(repo)
+    result, summary = run_vr(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "verify-red: 1 red · 0 import-only · 0 unexpected pass · 0 n/a" in summary, summary
+    assert "1 pre-existing test" in summary
+
+
+def test_no_code_change_is_nothing_to_verify(repo: Path, tmp_path: Path) -> None:
+    (repo / "tests" / "test_add.py").write_text(PR_TESTS.replace("make", "add"))
+    commit_all(repo, "test: more tests")
+    result, summary = run_vr(repo, tmp_path, "--json", str(tmp_path / "e.json"))
     assert result.returncode == 0, result.stderr
-    assert "nothing to verify" in summary
+    assert "verify-red: nothing to verify" in summary
     assert "::warning" not in result.stdout
+    assert json.loads((tmp_path / "e.json").read_text())["verify_red"] is None
 
 
-def test_no_test_change_is_nothing_to_verify(repo: Path, tmp_path: Path) -> None:
+def test_a_code_change_with_no_new_test_is_a_warning(repo: Path, tmp_path: Path) -> None:
     (repo / "pyrite" / "__init__.py").write_text(FIXED)
-    git(repo, "commit", "-q", "-am", "refactor")
-    result, summary = run_ci(repo, tmp_path)
+    commit_all(repo, "refactor")
+    result, summary = run_vr(repo, tmp_path)
     assert result.returncode == 0, result.stderr
-    assert "nothing to verify" in summary
-    # Implementation changed and no test did: worth a warning on the PR.
+    assert "verify-red: nothing to verify" in summary
     warnings = [ln for ln in result.stdout.splitlines() if ln.startswith("::warning")]
-    assert len(warnings) == 1, result.stdout
-    assert "no test file" in warnings[0]
+    assert len(warnings) == 1 and "no new or edited test" in warnings[0], result.stdout
 
 
-def test_an_infrastructure_error_fails_the_job(repo: Path, tmp_path: Path) -> None:
-    # An uncommitted edit to the implementation: verify-red.sh refuses to make
-    # a claim (exit 2). That is the job's own failure, not a verdict on the PR.
-    (repo / "pyrite" / "__init__.py").write_text(FIXED)
-    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
-    git(repo, "commit", "-q", "-am", "fix: add adds")
-    (repo / "pyrite" / "__init__.py").write_text(FIXED + "# wip\n")
-    result, _ = run_ci(repo, tmp_path)
-    assert result.returncode == 2, (result.stdout, result.stderr)
-    assert "uncommitted" in result.stderr
-    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED + "# wip\n"
-
-
-EDITS_DURING_THE_RUN = OLD_TESTS + (
-    "\n\ndef test_real():\n"
-    "    from pathlib import Path\n\n"
-    "    impl = Path('pyrite/__init__.py')\n"
-    "    if '# edited during the run' not in impl.read_text():\n"
-    "        impl.write_text(impl.read_text() + '# edited during the run\\n')\n"
-    "    assert add(2, 2) == 4\n"
-)
-
-
-def test_an_edit_made_during_the_run_survives_the_refusal(repo: Path, tmp_path: Path) -> None:
-    # An editor autosave or another session changes an implementation file after
-    # the up-front check. The reverted run refuses (uncommitted edits); nothing was
-    # reverted, so nothing may be "restored" over the edit on the way out.
-    (repo / "pyrite" / "__init__.py").write_text(FIXED)
-    (repo / "tests" / "test_add.py").write_text(EDITS_DURING_THE_RUN)
-    git(repo, "commit", "-q", "-am", "fix: add adds")
-    result, _ = run_ci(repo, tmp_path)
-    assert result.returncode == 2, (result.stdout, result.stderr)
-    assert "uncommitted" in result.stderr
-    assert "# edited during the run" in (repo / "pyrite" / "__init__.py").read_text()
-
-
-def _failing_restores(tmp_path: Path, times: int) -> tuple[dict[str, str], Path]:
-    """A `git` on PATH whose first `times` `checkout -q HEAD --` calls fail."""
-    bin_dir, count = tmp_path / "bin", tmp_path / "failed-restores"
-    bin_dir.mkdir()
-    count.write_text("0")
-    wrapper = bin_dir / "git"
+@pytest.mark.control  # the #189 check is kept: the old runner refused this too
+def test_a_package_that_resolves_outside_the_tree_is_refused(repo: Path, tmp_path: Path) -> None:
+    # #189: an interpreter whose `import pyrite` lands in another checkout (a
+    # symlinked .venv's editable install) would verify the wrong code.
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "pyrite").mkdir(parents=True)
+    (elsewhere / "pyrite" / "__init__.py").write_text(FIXED)
+    wrapper = tmp_path / "python"
     wrapper.write_text(
-        "#!/bin/sh\n"
-        'if [ "$1 $2 $3" = "checkout -q HEAD" ]; then\n'
-        f'  n=$(cat "{count}")\n'
-        f'  if [ "$n" -lt {times} ]; then echo $((n + 1)) > "{count}"; exit 1; fi\n'
-        "fi\n"
-        f'exec "{shutil.which("git")}" "$@"\n'
+        "#!/usr/bin/env bash\n"
+        f'export PYTHONPATH="{elsewhere}${{PYTHONPATH:+:$PYTHONPATH}}"\n'
+        # No implicit cwd entry: the real bug had no local path to the tree at all.
+        "export PYTHONSAFEPATH=1\n"
+        f'exec "{sys.executable}" "$@"\n'
     )
     wrapper.chmod(0o755)
-    return {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}, count
-
-
-def _commit_fix(repo: Path) -> None:
     (repo / "pyrite" / "__init__.py").write_text(FIXED)
     (repo / "tests" / "test_add.py").write_text(PR_TESTS)
-    git(repo, "commit", "-q", "-am", "fix: add adds")
-
-
-def test_a_restore_that_fails_silently_is_put_right(repo: Path, tmp_path: Path) -> None:
-    # verify-red.sh's EXIT trap restores with `git checkout ... || true`: a
-    # transient failure (an index.lock held by an IDE) is silent and the script
-    # still exits 0/1. The driver must not trust that; it checks the content.
-    _commit_fix(repo)
-    env, count = _failing_restores(tmp_path, 1)
-    result, _ = run_ci(repo, tmp_path, env_extra=env)
-    assert count.read_text().strip() == "1", "no restore failed; the test proves nothing"
-    assert result.returncode == 0, (result.stdout, result.stderr)
-    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
-    assert git(repo, "status", "--porcelain") == ""
-
-
-def test_a_restore_the_driver_cannot_make_is_reported(repo: Path, tmp_path: Path) -> None:
-    # The trap's restore and the driver's own both fail: say so, instead of running
-    # the next file against the merge-base code; the finally's retry puts it right.
-    _commit_fix(repo)
-    env, count = _failing_restores(tmp_path, 2)
-    result, _ = run_ci(repo, tmp_path, env_extra=env)
-    assert count.read_text().strip() == "2", "fewer restores failed than the test needs"
+    commit_all(repo)
+    before = snapshot(repo)
+    result, _ = run_vr(repo, tmp_path, "--python", str(wrapper))
     assert result.returncode == 2, (result.stdout, result.stderr)
-    assert "could not restore pyrite/__init__.py" in result.stderr
-    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
-    assert git(repo, "status", "--porcelain") == ""
-
-
-def test_a_refusal_leaves_a_staged_revert_alone(repo: Path, tmp_path: Path) -> None:
-    # A developer checking red by hand has the merge-base code staged. The driver
-    # refuses ("commit them first") before running anything, and must leave that
-    # state exactly as it found it -- not "restore" the fix over it.
-    (repo / "pyrite" / "__init__.py").write_text(FIXED)
-    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
-    git(repo, "commit", "-q", "-am", "fix: add adds")
-    git(repo, "checkout", "-q", "dev", "--", "pyrite/__init__.py")
-    result, _ = run_ci(repo, tmp_path)
-    assert result.returncode == 2, (result.stdout, result.stderr)
-    assert "uncommitted" in result.stderr
-    assert (repo / "pyrite" / "__init__.py").read_text() == BROKEN
-    assert git(repo, "status", "--porcelain") == "M  pyrite/__init__.py"
-
-
-def test_a_non_utf8_implementation_file_is_compared_as_bytes(repo: Path, tmp_path: Path) -> None:
-    impl = repo / "pyrite" / "__init__.py"
-    impl.write_bytes(b"# -*- coding: latin-1 -*-\n# caf\xe9\n" + FIXED.encode())
-    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
-    git(repo, "commit", "-q", "-am", "fix: add adds")
-    result, summary = run_ci(repo, tmp_path)
-    assert result.returncode == 0, (result.stdout, result.stderr)
-    assert "red without the fix" in summary
-    assert impl.read_bytes().startswith(b"# -*- coding: latin-1")
-    assert git(repo, "status", "--porcelain") == ""
+    assert "resolves outside" in result.stderr, result.stderr
+    assert snapshot(repo) == before
+    assert len(worktrees(repo)) == 1
 
 
 PINNED_MTIME = 1_700_000_000
+SAME_SIZE_FIX = BROKEN.replace("a - b", "a + b")
 
 
-def _pin_mtimes(repo: Path) -> None:
-    """Every checkout leaves every .py at ONE mtime -- the worst case for bytecode.
-
-    CPython validates a .pyc by the source's mtime (whole seconds) and size. A
-    revert and a restore inside the same second, between two sources of the same
-    size, is what the cold read hit; pinning the mtime makes it happen every run
-    instead of most runs.
-    """
+def test_a_same_size_fix_is_not_served_stale_bytecode(repo: Path, tmp_path: Path) -> None:
+    # CPython trusts a .pyc whose source has the same mtime (whole seconds) and
+    # size. The run without the fix imports the merge-base source; the fix that
+    # replaces it is the same size. A post-checkout hook pins every checked-out
+    # file's mtime and the overlay keeps the developer's (pinned too), so without
+    # PYTHONDONTWRITEBYTECODE the run with the fix would import the broken code.
     hook = repo / ".git" / "hooks" / "post-checkout"
     hook.write_text(
         "#!/usr/bin/env bash\n"
@@ -549,210 +633,146 @@ def _pin_mtimes(repo: Path) -> None:
         f"    '.git' in f.parts or os.utime(f, ({PINNED_MTIME}, {PINNED_MTIME}))\"\n"
     )
     hook.chmod(0o755)
-    for f in repo.rglob("*.py"):
-        os.utime(f, (PINNED_MTIME, PINNED_MTIME))
-
-
-SAME_SIZE_FIX = "def add(a, b):\n    return a + b\n"  # same size as BROKEN
-
-
-def test_a_same_size_fix_leaves_no_stale_bytecode(vr, repo: Path, tmp_path: Path) -> None:
     (repo / "pyrite" / "__init__.py").write_text(SAME_SIZE_FIX)
-    real = "from pyrite import add\n\n\ndef test_real():\n    assert add(2, 2) == 4\n"
-    (repo / "tests" / "test_a.py").write_text(real)
-    (repo / "tests" / "test_b.py").write_text(real)
-    git(repo, "add", ".")
-    git(repo, "commit", "-q", "-m", "fix: add adds")
-    _pin_mtimes(repo)
-
-    result, summary = run_ci(repo, tmp_path)
-    assert result.returncode == 0, (result.stdout, result.stderr)
-    # The second file's with-fix run must see the fix, not the reverted bytecode.
-    assert vr.RED in row(summary, "tests/test_a.py::test_real")
-    assert vr.RED in row(summary, "tests/test_b.py::test_real")
-    # And the tree left behind runs the fix.
-    out = subprocess.run(
-        [sys.executable, "-c", "from pyrite import add; print(add(2, 2))"],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    assert out == "4"
-
-
-def test_a_file_with_no_report_without_the_fix_is_a_row(vr, repo: Path, tmp_path: Path) -> None:
-    # A conftest that imports a name the fix adds: without the fix pytest cannot
-    # even load it, and writes no report. That file gets a row; the table survives.
-    (repo / "pyrite" / "__init__.py").write_text(FIXED)
-    (repo / "tests" / "conftest.py").write_text("from pyrite import helper  # noqa: F401\n")
-    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
-    (repo / "tests" / "test_helper.py").write_text(NEW_FILE_TESTS)
-    git(repo, "add", ".")
-    git(repo, "commit", "-q", "-m", "fix: add adds")
-
-    result, summary = run_ci(repo, tmp_path)
-    assert result.returncode == 0, (result.stdout, result.stderr)
-    for f in ("tests/test_add.py", "tests/test_helper.py"):
-        line = row(summary, f)
-        assert vr.NOT_VERIFIABLE in line and "no report without the fix" in line, line
-    assert git(repo, "status", "--porcelain") == ""
-
-
-def test_renamed_and_deleted_implementation_is_reverted_and_restored(
-    vr, repo: Path, tmp_path: Path
-) -> None:
-    body = "".join(f"\n\ndef unused_{i}():\n    return {i}\n" for i in range(20))
-    (repo / "pyrite" / "calc.py").write_text("def add(a, b):\n    return a - b\n" + body)
-    (repo / "pyrite" / "legacy.py").write_text("def add(a, b):\n    return a + b\n")
-    (repo / "pyrite" / "__init__.py").write_text("from pyrite.calc import add  # noqa: F401\n")
-    git(repo, "add", ".")
-    git(repo, "commit", "-q", "--amend", "-m", "base")
-    git(repo, "branch", "-f", "dev", "HEAD")
-
-    git(repo, "mv", "pyrite/calc.py", "pyrite/arith.py")
-    (repo / "pyrite" / "arith.py").write_text("def add(a, b):\n    return a + b\n" + body)
-    git(repo, "rm", "-q", "pyrite/legacy.py")
-    (repo / "pyrite" / "__init__.py").write_text("from pyrite.arith import add  # noqa: F401\n")
-    (repo / "tests" / "test_add.py").write_text(
-        PR_TESTS.replace("from pyrite import helper", "from pyrite import add as helper")
+    (repo / "tests" / "test_new.py").write_text(
+        "from pyrite import add\n\n\ndef test_new():\n    assert add(2, 2) == 4\n"
     )
-    git(repo, "add", ".")
-    git(repo, "commit", "-q", "-m", "fix: rename calc to arith, drop legacy")
-    assert "R" in git(repo, "diff", "--name-status", "-M", "dev", "HEAD")  # git sees a rename
-
-    result, summary = run_ci(repo, tmp_path)
+    commit_all(repo)
+    os.utime(repo / "pyrite" / "__init__.py", (PINNED_MTIME, PINNED_MTIME))
+    result, summary = run_vr(repo, tmp_path)
     assert result.returncode == 0, (result.stdout, result.stderr)
-    assert vr.RED in row(summary, "tests/test_add.py::test_real")
-    assert "`pyrite/calc.py`" in summary and "`pyrite/legacy.py`" in summary
-    # Restored exactly: the renamed-away and deleted files are gone again.
-    assert not (repo / "pyrite" / "calc.py").exists()
-    assert not (repo / "pyrite" / "legacy.py").exists()
-    assert (repo / "pyrite" / "arith.py").exists()
-    assert git(repo, "status", "--porcelain") == ""
+    assert "verify-red: 1 red · 0 import-only · 0 unexpected pass · 0 n/a" in summary, summary
 
 
-def test_a_hung_file_is_a_row_not_a_killed_job(vr, repo: Path, tmp_path: Path) -> None:
-    (repo / "pyrite" / "__init__.py").write_text(
-        "import time\n\n\ndef add(a, b):\n    time.sleep(60)\n    return a - b\n"
-    )
-    git(repo, "commit", "-q", "--amend", "-am", "base")
-    git(repo, "branch", "-f", "dev", "HEAD")
+def test_a_hung_run_keeps_what_it_recorded(repo: Path, tmp_path: Path) -> None:
     (repo / "pyrite" / "__init__.py").write_text(FIXED)
-    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
-    (repo / "tests" / "test_helper.py").write_text(NEW_FILE_TESTS)
-    git(repo, "add", ".")
-    git(repo, "commit", "-q", "-m", "fix: add adds, promptly")
-
-    result, summary = run_ci(repo, tmp_path, "--timeout", "5")
+    (repo / "tests" / "test_new.py").write_text(
+        "import time\n\nfrom pyrite import add\n\n\n"
+        "def test_a_real():\n    assert add(2, 2) == 4\n\n\n"
+        "def test_b_hangs_without_the_fix():\n"
+        "    if add(2, 2) != 4:\n        time.sleep(60)\n"
+    )
+    commit_all(repo)
+    before = snapshot(repo)
+    result, summary = run_vr(repo, tmp_path, "--timeout", "8")
     assert result.returncode == 0, (result.stdout, result.stderr)
-    line = row(summary, "tests/test_add.py")
-    assert vr.NOT_VERIFIABLE in line and "timed out without the fix" in line, line
-    # The next file still ran.
-    assert vr.RED_IMPORT in row(summary, "tests/test_helper.py::test_helper")
-    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
-    assert git(repo, "status", "--porcelain") == ""
+    assert "verify-red: 1 red · 0 import-only · 0 unexpected pass · 1 n/a" in summary, summary
+    row = [ln for ln in summary.splitlines() if "test_b_hangs" in ln]
+    assert row and "timed out" in row[0], summary
+    assert snapshot(repo) == before
 
 
-def _alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    return True
-
-
-@pytest.mark.parametrize("sig", [signal.SIGINT, signal.SIGTERM], ids=["SIGINT", "SIGTERM"])
-def test_interrupting_the_driver_restores_the_tree_and_kills_the_run(
-    repo: Path, tmp_path: Path, sig: signal.Signals
-) -> None:
-    # The reverted `add` records its pid and hangs, so the signal lands while the
-    # tree is reverted and bash + pytest are running in their own session.
-    pidfile = tmp_path / "hung.pid"
-    (repo / "pyrite" / "__init__.py").write_text(
-        "import os\nimport time\n\n\ndef add(a, b):\n"
-        f"    open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
-        "    time.sleep(120)\n    return a - b\n"
-    )
-    git(repo, "commit", "-q", "--amend", "-am", "base")
-    git(repo, "branch", "-f", "dev", "HEAD")
+def test_a_killed_run_leaves_the_developers_tree_alone(repo: Path, tmp_path: Path) -> None:
+    # SIGKILL: no handler, no finally. The developer's tree was never touched, so
+    # there is nothing to restore; the stale throwaway tree is only a registered
+    # worktree, and the next run prunes it once its directory is gone.
+    pidfile, flag = tmp_path / "hung.pid", tmp_path / "hang"
+    flag.write_text("1")
     (repo / "pyrite" / "__init__.py").write_text(FIXED)
-    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
-    git(repo, "add", ".")
-    git(repo, "commit", "-q", "-m", "fix: add adds, promptly")
+    (repo / "tests" / "test_new.py").write_text(
+        "import os\nimport time\n\nfrom pyrite import add\n\n\n"
+        "def test_new():\n"
+        f"    if add(2, 2) != 4 and os.path.exists({str(flag)!r}):  # hang without the fix\n"
+        f"        open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+        "        time.sleep(120)\n"
+        "    assert add(2, 2) == 4\n"
+    )
+    commit_all(repo)
+    (repo / "tests" / "test_wip.py").write_text("def test_wip():\n    pass\n")  # untracked
+    before = snapshot(repo)
 
-    env = {**os.environ, "VERIFY_RED_PYTHON": sys.executable}
-    env.pop("PYTEST_ADDOPTS", None)
-    env.pop("GITHUB_STEP_SUMMARY", None)
+    env = _env(tmp_path)
     driver = subprocess.Popen(
-        [sys.executable, str(SCRIPT), "--base", "dev", "--timeout", "100"],
+        [sys.executable, str(SCRIPT), "--base", "dev", "--python", sys.executable],
         cwd=repo,
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    hung = None
     try:
         deadline = time.monotonic() + 60
         while not (pidfile.exists() and pidfile.read_text().strip()):
             assert driver.poll() is None, "the driver exited before the run hung"
-            assert time.monotonic() < deadline, "the reverted run never started"
+            assert time.monotonic() < deadline, "the run never started"
             time.sleep(0.1)
         hung = int(pidfile.read_text())
-        assert (repo / "pyrite" / "__init__.py").read_text() != FIXED  # reverted right now
-
-        driver.send_signal(sig)
+        driver.send_signal(signal.SIGKILL)
         driver.wait(timeout=30)
     finally:
         if driver.poll() is None:
             driver.kill()
+        if hung:
+            try:
+                os.kill(hung, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
 
-    assert driver.returncode != 0
-    deadline = time.monotonic() + 10
-    while _alive(hung) and time.monotonic() < deadline:
-        time.sleep(0.1)
-    alive = _alive(hung)
-    if alive:
-        os.kill(hung, signal.SIGKILL)
-    assert not alive, "the pytest run outlived the driver"
-    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
-    assert git(repo, "status", "--porcelain") == ""
+    assert snapshot(repo) == before
+    stale = list((tmp_path / "tmpdir").glob("verify-red-*"))
+    assert len(stale) == 1 and len(worktrees(repo)) == 2, (stale, worktrees(repo))
 
-
-class TestRunTimeout:
-    """Each run gets the per-run timeout, cut to what the budget has left once the
-    kill grace is set aside; too little left, and the run is not started."""
-
-    def test_no_budget_is_the_per_run_timeout(self, vr):
-        assert vr.run_timeout(120, None) == 120
-
-    def test_plenty_left_is_the_per_run_timeout(self, vr):
-        assert vr.run_timeout(120, 1000) == 120
-
-    def test_the_kill_grace_is_set_aside(self, vr):
-        assert vr.run_timeout(120, vr.KILL_GRACE + 30) == 30
-
-    def test_too_little_left_is_no_run(self, vr):
-        assert vr.run_timeout(120, vr.KILL_GRACE + vr.MIN_RUN - 1) is None
-
-
-def test_a_spent_budget_turns_every_remaining_file_into_a_row(
-    vr, repo: Path, tmp_path: Path
-) -> None:
-    (repo / "pyrite" / "__init__.py").write_text(FIXED)
-    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
-    (repo / "tests" / "test_helper.py").write_text(NEW_FILE_TESTS)
-    git(repo, "add", ".")
-    git(repo, "commit", "-q", "-m", "fix: add adds")
-
-    result, summary = run_ci(repo, tmp_path, "--budget", "0")
+    # The OS clears $TMPDIR; the next run drops the registration left behind.
+    subprocess.run(["rm", "-rf", str(stale[0])], check=True)
+    flag.unlink()
+    result, summary = run_vr(repo, tmp_path, env=env)
     assert result.returncode == 0, (result.stdout, result.stderr)
-    for f in ("tests/test_add.py", "tests/test_helper.py"):
-        line = row(summary, f)
-        assert vr.NOT_VERIFIABLE in line and "time budget" in line, line
-    assert git(repo, "status", "--porcelain") == ""
+    assert "verify-red: 1 red" in summary, summary
+    assert len(worktrees(repo)) == 1, worktrees(repo)
+    assert snapshot(repo) == before
+
+
+def test_diff_coverage_is_carried_into_the_evidence(repo: Path, tmp_path: Path) -> None:
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_new.py").write_text(
+        "from pyrite import add\n\n\ndef test_new():\n    assert add(2, 2) == 4\n"
+    )
+    commit_all(repo)
+    dc = tmp_path / "diff-cover.json"
+    dc.write_text(
+        json.dumps({"total_percent_covered": 75, "total_num_lines": 20, "total_num_violations": 5})
+    )
+    out = tmp_path / "evidence.json"
+    result, summary = run_vr(
+        repo, tmp_path, "--json", str(out), "--diff-cover-json", str(dc), "--pr", "42"
+    )
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    ev = json.loads(out.read_text())
+    assert ev["pr"] == 42
+    assert ev["diff_coverage"] == {"percent": 75, "lines": 20, "uncovered": 5}
+    assert ev["verify_red"]["red"] == 1
+    assert "diff coverage: 75% of 20 changed lines" in summary
 
 
 # ---------------------------------------------------------------------------
-# The job's shape in ci.yml.
+# The local entry point
+# ---------------------------------------------------------------------------
+
+
+def test_verify_red_sh_is_the_same_code_path(repo: Path, tmp_path: Path) -> None:
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_new.py").write_text(
+        "from pyrite import add\n\n\ndef test_new():\n    assert add(2, 2) == 4\n"
+    )
+    commit_all(repo)
+    env = _env(tmp_path, {"VERIFY_RED_BASE": "dev", "VERIFY_RED_PYTHON": sys.executable})
+    env.pop("GITHUB_STEP_SUMMARY")
+    env.pop("GITHUB_ACTIONS")
+    result = subprocess.run(
+        ["bash", str(REPO / "scripts" / "verify-red.sh")],
+        cwd=repo / "tests",  # from a subdirectory
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "verify-red: 1 red · 0 import-only · 0 unexpected pass · 0 n/a" in result.stdout
+    assert "::warning" not in result.stdout  # annotations are for CI only
+
+
+# ---------------------------------------------------------------------------
+# The CI wiring
 # ---------------------------------------------------------------------------
 
 
@@ -761,57 +781,118 @@ def ci() -> dict:
     return yaml.safe_load(CI_PATH.read_text())
 
 
-class TestTheJobsShape:
-    def test_it_exists(self, ci):
-        assert "verify-red" in ci["jobs"]
+def _runs(job: dict) -> str:
+    return "\n".join(s.get("run", "") for s in job["steps"])
 
+
+class TestTheVerifyRedJob:
+    @pytest.mark.control  # kept from the old job
     def test_it_runs_on_pull_request_only(self, ci):
         condition = ci["jobs"]["verify-red"]["if"]
         assert "github.event_name == 'pull_request'" in condition, condition
         assert "||" not in condition, f"another event could reach it: {condition}"
 
+    @pytest.mark.control  # kept from the old job
     def test_it_is_not_a_gate(self, ci):
-        assert "verify-red" not in ci["jobs"]["gate"]["needs"]
-        assert not ci["jobs"]["verify-red"].get("continue-on-error"), (
-            "not needed: the job only fails on its own infrastructure errors, and it is not in gate"
-        )
+        assert ci["jobs"]["gate"]["needs"] == ["changes", "kb", "test", "frontend"]
 
+    @pytest.mark.control  # kept from the old job
     def test_it_is_read_only(self, ci):
         assert ci["jobs"]["verify-red"].get("permissions") == {"contents": "read"}
 
     def test_it_is_bounded(self, ci):
         job = ci["jobs"]["verify-red"]
-        assert 0 < job["timeout-minutes"] <= 30
+        m = re.search(r"--timeout (\d+)", _runs(job))
+        assert m, "the job must pass --timeout"
+        setup = 5 * 60  # checkout, Python, uv, the installs
+        assert 2 * int(m.group(1)) + setup <= job["timeout-minutes"] * 60
 
-    def test_the_script_budget_ends_before_the_job_is_cancelled(self, ci):
-        # A cancelled job loses the summary's legend and any file not yet
-        # written; a spent budget turns the remaining files into rows instead.
+    @pytest.mark.control  # kept from the old job
+    def test_it_runs_the_script_against_the_merge_base_with_the_pr_base(self, ci):
         job = ci["jobs"]["verify-red"]
-        run = "\n".join(s.get("run", "") for s in job["steps"])
-        m = re.search(r"--budget (\d+)", run)
-        assert m, "the job must pass --budget"
-        install_margin = 5 * 60  # checkout, Python, uv, the editable installs
-        assert int(m.group(1)) + install_margin <= job["timeout-minutes"] * 60
-
-    def test_it_runs_the_script_against_the_pr_base(self, ci):
-        job = ci["jobs"]["verify-red"]
-        run = "\n".join(step.get("run", "") for step in job["steps"])
+        run = _runs(job)
         assert "scripts/verify_red_ci.py" in run
         assert "github.event.pull_request.base.sha" in run
         checkout = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout"))
         assert checkout.get("with", {}).get("fetch-depth") == 0, "the merge base must be in history"
 
-    def test_extensions_are_installed_editable_from_the_pr_tree(self, ci):
-        # #189: the revert happens in the checkout, so imports must resolve
-        # there -- an editable install of the PR tree, reverted in place.
-        run = "\n".join(s.get("run", "") for s in ci["jobs"]["verify-red"]["steps"])
-        assert 'install --system -e ".[all]"' in run
-        assert 'uv pip install --system -e "$ext"' in run
+    def test_it_publishes_the_evidence_artifact(self, ci):
+        job = ci["jobs"]["verify-red"]
+        assert "--json test-evidence.json" in _runs(job)
+        upload = next(
+            s for s in job["steps"] if s.get("uses", "").startswith("actions/upload-artifact")
+        )
+        assert upload["with"]["name"] == "test-evidence"
+        assert upload["with"]["path"] == "test-evidence.json"
+
+    def test_it_waits_for_diff_coverage_but_not_for_success(self, ci):
+        job = ci["jobs"]["verify-red"]
+        assert "test" in job["needs"]
+        assert "!cancelled()" in job["if"], "a red suite must not hide the evidence"
+        assert "--diff-cover-json" in _runs(job)
 
 
-def test_review_md_does_not_trust_a_table_the_pr_itself_can_rewrite():
-    # The job runs the PR's own copy of the script and the workflow: a PR that
-    # changes either produces a table the review cannot take on trust.
-    review = (REPO / ".claude" / "skills" / "pyrite-conductor" / "review.md").read_text()
-    text = " ".join(review.split())
-    assert "the PR itself touches `scripts/verify*red*` or the `verify-red` job" in text
+class TestDiffCoverage:
+    def _test_job(self, ci) -> dict:
+        return ci["jobs"]["test"]
+
+    def test_the_312_pr_leg_measures_coverage_without_a_threshold(self, ci):
+        run = _runs(self._test_job(ci))
+        assert "--cov=pyrite" in run
+        # [tool.coverage.report] fail_under would otherwise fail the suite (and gate).
+        assert "--cov-fail-under=0" in run
+        assert "--cov-report=xml" in run
+
+    def test_only_the_312_pr_leg_pays_for_it(self, ci):
+        step = next(s for s in self._test_job(ci)["steps"] if "--cov=pyrite" in s.get("run", ""))
+        run = yaml.safe_dump(step, width=1000)
+        assert "matrix.python-version == '3.12'" in run
+        assert "github.event_name == 'pull_request'" in run
+
+    def test_diff_cover_is_advisory(self, ci):
+        steps = self._test_job(ci)["steps"]
+        step = next(s for s in steps if "diff-cover" in s.get("run", ""))
+        assert "--fail-under=80" in step["run"]
+        assert "--compare-branch" in step["run"]
+        assert "github.event.pull_request.base.sha" in step["run"]
+        assert step.get("continue-on-error") is True
+        assert "GITHUB_STEP_SUMMARY" in step["run"]
+
+    def test_diff_cover_is_a_dev_dependency(self):
+        import tomllib
+
+        dev = tomllib.loads((REPO / "pyproject.toml").read_text())["project"][
+            "optional-dependencies"
+        ]["dev"]
+        assert any(d.startswith("diff-cover") for d in dev), dev
+
+    def test_the_control_marker_is_registered(self):
+        import tomllib
+
+        markers = tomllib.loads((REPO / "pyproject.toml").read_text())["tool"]["pytest"][
+            "ini_options"
+        ]["markers"]
+        assert any(m.startswith("control:") for m in markers), markers
+
+
+# ---------------------------------------------------------------------------
+# Who runs it: the worker once, CI always; the conductor reads CI.
+# ---------------------------------------------------------------------------
+
+
+def _words(path: Path) -> str:
+    return " ".join(path.read_text().split())
+
+
+def test_the_conductor_reads_the_ci_result_and_does_not_rerun_it():
+    review = _words(REPO / ".claude" / "skills" / "pyrite-conductor" / "review.md")
+    assert "read the `verify-red` job's summary line" in review
+    assert "do not re-run it locally" in review
+    # The job runs the PR's own copy: a PR that changes it cannot vouch for itself.
+    assert "the PR itself touches `scripts/verify*red*` or the `verify-red` job" in review
+
+
+def test_the_worker_runs_it_once_and_pastes_the_line():
+    dev = _words(REPO / ".claude" / "skills" / "pyrite-dev" / "SKILL.md")
+    assert "scripts/verify-red.sh" in dev
+    assert "paste its summary line" in dev

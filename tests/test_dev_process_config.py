@@ -451,11 +451,17 @@ class TestChangeClassifier:
 
 
 class TestCoverageAndE2EPolicy:
-    def test_matrix_jobs_do_not_collect_coverage(self, ci):
-        # Coverage doubled the 3.12 test step (214 s vs ~90 s). It lives in its
-        # own non-required job; the matrix is the fast gate.
-        runs = "\n".join(str(s.get("run", "")) for s in ci["jobs"]["test"]["steps"])
-        assert "--cov" not in runs
+    def test_matrix_jobs_collect_coverage_only_on_the_pr_312_leg(self, ci):
+        # Coverage doubled the 3.12 test step (214 s vs ~90 s) under the old
+        # tracer, so the matrix ran without it. Diff coverage (0.26) needs it on
+        # one leg: the pull request's 3.12 leg, with 3.12's sysmon tracer, and
+        # only there; every other leg and every push stays fast.
+        (step,) = [s for s in ci["jobs"]["test"]["steps"] if "--cov" in str(s.get("run", ""))]
+        assert 'if [ "$COVER" = true ]' in step["run"]
+        cover = step["env"]["COVER"]
+        assert "github.event_name == 'pull_request'" in cover
+        assert "matrix.python-version == '3.12'" in cover
+        assert step["env"]["COVERAGE_CORE"] == "sysmon"
 
     def test_coverage_has_its_own_job_and_is_manual_for_now(self, ci):
         job = ci["jobs"]["coverage"]

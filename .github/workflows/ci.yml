@@ -320,8 +320,6 @@ jobs:
         run: mypy pyrite/ --ignore-missing-imports
 
       - name: Run tests
-        env:
-          PYRITE_TEST_PG_URL: postgresql://postgres:postgres@localhost:5432/pyrite_test
         # A bare `-W error::DeprecationWarning` promotes THIRD-PARTY
         # deprecations to hard errors, so any upstream release can turn CI
         # red without a line of pyrite changing (observed: anyio's
@@ -334,12 +332,52 @@ jobs:
         # tests/test_task_claim_concurrency.py for the pattern: barrier + one
         # group deadline), not a reason to go serial.
         #
-        # No coverage here: it doubled the test step. The `coverage` job below
-        # collects it, and is not a required check.
-        run: >-
-          pytest -n auto
-          -W "error::DeprecationWarning:pyrite"
-          -W "error::DeprecationWarning:tests"
+        # Coverage on the pull request's 3.12 leg only, for diff coverage
+        # below (advisory). COVERAGE_CORE=sysmon is 3.12's low-overhead
+        # tracer; --cov-fail-under=0 because [tool.coverage.report] fail_under
+        # would otherwise fail this step, and with it `gate`. Every other leg
+        # and every push runs without it.
+        env:
+          PYRITE_TEST_PG_URL: postgresql://postgres:postgres@localhost:5432/pyrite_test
+          COVER: ${{ github.event_name == 'pull_request' && matrix.python-version == '3.12' }}
+          COVERAGE_CORE: sysmon
+        run: |
+          cov=()
+          if [ "$COVER" = true ]; then
+            cov=(--cov=pyrite --cov-report=xml --cov-fail-under=0)
+            for d in extensions/*/src/*/; do cov+=("--cov=$d"); done
+          fi
+          pytest -n auto \
+            -W "error::DeprecationWarning:pyrite" \
+            -W "error::DeprecationWarning:tests" \
+            ${cov[@]+"${cov[@]}"}
+
+      # Diff coverage (the 0.26 test-evidence item): are the lines this PR
+      # changes run by some test? ADVISORY -- continue-on-error, so a low
+      # number never fails this job or `gate`. The table of uncovered changed
+      # lines goes to the step summary; the JSON goes to the verify-red job,
+      # which files it with the verdicts for the gate decision after ~10 PRs.
+      - name: Diff coverage (pull_request, advisory)
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && matrix.python-version == '3.12' }}
+        continue-on-error: true
+        run: |
+          status=0
+          diff-cover coverage.xml --compare-branch=${{ github.event.pull_request.base.sha }} \
+            --fail-under=80 --format json:diff-cover.json,markdown:diff-cover.md || status=$?
+          cat diff-cover.md >> "$GITHUB_STEP_SUMMARY" || true
+          if [ "$status" -ne 0 ]; then
+            echo "::warning title=diff coverage::below 80% of changed lines (advisory; see the summary)"
+          fi
+
+      - name: Keep the diff coverage for verify-red
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && matrix.python-version == '3.12' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: diff-cover
+          path: diff-cover.json
+          if-no-files-found: ignore
+          retention-days: 1
 
   # ===========================================================================
   # Coverage: its own job so the matrix stays the fast gate. Not a required
@@ -566,29 +604,23 @@ jobs:
         run: bash scripts/run_tutorial.sh
 
   # ===========================================================================
-  # verify-red (#352): do the PR's changed tests fail with its implementation
-  # changes reverted to the merge base? The same check the review lane runs by
-  # hand with scripts/verify-red.sh, on every PR, as a table in the job
-  # summary: red without the fix / red by import-collection error (weak) /
-  # passes without the fix (a ::warning, never a failure) / not verifiable.
+  # verify-red (#352; redesigned in 0.26): do the PR's new and edited tests
+  # fail without its change? scripts/verify_red_ci.py checks the merge base
+  # out into a throwaway worktree, overlays the PR's test-side files, runs the
+  # new tests, overlays the rest of the change and runs them again. The
+  # summary line and a table of the tests that are not red go to the run
+  # summary; `test-evidence.json` (verdict counts plus the test job's diff
+  # coverage) is the measurement for the gating decision.
   #
-  # A SIGNAL, NOT A GATE -- on trial (maintainer, 2026-09-23). Deliberately
-  # absent from `gate`'s needs and not a required check; it fails only when
-  # the check itself could not run. pull_request only: a push or a merge group
-  # has no fix to take away. Bounded: only the changed test files, serially,
-  # never the full suite.
-  #
-  # The install is editable from the PR tree and the revert happens in that
-  # same tree, so `import pyrite` and every extension package resolve to the
-  # REVERTED sources (#189 -- verify-red.sh refuses if they do not).
+  # A SIGNAL, NOT A GATE: absent from `gate`'s needs and not a required check;
+  # it fails only when the check itself could not run. It waits for `test`
+  # (for the diff coverage) but runs whatever `test` concluded.
   # ===========================================================================
   verify-red:
-    needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.backend == 'true'
+    needs: [changes, test]
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
-    # 20 min for the job, 15 of them (--budget below) for the runs: a file the
-    # budget cannot cover becomes a "not verifiable" row, so a few slow files
-    # give a partial table instead of a cancelled job with no legend.
+    # Two pytest runs of at most --timeout each, plus setup.
     timeout-minutes: 20
     permissions:
       contents: read
@@ -609,19 +641,39 @@ jobs:
             pyproject.toml
             extensions/*/pyproject.toml
 
-      - name: Install dependencies (editable, from the PR tree)
+      # The tests run in the throwaway tree with it first on PYTHONPATH; the
+      # script refuses (#189) if any package there imports from elsewhere.
+      - name: Install dependencies
         run: |
           uv pip install --system -e ".[all]"
           for ext in extensions/*/; do
             if [ -f "$ext/pyproject.toml" ]; then uv pip install --system -e "$ext"; fi
           done
 
-      - name: Run the changed tests without the fix
+      - name: Fetch the diff coverage
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: diff-cover
+
+      - name: Run the new tests with and without the change
         env:
           HF_HUB_OFFLINE: "1"
         run: >-
-          python scripts/verify_red_ci.py --budget 900
+          python scripts/verify_red_ci.py --timeout 420
           --base "${{ github.event.pull_request.base.sha }}"
+          --pr "${{ github.event.pull_request.number }}"
+          --diff-cover-json diff-cover.json
+          --json test-evidence.json
+
+      - name: Keep the evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-evidence
+          path: test-evidence.json
+          if-no-files-found: ignore
+          retention-days: 90
 
   # ===========================================================================
   # The one required check. A skipped matrix job reports as `test`, not
