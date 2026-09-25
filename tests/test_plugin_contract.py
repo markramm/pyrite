@@ -124,6 +124,24 @@ class TestDroppedBeforeHookFailsClosed:
         with pytest.raises(Exception):  # noqa: B017 -- the exact type isn't the contract
             runner.run_before_save(entry, {})
 
+    def test_a_failed_dropped_hook_lookup_refuses_the_write(self):
+        """#422 delta cold read: if the registry cannot say which before_*
+        hooks were dropped, dispatch must fail closed, like a failed hook
+        lookup does -- not treat it as "none dropped"."""
+        from pyrite.models.core_types import NoteEntry
+        from pyrite.services.hook_runner import HookRunner
+
+        class BrokenRegistry:
+            def get_hooks_for_kb(self, kb_type):
+                return {}
+
+            def dropped_before_hooks_for_kb(self, kb_type):
+                raise RuntimeError("registry unavailable")
+
+        runner = HookRunner(plugin_registry=BrokenRegistry())
+        with pytest.raises(RuntimeError):
+            runner.run_before_save(NoteEntry(id="t", title="T"), {})
+
     def test_wrong_arity_after_save_hook_only_warns(self, caplog):
         """The after_* half of the same property: dropped, warned, does NOT abort."""
         from pyrite.models.core_types import NoteEntry

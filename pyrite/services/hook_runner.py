@@ -151,10 +151,9 @@ class HookRunner:
         # already treats after_* this way for a hook that raises, so a
         # dropped one is consistent).
         if is_before:
-            try:
-                dropped = self._plugin_registry.dropped_before_hooks_for_kb(kb_type)
-            except Exception:
-                dropped = set()
+            # A failure here re-raises, like a failed hook lookup above:
+            # not knowing what was dropped is not "nothing was dropped".
+            dropped = self._plugin_registry.dropped_before_hooks_for_kb(kb_type)
             if hook_name in dropped:
                 from ..exceptions import PluginError
 
