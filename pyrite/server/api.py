@@ -16,7 +16,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -60,6 +60,13 @@ from ..services.task_service import TaskService
 from ..services.version_service import VersionService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
+
+if TYPE_CHECKING:
+    from ..services.auth_service import AuthService
+    from ..services.embedding_worker import EmbeddingWorker
+    from ..services.qa_service import QAService
+    from ..services.site_cache import SiteCacheService
+    from ..services.sitemap_service import SitemapService
 
 logger = logging.getLogger(__name__)
 
@@ -427,6 +434,85 @@ def get_settings_service(
 ) -> SettingsService:
     """Get SettingsService instance via DI."""
     return SettingsService(db)
+
+
+def get_auth_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> "AuthService":
+    """Get AuthService instance via DI (users, sessions, grants, tokens).
+
+    One per request, like every other provider here. The endpoints used to
+    build ``AuthService(db, ...)`` inline (#380).
+    """
+    from ..services.auth_service import AuthService
+
+    return AuthService(db, config.settings.auth)
+
+
+def get_qa_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+    llm_service: LLMService = Depends(get_llm_service),
+) -> "QAService":
+    """Get QAService instance via DI."""
+    from ..services.qa_service import QAService
+
+    return QAService(config, db, llm_service=llm_service)
+
+
+def get_sitemap_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> "SitemapService":
+    """Get SitemapService instance via DI."""
+    from ..services.sitemap_service import SitemapService
+
+    return SitemapService(config, db)
+
+
+def get_embedding_worker(
+    db: PyriteDB = Depends(get_db),
+) -> "EmbeddingWorker":
+    """Get an EmbeddingWorker (the embed queue) via DI."""
+    from ..services.embedding_worker import EmbeddingWorker
+
+    return EmbeddingWorker(db)
+
+
+def get_site_cache_factory(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> "Callable[[], SiteCacheService]":
+    """A zero-argument builder for SiteCacheService.
+
+    A factory, not the service: the constructor reads ``branding.yaml`` and
+    may raise ``BrandingInvalidError``, which ``POST /site/render`` answers
+    with a 409 -- so the handler must be the one that calls it.
+    """
+
+    def build() -> "SiteCacheService":
+        from ..services.site_cache import SiteCacheService
+
+        return SiteCacheService(config, db)
+
+    return build
+
+
+def get_kb_default_role_resolver(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> Callable[[str], str | None]:
+    """A KB's ``default_role``, for a handler that decides inline.
+
+    ``resolve_default(kb_name)`` is ``resolve_kb_default_role`` bound to
+    this request's config and database (#380); #383 replaces it.
+    """
+
+    def resolve_default(kb_name: str) -> str | None:
+        return resolve_kb_default_role(config, db, kb_name)
+
+    return resolve_default
 
 
 KBRoleResolver = Callable[[str], Awaitable[str | None]]

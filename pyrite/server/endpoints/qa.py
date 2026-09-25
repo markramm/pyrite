@@ -4,29 +4,15 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from ...config import PyriteConfig
-from ...services.llm_service import LLMService
 from ...services.qa_service import QAService
-from ...storage.database import PyriteDB
 from ..api import (
-    get_config,
-    get_db,
-    get_llm_service,
+    get_qa_service,
     get_readable_kbs,
     limiter,
     requires_kb_read,
 )
 
 router = APIRouter(tags=["QA"])
-
-
-def get_qa_service(
-    config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
-    llm_service: LLMService = Depends(get_llm_service),
-) -> QAService:
-    """Get QA service instance."""
-    return QAService(config, db, llm_service=llm_service)
 
 
 @router.get("/qa/status", dependencies=[Depends(requires_kb_read())])

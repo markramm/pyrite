@@ -623,3 +623,55 @@ class TestKBPermissionsCRUD:
         # Verify empty
         r = client.get("/api/kbs/test-kb/permissions")
         assert r.json()["permissions"] == []
+
+
+class TestKBPermissionsForKBAdmins:
+    """The non-global-admin branch of /api/kbs/{name}/permissions: a KB admin
+    by grant or by the KB's default role may manage grants, anyone else gets
+    403. Characterizes #380's move of AuthService and the default-role lookup
+    to providers."""
+
+    def _clients(self, tmpdir):
+        client, config, db = _make_client(tmpdir)
+        client.post("/auth/register", json={"username": "admin", "password": "password123"})
+        from pyrite.services.auth_service import AuthService
+
+        auth = AuthService(db, config.settings.auth)
+        users = {}
+        for name in ("bob", "carol"):
+            c = TestClient(client.app)
+            r = c.post("/auth/register", json={"username": name, "password": "password123"})
+            auth.set_role(r.json()["id"], "write")
+            users[name] = (c, r.json()["id"])
+        return client, config, auth, users
+
+    def test_kb_admin_by_grant_manages_permissions(self, tmpdir):
+        admin, _config, auth, users = self._clients(tmpdir)
+        bob, bob_id = users["bob"]
+        _carol, carol_id = users["carol"]
+        auth.grant_kb_permission(bob_id, "test-kb", "admin", None)
+
+        r = bob.get("/api/kbs/test-kb/permissions")
+        assert r.status_code == 200, r.text
+        assert [p["role"] for p in r.json()["permissions"]] == ["admin"]
+        r = bob.post("/api/kbs/test-kb/permissions", json={"user_id": carol_id, "role": "read"})
+        assert r.status_code == 200, r.text
+
+    def test_no_grant_is_refused(self, tmpdir):
+        _admin, _config, _auth, users = self._clients(tmpdir)
+        carol, carol_id = users["carol"]
+        for r in (
+            carol.get("/api/kbs/test-kb/permissions"),
+            carol.post("/api/kbs/test-kb/permissions", json={"user_id": carol_id, "role": "admin"}),
+        ):
+            assert r.status_code == 403
+            assert r.json() == {"detail": "Admin access required for this KB"}
+
+    def test_kb_default_role_admin_counts(self, tmpdir):
+        _admin, config, auth, users = self._clients(tmpdir)
+        carol, carol_id = users["carol"]
+        # Since #467 a KB's default_role reaches past read only for a user an
+        # admin gave global access.
+        auth.set_role(carol_id, "write", global_access=True)
+        config.knowledge_bases[0].default_role = "admin"
+        assert carol.get("/api/kbs/test-kb/permissions").status_code == 200

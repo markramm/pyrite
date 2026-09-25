@@ -15,32 +15,12 @@ from ..config import PyriteConfig
 from ..exceptions import LastAdminError
 from ..services.auth_service import AuthService, RegistrationClosedError
 from ..services.oauth_providers import GitHubOAuthProvider
-from ..storage.database import PyriteDB
-from .api import _anonymized_key_func, get_config, get_db, requires_tier, verify_api_key
+from .api import _anonymized_key_func, get_auth_service, get_config, requires_tier, verify_api_key
 from .auth_rate_limit import get_auth_rate_limiter
 
 logger = logging.getLogger(__name__)
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
-
-# ---------------------------------------------------------------------------
-# Dependency
-# ---------------------------------------------------------------------------
-
-_auth_service: AuthService | None = None
-
-
-def get_auth_service(
-    config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
-) -> AuthService:
-    global _auth_service
-    if _auth_service is None:
-        _auth_service = AuthService(db, config.settings.auth)
-    elif _auth_service.db is not db:
-        _auth_service = AuthService(db, config.settings.auth)
-    return _auth_service
-
 
 # ---------------------------------------------------------------------------
 # Request / Response schemas

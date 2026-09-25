@@ -4,19 +4,16 @@ from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from ...config import PyriteConfig
 from ...exceptions import KBNotFoundError
 from ...services.kb_service import KBService
-from ...storage.database import PyriteDB
 from ..api import (
     TIER_LEVELS,
-    get_config,
-    get_db,
+    KBRoleResolver,
+    get_kb_role_resolver,
     get_kb_service,
     limiter,
     requires_kb_read,
     requires_kb_tier,
-    resolve_effective_kb_role,
 )
 from ..schemas import DailyDatesResponse, EntryResponse
 
@@ -170,8 +167,7 @@ async def get_or_create_daily_note(
     date_str: str,
     kb: str = Query(..., description="KB name"),
     svc: KBService = Depends(get_kb_service),
-    config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
+    role_of: KBRoleResolver = Depends(get_kb_role_resolver),
 ):
     """Get a daily note for the given date, auto-creating it only for a
     write-tier caller.
@@ -199,7 +195,7 @@ async def get_or_create_daily_note(
     if existing:
         return existing
 
-    effective_role = await resolve_effective_kb_role(request, config, db, kb)
+    effective_role = await role_of(kb)
     if effective_role is None or TIER_LEVELS.get(effective_role, -1) < TIER_LEVELS.get("write", 99):
         raise HTTPException(
             status_code=404,
