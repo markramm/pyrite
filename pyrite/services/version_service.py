@@ -36,10 +36,14 @@ class VersionService:
     def get_entry_at_version(self, entry_id: str, kb_name: str, commit_hash: str) -> str | None:
         """Get entry content at a specific git commit.
 
+        Returns None when the KB, the entry or the object is unknown, or the
+        entry's file does not exist at that commit.
+
         Raises:
-            InvalidGitRefError: `commit_hash` is not a hex object id. Checked
-                before any lookup or git call; this service is the only path
-                from a caller-supplied hash to git.
+            InvalidGitRefError: `commit_hash` is not a hex object id (checked
+                before any lookup or git call), or it names an object that is
+                not a commit, such as a tree or a blob. This service is the
+                only path from a caller-supplied hash to git.
         """
         import subprocess
 
@@ -68,10 +72,32 @@ class VersionService:
         except ValueError:
             rel_path = file_path
 
-        # Use git show to get content at commit
+        def _rev_parse(rev: str) -> str | None:
+            result = subprocess.run(
+                ["git", "rev-parse", "--verify", "--quiet", "--end-of-options", rev],
+                cwd=str(kb_path),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            return result.stdout.strip() if result.returncode == 0 else None
+
+        try:
+            # The id must name a commit (an annotated tag peels to its commit).
+            # `<tree>:<path>` would otherwise read a path from any tree.
+            if _rev_parse(f"{commit_hash}^{{object}}") is None:
+                return None
+            commit = _rev_parse(f"{commit_hash}^{{commit}}")
+        except Exception:
+            logger.warning("Git rev-parse failed for KB", exc_info=True)
+            return None
+        if commit is None:
+            raise InvalidGitRefError("Invalid commit hash: the object is not a commit")
+
+        # Read the entry's file at the peeled, full commit id
         try:
             result = subprocess.run(
-                ["git", "show", "--end-of-options", f"{commit_hash}:{rel_path}"],
+                ["git", "show", "--end-of-options", f"{commit}:{rel_path}"],
                 cwd=str(kb_path),
                 capture_output=True,
                 text=True,
@@ -80,5 +106,5 @@ class VersionService:
             if result.returncode == 0:
                 return result.stdout
         except Exception:
-            logger.warning("Git diff failed for KB", exc_info=True)
+            logger.warning("Git show failed for KB", exc_info=True)
         return None

@@ -133,13 +133,50 @@ class TestCommitHashValidation:
             return real_run(argv, *args, **kwargs)
 
         monkeypatch.setattr(subprocess, "run", _spy)
-        assert svc.get_entry_at_version("entry-1", "test-kb", commit1) is not None
+        # An abbreviated id: the read must use the peeled full commit id.
+        assert svc.get_entry_at_version("entry-1", "test-kb", commit1[:7]) is not None
         show = [a for a in seen if a[:2] == ["git", "show"]]
         assert len(show) == 1, seen
         argv = show[0]
-        assert "--end-of-options" in argv
         assert argv.index("--end-of-options") == len(argv) - 2
         assert argv[-1] == f"{commit1}:entry-1.md"
+        peels = [a for a in seen if a[:2] == ["git", "rev-parse"] and commit1[:7] in a[-1]]
+        assert peels, seen
+        for a in peels:
+            assert a.index("--end-of-options") == len(a) - 2, a
+
+
+def _git(kb_path, *args):
+    return subprocess.run(
+        ["git", *args], cwd=str(kb_path), capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+class TestCommitObjectsOnly:
+    """A hex id must name a commit: a tree or blob id is refused (#333 cold read)."""
+
+    @pytest.mark.parametrize("kind", ["tree", "blob"])
+    def test_non_commit_object_refused(self, version_setup, kind):
+        svc, db, commit1 = version_setup
+        kb_path = svc.config.get_kb("test-kb").path
+        obj = _git(kb_path, "rev-parse", f"{commit1}^{{tree}}")
+        if kind == "blob":
+            obj = _git(kb_path, "rev-parse", f"{commit1}:entry-1.md")
+        with pytest.raises(InvalidGitRefError):
+            svc.get_entry_at_version("entry-1", "test-kb", obj)
+
+    def test_annotated_tag_peels_to_its_commit(self, version_setup):
+        svc, db, commit1 = version_setup
+        kb_path = svc.config.get_kb("test-kb").path
+        _git(kb_path, "tag", "-a", "v1", "-m", "v1", commit1)
+        tag = _git(kb_path, "rev-parse", "v1")
+        assert tag != commit1
+        content = svc.get_entry_at_version("entry-1", "test-kb", tag)
+        assert content is not None and "Version 1" in content
+
+    def test_unknown_object_is_not_found_not_refused(self, version_setup):
+        svc, db, commit1 = version_setup
+        assert svc.get_entry_at_version("entry-1", "test-kb", "0" * 40) is None
 
 
 class TestVersionEndpointHash:
@@ -166,6 +203,13 @@ class TestVersionEndpointHash:
         before = self._tree(kb_path)
         r = c.get(f"/api/entries/entry-1/versions/{bad}", params={"kb": "test-kb"})
         assert self._tree(kb_path) == before, "the request created a file in the KB"
+        assert r.status_code == 400, r.text
+        assert r.json()["detail"]["code"] == "INVALID_REF"
+
+    def test_tree_id_refused_with_400(self, client):
+        c, kb_path, commit1 = client
+        tree = _git(kb_path, "rev-parse", f"{commit1}^{{tree}}")
+        r = c.get(f"/api/entries/entry-1/versions/{tree}", params={"kb": "test-kb"})
         assert r.status_code == 400, r.text
         assert r.json()["detail"]["code"] == "INVALID_REF"
 
