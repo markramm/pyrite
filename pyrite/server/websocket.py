@@ -14,13 +14,13 @@ import asyncio
 import json
 import logging
 from typing import Any
-from urllib.parse import urlsplit
 
 from fastapi import HTTPException, WebSocket
 from starlette.requests import HTTPConnection
 
 from ..config import PyriteConfig
 from ..storage.database import PyriteDB
+from .request_guard import origin_permitted
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +57,7 @@ def origin_allowed(conn: HTTPConnection, config: PyriteConfig) -> bool:
     origin = conn.headers.get("origin")
     if origin is None:
         return True
-    if origin in config.settings.cors_origins:
-        return True
-    host = conn.headers.get("host", "")
-    netloc = urlsplit(origin).netloc
-    return bool(host) and netloc.lower() == host.lower()
+    return origin_permitted(origin, conn.headers.get("host", ""), config.settings.cors_origins)
 
 
 def resolve_socket_scope(

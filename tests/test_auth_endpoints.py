@@ -366,6 +366,10 @@ class TestOAuthEndpoints:
 
         parsed = urllib.parse.urlparse(r.headers["location"])
         state = urllib.parse.parse_qs(parsed.query)["state"][0]
+        # The browser outlives the server process: it still holds the
+        # binding cookie set when the flow started.
+        binding = client_a.cookies.get("pyrite_oauth_binding")
+        assert binding
         db_a.close()
 
         # Simulate a process restart: wipe any in-memory state store (what
@@ -376,6 +380,7 @@ class TestOAuthEndpoints:
             auth_endpoints_module._oauth_states.clear()
 
         client_b, _config_b, db_b = _make_client(tmpdir, providers=providers)
+        client_b.cookies.set("pyrite_oauth_binding", binding, path="/auth/github")
 
         mock_token = OAuthToken(access_token="gho_test")
         mock_profile = OAuthProfile(

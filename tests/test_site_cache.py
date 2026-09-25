@@ -10,7 +10,7 @@ from pyrite.storage.database import PyriteDB
 @pytest.fixture
 def cache_env(tmp_path):
     """Create a minimal Pyrite environment for cache testing."""
-    kb = KBConfig(name="test-kb", path=tmp_path / "kb", kb_type="generic")
+    kb = KBConfig(name="test-kb", path=tmp_path / "kb", kb_type="generic", default_role="read")
     config = PyriteConfig(
         knowledge_bases=[kb],
         settings=Settings(index_path=tmp_path / "index.db"),
@@ -97,7 +97,14 @@ class TestSiteCacheRenderAll:
         # NOT passed to PyriteConfig(knowledge_bases=...) -- DB-only.
         config = PyriteConfig(knowledge_bases=[], settings=Settings(index_path=db_path))
         db = PyriteDB(db_path)
-        db.register_kb("db-only-kb", "generic", str(kb_path), "A DB-only KB", source="user")
+        db.register_kb(
+            "db-only-kb",
+            "generic",
+            str(kb_path),
+            "A DB-only KB",
+            source="user",
+            default_role="read",
+        )
         db.merge_registered_kbs(config)
         db.upsert_entry(
             {
@@ -166,7 +173,13 @@ class TestEditLinkVisibility:
         assert "Edit on Pyrite" in html
 
     def test_edit_link_hidden_for_read_only_kb(self, tmp_path):
-        kb = KBConfig(name="public-kb", path=tmp_path / "kb", kb_type="generic", read_only=True)
+        kb = KBConfig(
+            name="public-kb",
+            path=tmp_path / "kb",
+            kb_type="generic",
+            default_role="read",
+            read_only=True,
+        )
         config = PyriteConfig(
             knowledge_bases=[kb],
             settings=Settings(index_path=tmp_path / "index.db"),
@@ -198,7 +211,7 @@ class TestAboutPageLink:
     """About link in homepage should only appear when _about entry exists."""
 
     def test_about_link_hidden_when_no_about_entry(self, tmp_path):
-        kb = KBConfig(name="my-kb", path=tmp_path / "kb", kb_type="generic")
+        kb = KBConfig(name="my-kb", path=tmp_path / "kb", kb_type="generic", default_role="read")
         config = PyriteConfig(
             knowledge_bases=[kb],
             settings=Settings(index_path=tmp_path / "index.db"),
@@ -226,7 +239,7 @@ class TestAboutPageLink:
         db.close()
 
     def test_about_link_shown_when_about_entry_exists(self, tmp_path):
-        kb = KBConfig(name="my-kb", path=tmp_path / "kb", kb_type="generic")
+        kb = KBConfig(name="my-kb", path=tmp_path / "kb", kb_type="generic", default_role="read")
         config = PyriteConfig(
             knowledge_bases=[kb],
             settings=Settings(index_path=tmp_path / "index.db"),
@@ -1202,7 +1215,7 @@ def branded_cache_env(tmp_path):
         ).lstrip()
     )
 
-    kb = KBConfig(name="test-kb", path=tmp_path / "kb", kb_type="generic")
+    kb = KBConfig(name="test-kb", path=tmp_path / "kb", kb_type="generic", default_role="read")
     config = PyriteConfig(
         knowledge_bases=[kb],
         settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding_dir),

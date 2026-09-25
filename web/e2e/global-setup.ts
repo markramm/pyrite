@@ -160,6 +160,11 @@ export function preflightPort(port: number, label: string): void {
  *   100x200 + 50x429 with the limiter on, and 150x200 with it off. The limiter
  *   is a production behaviour with its own backend tests; it is not what these
  *   specs are asserting.
+ * - `PYRITE_CORS_ORIGINS` names this world's Vite dev server. The dev server
+ *   proxies with `changeOrigin`, so the backend sees its own Host but the
+ *   browser's Origin, `http://localhost:<derived vite port>`; an auth-disabled
+ *   backend refuses a state-changing request from an origin that is neither
+ *   its host nor configured (pyrite/server/request_guard.py).
  */
 export const E2E_ENV: Record<string, string> = {
 	PYRITE_DATA_DIR: E2E_DATA_DIR,
@@ -169,7 +174,8 @@ export const E2E_ENV: Record<string, string> = {
 	PYRITE_SEARCH_MODE: 'keyword',
 	HF_HUB_OFFLINE: '1',
 	TRANSFORMERS_OFFLINE: '1',
-	RATELIMIT_ENABLED: 'false'
+	RATELIMIT_ENABLED: 'false',
+	PYRITE_CORS_ORIGINS: `http://localhost:${E2E_VITE_PORT}`
 };
 
 function pyrite(args: string[]): string {

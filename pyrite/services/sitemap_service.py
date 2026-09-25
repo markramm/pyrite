@@ -17,6 +17,7 @@ from xml.sax.saxutils import escape
 
 from ..config import PyriteConfig
 from ..storage.database import PyriteDB
+from .public_kbs import public_kb_names
 
 SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
 
@@ -47,7 +48,7 @@ class SitemapService:
         equivalent config.yaml KB (collapse-kb-registry-to-one-source-of-
         truth: the all_kbs() sweep).
         """
-        return [kb.name for kb in self.config.all_kbs() if kb.default_role == "read"]
+        return public_kb_names(self.config)
 
     def entries(self, site_url: str) -> list[SitemapEntry]:
         """Collect all public-KB entries as SitemapEntry objects.

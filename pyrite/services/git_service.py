@@ -12,6 +12,8 @@ import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
 
+from ..exceptions import InvalidGitRefError
+
 logger = logging.getLogger(__name__)
 
 _GITHUB_HOSTS = frozenset({"github.com", "www.github.com"})
@@ -308,6 +310,27 @@ class GitService:
         except (subprocess.SubprocessError, OSError):
             logger.warning("Failed to get current branch for %s", local_path, exc_info=True)
         return "main"
+
+    @staticmethod
+    def _checked_out_branch(local_path: Path) -> str | None:
+        """The checked-out branch's name, or None on a detached HEAD.
+
+        Unlike `get_current_branch`, which answers "HEAD" (detached) or
+        "main" (on error), this never invents a name to push.
+        """
+        try:
+            result = subprocess.run(
+                ["git", "symbolic-ref", "--short", "-q", "HEAD"],
+                cwd=str(local_path),
+                capture_output=True,
+                text=True,
+                env=_git_env(),
+            )
+        except (subprocess.SubprocessError, OSError):
+            logger.warning("Failed to read the current branch of %s", local_path, exc_info=True)
+            return None
+        name = result.stdout.strip()
+        return name if result.returncode == 0 and name else None
 
     @staticmethod
     def get_head_commit(local_path: Path) -> str:
@@ -680,6 +703,77 @@ class GitService:
         except (subprocess.SubprocessError, OSError) as e:
             return False, {"error": str(e)}
 
+    # =========================================================================
+    # Caller-supplied ref and remote names
+    # =========================================================================
+    #
+    # A remote or branch that reaches a git command line from a caller must
+    # never be parsed by git as an option (`--receive-pack=<cmd>` runs a
+    # command) or as a URL or path (a push to anywhere). Values are validated
+    # as names here and, where git supports it, passed after
+    # `--end-of-options` as well. tests/test_git_ref_arguments.py pins every
+    # git argument list in this module.
+
+    @staticmethod
+    def is_valid_branch_name(name: object) -> bool:
+        """True for a valid branch name that git cannot read as an option.
+
+        Nor as anything but a branch: a leading "+" is a forced update in a
+        push refspec, and `git check-ref-format` accepts it.
+        """
+        if not isinstance(name, str) or name.startswith(("-", "+")):
+            return False
+        # `git check-ref-format` accepts "refs/heads/-x", hence the check
+        # above; it rejects whitespace, control characters, "..", "@{" and
+        # the other forms a ref name may not take. The argument starts with
+        # "refs/", so git cannot read it as an option either.
+        try:
+            result = subprocess.run(
+                ["git", "check-ref-format", f"refs/heads/{name}"],
+                capture_output=True,
+                text=True,
+                env=_git_env(),
+            )
+        except (subprocess.SubprocessError, OSError):
+            return False
+        return result.returncode == 0
+
+    @staticmethod
+    def validate_branch_name(name: object) -> str:
+        """Return `name` if it is a valid branch name, else raise InvalidGitRefError."""
+        if not GitService.is_valid_branch_name(name):
+            raise InvalidGitRefError("Invalid branch name")
+        return name  # type: ignore[return-value]
+
+    @staticmethod
+    def list_remotes(local_path: Path) -> set[str]:
+        """The names of the repository's configured remotes."""
+        try:
+            result = subprocess.run(
+                ["git", "remote"],
+                cwd=str(local_path),
+                capture_output=True,
+                text=True,
+                env=_git_env(),
+            )
+        except (subprocess.SubprocessError, OSError):
+            logger.warning("Failed to list remotes for %s", local_path, exc_info=True)
+            return set()
+        if result.returncode != 0:
+            return set()
+        return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+    @staticmethod
+    def validate_remote_name(local_path: Path, name: object) -> str:
+        """Return `name` if it is one of the repository's configured remotes.
+
+        A URL, a path or an option is never a configured remote's name, so
+        membership is the whole check.
+        """
+        if not isinstance(name, str) or name not in GitService.list_remotes(local_path):
+            raise InvalidGitRefError("Remote must be the name of a configured remote")
+        return name
+
     @staticmethod
     def push(
         local_path: Path,
@@ -698,12 +792,33 @@ class GitService:
 
         Returns:
             (success, message)
+
+        Raises:
+            InvalidGitRefError: `remote` is not a configured remote, or
+                `branch` is not a valid branch name. Git is not run.
         """
         if not GitService.is_git_repo(local_path):
             return False, "Not a git repository"
 
+        if not GitService.list_remotes(local_path):
+            # Nothing can be pushed anywhere: an ordinary push failure, not a
+            # rejected value, reported with its real cause.
+            return False, "Push failed: this repository has no remotes configured"
         if branch is None:
-            branch = GitService.get_current_branch(local_path)
+            branch = GitService._checked_out_branch(local_path)
+            if branch is None:
+                # Not a rejected value: there is nothing to default to.
+                return (
+                    False,
+                    "Push failed: the repository has no current branch "
+                    "(detached HEAD); name the branch to push",
+                )
+        GitService.validate_remote_name(local_path, remote)
+        GitService.validate_branch_name(branch)
+        # The refspec is built here, never taken from the caller: a branch
+        # value names that branch on both sides and nothing else (not a tag
+        # of the same name, not a forced update).
+        refspec = f"refs/heads/{branch}:refs/heads/{branch}"
 
         extra = {}
         if token:
@@ -714,7 +829,7 @@ class GitService:
 
         try:
             result = subprocess.run(
-                ["git", "push", "-u", remote, branch],
+                ["git", "push", "-u", "--end-of-options", remote, refspec],
                 cwd=str(local_path),
                 capture_output=True,
                 text=True,
@@ -863,12 +978,14 @@ class GitService:
         Returns:
             (success, message) tuple.
         """
+        if not GitService.is_valid_branch_name(branch):
+            return False, "Invalid branch name"
         worktree_path = Path(worktree_path)
         worktree_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             # Try creating with new branch first
             result = subprocess.run(
-                ["git", "worktree", "add", str(worktree_path), "-b", branch],
+                ["git", "worktree", "add", "-b", branch, "--end-of-options", str(worktree_path)],
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
@@ -878,7 +995,7 @@ class GitService:
                 return True, f"Created worktree at {worktree_path} on branch {branch}"
             # Branch may already exist — try without -b
             result = subprocess.run(
-                ["git", "worktree", "add", str(worktree_path), branch],
+                ["git", "worktree", "add", "--end-of-options", str(worktree_path), branch],
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
@@ -956,6 +1073,8 @@ class GitService:
         Performs checkout + merge in the repo_path working directory.
         Returns (success, message). On conflict, returns (False, conflict_info).
         """
+        if not (GitService.is_valid_branch_name(branch) and GitService.is_valid_branch_name(into)):
+            return False, "Invalid branch name"
         try:
             # Checkout target branch
             result = subprocess.run(
@@ -970,7 +1089,7 @@ class GitService:
 
             # Merge
             result = subprocess.run(
-                ["git", "merge", branch, "--no-edit"],
+                ["git", "merge", "--no-edit", "--end-of-options", branch],
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
@@ -1007,9 +1126,12 @@ class GitService:
         Returns:
             (success, diff_output) tuple.
         """
-        cmd = ["git", "diff", f"{base}...{head}"]
+        if not (GitService.is_valid_branch_name(base) and GitService.is_valid_branch_name(head)):
+            return False, "Invalid branch name"
+        cmd = ["git", "diff"]
         if stat_only:
             cmd.append("--stat")
+        cmd.extend(["--end-of-options", f"{base}...{head}"])
         try:
             result = subprocess.run(
                 cmd,

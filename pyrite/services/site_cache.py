@@ -9,6 +9,7 @@ from ..config import PyriteConfig
 from ..storage.database import PyriteDB
 from ..utils.metadata import parse_metadata
 from ..utils.sanitize import sanitize_filename
+from .public_kbs import public_kb_names
 
 logger = logging.getLogger(__name__)
 
@@ -57,14 +58,21 @@ class SiteCacheService:
         self._branding = BrandingService(config.settings.branding_dir).get()
 
     def render_all(self) -> dict:
-        """Render all KB index pages and entry pages. Returns stats."""
+        """Render the public KBs' index pages and entry pages. Returns stats.
+
+        `/site` is served to anonymous visitors, so only public KBs
+        (`public_kbs.public_kb_names`) are rendered; links into other KBs
+        are dropped from the pages.
+        """
         from collections import defaultdict
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
+        public = set(public_kb_names(self.config))
         kbs = [
             {"name": kb.name, "description": getattr(kb, "description", ""), "entry_count": 0}
             for kb in self.config.all_kbs()
+            if kb.name in public
         ]
         stats = {"kbs": 0, "entries": 0, "errors": 0}
 
@@ -91,8 +99,8 @@ class SiteCacheService:
             stats["kbs"] += 1
 
             # Batch-load all backlinks, outlinks, and sources for this KB (3 queries total, not 3N)
-            backlinks_map = self.db.get_all_backlinks_for_kb(kb_name)
-            outlinks_map = self.db.get_all_outlinks_for_kb(kb_name)
+            backlinks_map = _only_public_links(self.db.get_all_backlinks_for_kb(kb_name), public)
+            outlinks_map = _only_public_links(self.db.get_all_outlinks_for_kb(kb_name), public)
             sources_map = self.db.get_all_sources_for_kb(kb_name)
 
             # Pre-compute actor->entry_ids and tag->entry_ids for related events
@@ -179,12 +187,24 @@ class SiteCacheService:
         return stats
 
     def render_entry_by_id(self, entry_id: str, kb_name: str) -> bool:
-        """Render a single entry page. Returns True if successful."""
+        """Render a single entry page. Returns True if successful.
+
+        Refuses (False) an entry in a KB that is not public.
+        """
+        public = set(public_kb_names(self.config))
+        if kb_name not in public:
+            return False
         entry = self.db.get_entry(entry_id, kb_name)
         if not entry:
             return False
-        backlinks = self.db.get_backlinks(entry_id, kb_name)
-        outlinks = self.db.get_outlinks(entry_id, kb_name)
+        backlinks = [
+            bl for bl in self.db.get_backlinks(entry_id, kb_name) if bl.get("kb_name") in public
+        ]
+        outlinks = [
+            ol
+            for ol in self.db.get_outlinks(entry_id, kb_name)
+            if ol.get("kb_name", kb_name) in public
+        ]
         self._render_entry(kb_name, entry, backlinks, outlinks)
         return True
 
@@ -389,8 +409,6 @@ class SiteCacheService:
         related: list[tuple[dict, int]] | None = None,
     ):
         """Render a single entry page."""
-        import json
-
         entry_id = entry["id"]
         title = entry.get("title", entry_id)
         entry_type = entry.get("entry_type", "note")
@@ -442,7 +460,7 @@ class SiteCacheService:
         if author_name:
             jsonld["author"] = {"@type": "Person", "name": author_name}
 
-        extra_head = f'<script type="application/ld+json">{json.dumps(jsonld)}</script>'
+        extra_head = f'<script type="application/ld+json">{_json_for_script(jsonld)}</script>'
 
         # Reading time estimate
         word_count = len(body_md.split())
@@ -637,6 +655,18 @@ class SiteCacheService:
         (kb_dir / f"{sanitize_filename(entry_id)}.html").write_text(html, encoding="utf-8")
 
 
+def _only_public_links(links_map: dict[str, list[dict]], public: set[str]) -> dict[str, list[dict]]:
+    """Drop link rows whose other end is in a non-public KB.
+
+    The batch link queries join across KBs, so a public entry's backlinks
+    and outlinks can name (and title) entries in private KBs.
+    """
+    return {
+        eid: [row for row in rows if row.get("kb_name") in public]
+        for eid, rows in links_map.items()
+    }
+
+
 def _render_designed_homepage(
     homepage: dict, kb_name: str, total: int, *, has_about: bool = False
 ) -> str:
@@ -758,10 +788,11 @@ def _render_designed_homepage(
         if links:
             link_cards = []
             for label, href, desc in links:
+                safe_href = _safe_href(href)
+                if safe_href is None:
+                    continue
                 link_cards.append(
-                    f'<a href="{_esc(href)}" style="display:block;padding:1rem 1.25rem;border:1px solid var(--border);border-radius:0.625rem;text-decoration:none;transition:all 0.15s;background:var(--surface-raised)"'
-                    f" onmouseover=\"this.style.borderColor='var(--gold-border)';this.style.boxShadow='0 2px 12px rgba(201,168,76,0.1)'\""
-                    f" onmouseout=\"this.style.borderColor='var(--border)';this.style.boxShadow='none'\">"
+                    f'<a href="{safe_href}" class="explore-card">'
                     f'<strong style="color:var(--ink);display:block;margin-bottom:0.25rem">{_esc(label)}</strong>'
                     f'<span style="font-size:0.8125rem;color:var(--ink-muted)">{_esc(desc)}</span>'
                     f"</a>"
@@ -801,21 +832,18 @@ def _render_designed_homepage(
 
 
 def _md_inline(text: str) -> str:
-    """Convert inline markdown (bold, italic, links) without wrapping in paragraphs."""
+    """Convert inline markdown (bold, italic, links) without wrapping in paragraphs.
+
+    The text is HTML-escaped before any markdown transform, so raw HTML in
+    it is shown, never interpreted.
+    """
     import re
 
+    text, links = _extract_links(text, kb_name=None)
+    text = _esc(text)
     text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
     text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
-
-    def _safe_inline_link(m: re.Match) -> str:
-        link_text = _esc(m.group(1))
-        url = m.group(2).strip()
-        if url.lower().startswith(("javascript:", "data:", "vbscript:")):
-            return link_text
-        return f'<a href="{_esc(url)}">{link_text}</a>'
-
-    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _safe_inline_link, text)
-    return text
+    return _restore_links(text, links)
 
 
 def _humanize_type(entry_type: str) -> str:
@@ -838,8 +866,16 @@ def _esc(text: str) -> str:
 
 
 def _md_to_html(md: str, kb_name: str) -> str:
-    """Convert basic markdown to HTML with wikilink resolution."""
+    """Convert basic markdown to HTML with wikilink resolution.
+
+    Links and wikilinks are rendered from the raw text first and set aside;
+    everything else is HTML-escaped before the markdown transforms run, so
+    raw HTML in an entry body is shown as text, never interpreted.
+    """
     import re
+
+    md, links = _extract_links(md, kb_name=kb_name)
+    md = _esc(md)
 
     # Headings
     html = re.sub(r"^### (.+)$", r"<h3>\1</h3>", md, flags=re.MULTILINE)
@@ -849,29 +885,6 @@ def _md_to_html(md: str, kb_name: str) -> str:
     # Bold/italic
     html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
     html = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html)
-
-    # Wikilinks: [[kb:id|label]] or [[id|label]] or [[id]]
-    def _wikilink(m: re.Match) -> str:
-        target = m.group(1)
-        label = m.group(2) if m.group(2) else None
-        parts = target.split(":", 1)
-        if len(parts) == 2:
-            return (
-                f'<a href="/site/{_esc(parts[0])}/{_esc(parts[1])}">{_esc(label or parts[1])}</a>'
-            )
-        return f'<a href="/site/{_esc(kb_name)}/{_esc(target)}">{_esc(label or target)}</a>'
-
-    html = re.sub(r"\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]", _wikilink, html)
-
-    # Markdown links [text](url) — escape text and block dangerous URLs
-    def _safe_link(m: re.Match) -> str:
-        text = _esc(m.group(1))
-        url = m.group(2).strip()
-        if url.lower().startswith(("javascript:", "data:", "vbscript:")):
-            return text
-        return f'<a href="{_esc(url)}">{text}</a>'
-
-    html = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _safe_link, html)
 
     # List items
     html = re.sub(r"^- (.+)$", r"<li>\1</li>", html, flags=re.MULTILINE)
@@ -885,4 +898,93 @@ def _md_to_html(md: str, kb_name: str) -> str:
     html = re.sub(r"(</h[123]>)\s*</p>", r"\1", html)
     html = re.sub(r"<p>\s*</p>", "", html)
 
-    return html
+    return _restore_links(html, links)
+
+
+# Placeholder for a link rendered before escaping; NUL never survives input.
+_LINK_MARK = "\x00"
+_SAFE_SCHEMES = ("http", "https", "mailto", "tel")
+
+
+def _safe_href(url: str) -> str | None:
+    """Return ``url`` escaped for an href attribute, or None if unsafe.
+
+    Character references are decoded first (as a browser would), then any
+    explicit scheme must be on an allowlist: ``javascript:``, ``data:``,
+    ``vbscript:`` and anything unknown are refused, including spellings
+    like ``jav&#x61;script:`` or ``java\tscript:``.
+    """
+    import html as _html
+    import re
+
+    decoded = _html.unescape(url).strip()
+    probe = re.sub(r"[\x00-\x20\x7f]", "", decoded)
+    m = re.match(r"([a-zA-Z][a-zA-Z0-9+.-]*):", probe)
+    if m and m.group(1).lower() not in _SAFE_SCHEMES:
+        return None
+    return _esc(decoded)
+
+
+def _extract_links(md: str, kb_name: str | None) -> tuple[str, list[str]]:
+    """Render wikilinks and markdown links from raw text; leave placeholders.
+
+    Returns the text with each link replaced by a NUL-delimited index, and
+    the rendered (escaped) HTML for each. ``kb_name=None`` leaves wikilinks
+    as text (inline contexts have no KB to resolve against).
+    """
+    import re
+
+    md = (md or "").replace(_LINK_MARK, "")
+    rendered: list[str] = []
+
+    def _keep(html: str) -> str:
+        rendered.append(html)
+        return f"{_LINK_MARK}{len(rendered) - 1}{_LINK_MARK}"
+
+    # Wikilinks: [[kb:id|label]] or [[id|label]] or [[id]]
+    def _wikilink(m: re.Match) -> str:
+        target = m.group(1)
+        label = m.group(2) if m.group(2) else None
+        parts = target.split(":", 1)
+        if len(parts) == 2:
+            return _keep(
+                f'<a href="/site/{_esc(parts[0])}/{_esc(parts[1])}">{_esc(label or parts[1])}</a>'
+            )
+        return _keep(f'<a href="/site/{_esc(kb_name)}/{_esc(target)}">{_esc(label or target)}</a>')
+
+    if kb_name is not None:
+        md = re.sub(r"\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]", _wikilink, md)
+
+    # Markdown links [text](url): text escaped, unsafe URLs dropped to text
+    def _link(m: re.Match) -> str:
+        text = _esc(m.group(1))
+        href = _safe_href(m.group(2))
+        if href is None:
+            return _keep(text)
+        return _keep(f'<a href="{href}">{text}</a>')
+
+    md = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _link, md)
+    return md, rendered
+
+
+def _restore_links(html: str, rendered: list[str]) -> str:
+    """Put the links set aside by ``_extract_links`` back in place."""
+    import re
+
+    return re.sub(
+        f"{_LINK_MARK}(\\d+){_LINK_MARK}",
+        lambda m: rendered[int(m.group(1))],
+        html,
+    )
+
+
+def _json_for_script(obj: object) -> str:
+    """JSON for embedding inside a ``<script>`` element.
+
+    ``json.dumps`` leaves ``</script>`` intact, which closes the element;
+    escaping ``<``, ``>`` and ``&`` as ``\\u003c`` etc. keeps the value
+    identical to a JSON parser (the web UI's ``jsonForScriptTag`` rule).
+    """
+    import json
+
+    return json.dumps(obj).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")

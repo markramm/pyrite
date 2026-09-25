@@ -147,12 +147,18 @@ class ExportService:
 
         Returns:
             Summary dict with entries_exported, commit_hash, etc.
+
+        Raises:
+            InvalidGitRefError: `branch` is not a plain branch name.
         """
         from .git_service import GitService
 
         kb_config = self.config.get_kb(kb_name)
         if not kb_config:
             raise KBNotFoundError(f"KB not found: {kb_name}")
+        # The branch is cloned and then pushed: refuse a value that is not a
+        # plain branch name before either runs.
+        GitService.validate_branch_name(branch)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             clone_path = Path(tmpdir) / "repo"

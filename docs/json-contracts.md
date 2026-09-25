@@ -54,6 +54,9 @@ replaced by the endpoint's default rather than echoed to the caller:
 | `INVALID_REQUEST` | the URL or branch was rejected before git ran |
 | `SUBSCRIBE_FAILED`, `FORK_FAILED`, `SYNC_FAILED`, `UNSUBSCRIBE_FAILED`, `PR_FAILED` | per-endpoint defaults when nothing more specific applies |
 | `GITHUB_NOT_CONNECTED` | `/repos/fork` with no GitHub account connected |
+| `KB_NAME_CONFLICT` | a KB in the repository has the name of an already-registered KB, or two KBs in it share a name; nothing was subscribed and the clone was removed |
+| `INVALID_KB_NAME` | a KB in the repository has a name that is not a plain KB name (1-64 letters, digits, `-` or `_`, starting with a letter or digit) |
+| `REPO_NAME_CONFLICT` | a repository with that name is already registered |
 
 `message` never contains an absolute filesystem path or a token: git's
 stderr is redacted on the way out and logged unredacted at `WARNING`
@@ -85,6 +88,11 @@ This applies to the HTTP response only. The `pyrite repo list` /
 `pyrite repo status` CLI output, and every internal caller reading
 `local_path` off the DB row or a service dict directly, still show the real
 absolute path — the CLI operator is not a remote caller.
+
+A `subscribe`/`fork` success body also carries `kb_default_role`, the access
+policy of the KBs it registered. It is `null`: those KBs have no
+`default_role`, so each user reaches them at their global role (a subscribed
+KB is also read-only). An admin can set a KB's `default_role` afterwards.
 
 Source of truth: `pyrite/server/endpoints/repos.py` (`_relativize_path`,
 `_repo_dict_to_info`).

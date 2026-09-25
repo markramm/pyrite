@@ -42,6 +42,9 @@ _PUBLIC_ERROR_CODES = frozenset(
         "UNSUBSCRIBE_FAILED",
         "PR_FAILED",
         "GITHUB_NOT_CONNECTED",
+        "KB_NAME_CONFLICT",
+        "INVALID_KB_NAME",
+        "REPO_NAME_CONFLICT",
     }
 )
 

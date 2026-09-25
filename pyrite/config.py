@@ -288,6 +288,30 @@ class UsageTierConfig:
     daily_llm_requests: int | None = None
 
 
+ANONYMOUS_TIERS = ("read", "write")
+
+
+def normalize_anonymous_tier(value: str | None, source: str = "auth.anonymous_tier") -> str | None:
+    """The validated `anonymous_tier`: None, "read" or "write".
+
+    "none" (any case) is accepted as None -- no anonymous access -- because
+    shipped deploy configs set `PYRITE_AUTH_ANONYMOUS_TIER=none`. Anything
+    else is refused: an unknown string used to be carried through as the
+    visitor's role, and `admin` would have made every visitor an admin.
+    """
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if normalized in ("", "none"):
+        return None
+    if normalized in ANONYMOUS_TIERS:
+        return normalized
+    raise ValueError(
+        f"{source} must be one of 'read', 'write' or 'none' (no anonymous access), "
+        f"got {value!r}. Anonymous visitors can never be given 'admin'."
+    )
+
+
 @dataclass
 class AuthConfig:
     """Authentication configuration."""
@@ -304,6 +328,9 @@ class AuthConfig:
     ephemeral_default_ttl: int = 86400
     ephemeral_max_ttl: int = 604800
     usage_tiers: dict[str, UsageTierConfig] = field(default_factory=dict)
+
+    def __post_init__(self):
+        self.anonymous_tier = normalize_anonymous_tier(self.anonymous_tier)
 
 
 @dataclass
@@ -330,6 +357,11 @@ class Settings:
             "http://localhost:8088",
         ]
     )
+    # Extra hostnames a credential-free server answers (auth disabled with no
+    # API keys, or anonymous_tier "write"), beyond localhost, 127.0.0.1, ::1
+    # and a non-wildcard `host`. Requests addressed to any other Host get 421
+    # (pyrite/server/request_guard.py).
+    allowed_hosts: list[str] = field(default_factory=list)
     api_key: str = ""  # Empty = auth disabled (backwards-compatible)
     api_keys: list[dict[str, str]] = field(default_factory=list)  # [{key_hash, role, label}]
     auth: AuthConfig = field(default_factory=AuthConfig)
@@ -348,6 +380,11 @@ class Settings:
     # Embed entries on write. Off = keyword search only, no torch import, no
     # model download; `pyrite index embed` can backfill later. Env: PYRITE_AUTO_EMBED
     auto_embed: bool = True
+    # Extra Content-Security-Policy sources for the public /site pages, in CSP
+    # syntax, appended to the built-in policy (script-src 'self' ...), e.g.
+    # "script-src https://plausible.io 'sha256-...'; connect-src https://plausible.io"
+    # for a reverse proxy that injects an analytics script. Env: PYRITE_SITE_CSP_EXTRA
+    site_csp_extra: str = ""
     # White-label branding folder. None = use built-in Pyrite defaults.
     # Env override: PYRITE_BRANDING_DIR
     branding_dir: Path | None = field(
@@ -436,13 +473,27 @@ class PyriteConfig:
             path = kb_data.get("path", "")
             if not path:
                 continue
-            self._db_kb_cache[name] = KBConfig(
-                name=name,
-                path=Path(path),
-                kb_type=kb_data.get("kb_type", "generic"),
-                description=kb_data.get("description", ""),
-                default_role=kb_data.get("default_role"),
-            )
+            try:
+                kb = KBConfig(
+                    name=name,
+                    path=Path(path),
+                    kb_type=kb_data.get("kb_type", "generic"),
+                    description=kb_data.get("description", ""),
+                    default_role=kb_data.get("default_role"),
+                )
+            except (OSError, RuntimeError, ValueError):
+                # A registry path that cannot be resolved (an unknown ~user, a
+                # symlink loop) must not stop the load -- this runs while every
+                # entry point is constructed. The KB is left out: unreachable,
+                # never open.
+                logger.warning(
+                    "Registry KB %r has a path that cannot be resolved (%s); not loading it",
+                    name,
+                    path,
+                    exc_info=True,
+                )
+                continue
+            self._db_kb_cache[name] = kb
             added += 1
         return added
 
@@ -595,6 +646,16 @@ class PyriteConfig:
             "host": self.settings.host,
             "port": self.settings.port,
             "cors_origins": self.settings.cors_origins,
+            **(
+                {"allowed_hosts": self.settings.allowed_hosts}
+                if self.settings.allowed_hosts
+                else {}
+            ),
+            **(
+                {"site_csp_extra": self.settings.site_csp_extra}
+                if self.settings.site_csp_extra
+                else {}
+            ),
             "api_key": self.settings.api_key,
             **({"api_keys": self.settings.api_keys} if self.settings.api_keys else {}),
             "auth": {
@@ -657,6 +718,7 @@ class PyriteConfig:
                     default_role=kb_data.get("default_role"),
                 )
             )
+            _repair_ephemeral_default_role(knowledge_bases[-1])
 
         repositories = []
         for repo_data in data.get("repositories", []):
@@ -737,6 +799,7 @@ class PyriteConfig:
                 "cors_origins",
                 ["http://localhost:3000", "http://localhost:5173", "http://localhost:8088"],
             ),
+            allowed_hosts=list(settings_data.get("allowed_hosts") or []),
             api_key=settings_data.get("api_key", ""),
             api_keys=settings_data.get("api_keys", []),
             auth=AuthConfig(
@@ -763,6 +826,7 @@ class PyriteConfig:
             embedding_dimensions=settings_data.get("embedding_dimensions", 384),
             search_mode=settings_data.get("search_mode", "keyword"),
             auto_embed=settings_data.get("auto_embed", True),
+            site_csp_extra=settings_data.get("site_csp_extra", "") or "",
         )
 
         return cls(
@@ -850,11 +914,15 @@ def _apply_env_overrides(config: PyriteConfig) -> None:
     if val := env("PYRITE_AUTH_ENABLED"):
         config.settings.auth.enabled = val.lower() in ("true", "1", "yes")
     if val := env("PYRITE_AUTH_ANONYMOUS_TIER"):
-        config.settings.auth.anonymous_tier = val
+        config.settings.auth.anonymous_tier = normalize_anonymous_tier(
+            val, "PYRITE_AUTH_ANONYMOUS_TIER"
+        )
     if val := env("PYRITE_AUTH_ALLOW_REGISTRATION"):
         config.settings.auth.allow_registration = val.lower() in ("true", "1", "yes")
     if val := env("PYRITE_CORS_ORIGINS"):
         config.settings.cors_origins = [s.strip() for s in val.split(",")]
+    if val := env("PYRITE_ALLOWED_HOSTS"):
+        config.settings.allowed_hosts = [s.strip() for s in val.split(",") if s.strip()]
     if val := env("PYRITE_API_KEY"):
         config.settings.api_key = val
     if val := env("PYRITE_AI_PROVIDER"):
@@ -869,6 +937,8 @@ def _apply_env_overrides(config: PyriteConfig) -> None:
         config.settings.prewarm_embeddings = val.lower() in ("true", "1", "yes")
     if val := env("PYRITE_AUTO_EMBED"):
         config.settings.auto_embed = val.lower() in ("true", "1", "yes")
+    if val := env("PYRITE_SITE_CSP_EXTRA"):
+        config.settings.site_csp_extra = val
 
     # When PYRITE_DATA_DIR is set, derive index_path and workspace_path from it
     data_dir = env("PYRITE_DATA_DIR")
@@ -902,6 +972,21 @@ def load_config() -> PyriteConfig:
         kb.load_kb_yaml()
 
     return config
+
+
+def _repair_ephemeral_default_role(kb: KBConfig) -> None:
+    """Make an ephemeral KB without an access policy private.
+
+    Versions before this one set a user's ephemeral KB private only in the
+    memory of the process that created it, so config.yaml can hold ephemeral
+    KBs with no default_role -- readable by every user at their global role.
+    Ephemeral KBs are private by default; restore that on every load.
+    """
+    if kb.ephemeral and kb.default_role is None:
+        logger.warning(
+            "Ephemeral KB %r has no default_role; treating it as private ('none')", kb.name
+        )
+        kb.default_role = "none"
 
 
 def save_config(config: PyriteConfig) -> None:

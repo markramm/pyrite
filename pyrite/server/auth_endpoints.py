@@ -100,10 +100,33 @@ def _clear_session_cookie(response: Response) -> None:
 
 
 # ---------------------------------------------------------------------------
-# CSRF state store — DB-backed via AuthService.{create,verify}_oauth_state
-# (oauth_state table, migration v22). Survives process restarts and works
-# across replicas; see oauth-state-store-persistence.
+# OAuth state, bound to the browser that started the flow
+#
+# The state row lives in the DB (AuthService.{create,verify}_oauth_state,
+# oauth_state table) so it survives restarts and works across replicas. The
+# binding value lives in this short-lived cookie, which only the browser that
+# started the flow holds; the callback needs both. SameSite=Lax because the
+# provider's redirect back is a top-level cross-site GET navigation.
 # ---------------------------------------------------------------------------
+
+OAUTH_BINDING_COOKIE = "pyrite_oauth_binding"
+_OAUTH_COOKIE_PATH = "/auth/github"
+
+
+def _set_oauth_binding_cookie(response: Response, binding: str, request: Request) -> None:
+    response.set_cookie(
+        key=OAUTH_BINDING_COOKIE,
+        value=binding,
+        httponly=True,
+        samesite="lax",
+        secure=request.url.scheme == "https",
+        path=_OAUTH_COOKIE_PATH,
+        max_age=AuthService._OAUTH_STATE_TTL_SECONDS,
+    )
+
+
+def _clear_oauth_binding_cookie(response: Response) -> None:
+    response.delete_cookie(key=OAUTH_BINDING_COOKIE, path=_OAUTH_COOKIE_PATH)
 
 
 # ---------------------------------------------------------------------------
@@ -282,13 +305,15 @@ async def github_oauth_start(
         raise HTTPException(status_code=404, detail="GitHub OAuth is not configured")
 
     provider = GitHubOAuthProvider(gh_config.client_id, gh_config.client_secret)
-    state = auth_service.create_oauth_state()
+    state, binding = auth_service.create_oauth_state()
 
     # Build callback URL from request
     callback_url = str(request.url_for("github_oauth_callback"))
     authorize_url = provider.get_authorize_url(callback_url, state)
 
-    return RedirectResponse(url=authorize_url, status_code=302)
+    response = RedirectResponse(url=authorize_url, status_code=302)
+    _set_oauth_binding_cookie(response, binding, request)
+    return response
 
 
 @auth_router.get("/github/callback")
@@ -300,12 +325,31 @@ async def github_oauth_callback(
     config: PyriteConfig = Depends(get_config),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> RedirectResponse:
-    """Handle GitHub OAuth callback."""
+    """Handle GitHub OAuth callback.
+
+    Completes only in the browser that started the flow (the binding
+    cookie), and -- for the connect flow -- only for the session user who
+    started it. The binding cookie is cleared whatever the outcome.
+    """
+    response = await _github_oauth_callback(request, code, state, error, config, auth_service)
+    _clear_oauth_binding_cookie(response)
+    return response
+
+
+async def _github_oauth_callback(
+    request: Request,
+    code: str,
+    state: str,
+    error: str,
+    config: PyriteConfig,
+    auth_service: AuthService,
+) -> RedirectResponse:
     if error or not code:
         logger.warning("GitHub OAuth error: %s", error or "no code")
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
 
-    state_data = auth_service.verify_oauth_state(state)
+    binding = request.cookies.get(OAUTH_BINDING_COOKIE, "")
+    state_data = auth_service.verify_oauth_state(state, binding)
     if not state_data:
         logger.warning("GitHub OAuth invalid/expired state")
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
@@ -313,6 +357,16 @@ async def github_oauth_callback(
     gh_config = config.settings.auth.providers.get("github")
     if not gh_config or not gh_config.client_id:
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
+
+    # A connect callback completes only for the session user who started it.
+    # Checked before the exchange, so a refused callback never spends the code.
+    if state_data.get("flow") == "connect":
+        connect_user_id = state_data.get("user_id")
+        session_token = request.cookies.get(COOKIE_NAME)
+        session_user = auth_service.verify_session(session_token) if session_token else None
+        if not connect_user_id or not session_user or session_user["id"] != connect_user_id:
+            logger.warning("GitHub connect callback without the initiating user's session")
+            return RedirectResponse(url="/settings/kbs?error=connect_failed", status_code=302)
 
     provider = GitHubOAuthProvider(gh_config.client_id, gh_config.client_secret)
     callback_url = str(request.url_for("github_oauth_callback"))
@@ -328,9 +382,7 @@ async def github_oauth_callback(
 
     # Handle "connect" flow — store token for existing user, don't create session
     if state_data.get("flow") == "connect":
-        connect_user_id = state_data.get("user_id")
-        if not connect_user_id:
-            return RedirectResponse(url="/settings/kbs?error=connect_failed", status_code=302)
+        connect_user_id = state_data["user_id"]
         try:
             auth_service.store_github_token(connect_user_id, token.access_token, token.scope)
             return RedirectResponse(url="/settings/kbs?github=connected", status_code=302)
@@ -381,7 +433,7 @@ async def github_connect_start(
         raise HTTPException(status_code=401, detail="Session expired")
 
     provider = GitHubOAuthProvider(gh_config.client_id, gh_config.client_secret)
-    state = auth_service.create_oauth_state(flow="connect", user_id=user["id"])
+    state, binding = auth_service.create_oauth_state(flow="connect", user_id=user["id"])
 
     callback_url = str(request.url_for("github_oauth_callback"))
     # Build authorize URL with elevated scopes
@@ -395,7 +447,9 @@ async def github_connect_start(
     }
     authorize_url = f"{provider.AUTHORIZE_URL}?{urlencode(params)}"
 
-    return RedirectResponse(url=authorize_url, status_code=302)
+    response = RedirectResponse(url=authorize_url, status_code=302)
+    _set_oauth_binding_cookie(response, binding, request)
+    return response
 
 
 @auth_router.get("/github/status")

@@ -6,6 +6,7 @@ Mixin class for KB management operations.
 
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import text
@@ -17,6 +18,22 @@ if TYPE_CHECKING:
     from ..config import PyriteConfig
 
 logger = logging.getLogger(__name__)
+
+
+def ephemeral_root(config: "PyriteConfig") -> Path:
+    """The directory ephemeral KBs are created in: <workspace>/ephemeral."""
+    return (config.settings.workspace_path / "ephemeral").resolve()
+
+
+def is_ephemeral_kb_path(root: Path, path: str) -> bool:
+    """True when `path` resolves strictly inside the ephemeral root `root`.
+
+    A registry row at such a path is an ephemeral KB's, whether or not its
+    config.yaml entry survives. The root itself is not an ephemeral KB.
+    (`kb.path` is NOT NULL.)
+    """
+    resolved = Path(path).expanduser().resolve()
+    return resolved != root and resolved.is_relative_to(root)
 
 
 class KBOpsMixin:
@@ -60,17 +77,27 @@ class KBOpsMixin:
         path: str,
         description: str = "",
         source: str = "user",
+        default_role: str | None = None,
     ) -> bool:
         """Register a KB only if no row has this name; never overwrite one.
 
         Returns False when the name is already registered. The primary key
         makes this atomic: of two concurrent inserts, one fails.
+        `default_role` is written with the row, so a KB's access policy exists
+        from the moment the KB does.
         """
         type_str = kb_type.value if hasattr(kb_type, "value") else kb_type
         if self.session.get(KB, name) is not None:
             return False
         self.session.add(
-            KB(name=name, kb_type=type_str, path=path, description=description, source=source)
+            KB(
+                name=name,
+                kb_type=type_str,
+                path=path,
+                description=description,
+                source=source,
+                default_role=default_role,
+            )
         )
         try:
             self.session.commit()
@@ -94,6 +121,15 @@ class KBOpsMixin:
         visible, but does not raise, since callers run this during
         construction and must not crash on a transient/first-run issue.
 
+        This loop is the one owner of an orphaned ephemeral KB's policy: a
+        row whose path is an ephemeral KB's (`is_ephemeral_kb_path`) and
+        that has no default_role loads with "none", decided from the rows
+        read here and from nothing else. Writing "none" back to those rows
+        afterwards is best-effort record-keeping, never a precondition.
+
+        It commits or rolls back its own session: do not call it in the
+        middle of a transaction.
+
         Returns the number of KBs merged (0 on failure or none pending).
         """
         try:
@@ -103,7 +139,11 @@ class KBOpsMixin:
                     "FROM kb WHERE source = 'user'"
                 )
             ).fetchall()
+            # End the read transaction: a session left inside one blocks WAL
+            # checkpoints for as long as it lives.
+            self.session.commit()
         except SQLAlchemyError:
+            self.session.rollback()
             logger.warning(
                 "Could not query DB-registered KBs to merge into config "
                 "(kb table may not exist yet on first run)",
@@ -113,17 +153,71 @@ class KBOpsMixin:
 
         if not rows:
             return 0
-        db_kbs = [
-            {
-                "name": r[0],
-                "path": r[1],
-                "kb_type": r[2],
-                "description": r[3] or "",
-                "default_role": r[4],
-            }
-            for r in rows
-        ]
-        return config.register_db_kbs(db_kbs)
+        root = ephemeral_root(config)
+        db_kbs = []
+        orphans = []
+        for name, path, kb_type, description, default_role in rows:
+            if default_role is None:
+                try:
+                    orphan = is_ephemeral_kb_path(root, path)
+                except (OSError, RuntimeError, ValueError):
+                    # A path that cannot be resolved (an unknown ~user, a
+                    # symlink loop) must not stop the load, and fails closed:
+                    # private for this process, nothing written back.
+                    logger.warning(
+                        "Could not resolve the path of KB %r (%s); loading it private ('none')",
+                        name,
+                        path,
+                        exc_info=True,
+                    )
+                    default_role = "none"
+                    orphan = False
+                if orphan:
+                    logger.warning(
+                        "Ephemeral KB %r has no default_role in the registry; "
+                        "loading it private ('none')",
+                        name,
+                    )
+                    default_role = "none"
+                    orphans.append(name)
+            db_kbs.append(
+                {
+                    "name": name,
+                    "path": path,
+                    "kb_type": kb_type,
+                    "description": description or "",
+                    "default_role": default_role,
+                }
+            )
+        merged = config.register_db_kbs(db_kbs)
+        if orphans:
+            self._record_private_policy(orphans)
+        return merged
+
+    def _record_private_policy(self, names: list[str]) -> None:
+        """Best effort: write "none" to the rows `merge_registered_kbs` loaded private.
+
+        Only record-keeping, so a later reader of the row sees the policy the
+        load applied. A failure (a locked or read-only index) is rolled back
+        and logged; the merged KB is private either way.
+        """
+        try:
+            for name in names:
+                self.session.execute(
+                    text(
+                        "UPDATE kb SET default_role = 'none' "
+                        "WHERE name = :n AND default_role IS NULL"
+                    ),
+                    {"n": name},
+                )
+            self.session.commit()
+        except SQLAlchemyError:
+            self.session.rollback()
+            logger.warning(
+                "Could not record the private policy for %s; it applies for this load",
+                ", ".join(names),
+                exc_info=True,
+            )
 
     def update_kb_default_role(self, name: str, default_role: str | None) -> bool:
         """Update a KB's default_role. Returns True if KB was found."""

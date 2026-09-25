@@ -37,7 +37,9 @@ settings:
   index_path: /data/index.db
 HEADER
 
-# Register each KB that has a kb.yaml
+# Register each KB that has a kb.yaml. The demo is a public site, so each KB
+# gets default_role: read (anonymous read, and listed on /site) unless its
+# kb.yaml says otherwise. /site renders only default_role: read KBs.
 python3 -c "
 import os, sys
 sys.path.insert(0, '/app')
@@ -59,13 +61,15 @@ for d in sorted(data_dir.iterdir()):
             desc = desc.strip()[:200]
         else:
             desc = ''
+        default_role = meta.get('default_role', 'read')
         kbs.append({
             'name': name,
             'path': str(d),
             'kb_type': kb_type,
             'description': desc,
+            'default_role': default_role,
         })
-        print(f'  Registered: {name} ({kb_type}) at {d}')
+        print(f'  Registered: {name} ({kb_type}, default_role={default_role}) at {d}')
 
 config = {
     'knowledge_bases': kbs,

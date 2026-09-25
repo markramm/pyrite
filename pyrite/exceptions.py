@@ -25,6 +25,17 @@ class ValidationError(PyriteError):
     """Raised when entry data fails validation."""
 
 
+class InvalidGitRefError(ValidationError):
+    """A caller-supplied git remote or branch is not an acceptable name.
+
+    A remote must be one of the repository's configured remotes (never a URL
+    or a path); a branch must be a valid branch name that does not begin
+    with "-". Raised before git runs. Carries ``error_code`` ``INVALID_REF``.
+    """
+
+    error_code = "INVALID_REF"
+
+
 class FrontmatterError(ValidationError):
     """Raised when YAML frontmatter is malformed or not a mapping.
 

@@ -108,13 +108,29 @@ class AuthService:
 
     _OAUTH_STATE_TTL_SECONDS = 300  # 5 minutes, matches the prior in-memory TTL
 
+    @staticmethod
+    def _oauth_state_key(state: str, binding: str) -> str:
+        """The row key for a state bound to a browser.
+
+        Only this digest is stored: the database holds neither the public
+        ``state`` (it travels through the provider) nor the ``binding``
+        (it lives in an HttpOnly cookie), so a row can be found only by a
+        request that carries both.
+        """
+        return hashlib.sha256(f"{state}\x00{binding}".encode()).hexdigest()
+
     def create_oauth_state(
         self,
         flow: str = "login",
         user_id: int | None = None,
         ttl_seconds: int | None = None,
-    ) -> str:
-        """Generate a CSRF state token and persist it with flow metadata.
+    ) -> tuple[str, str]:
+        """Generate a CSRF state bound to the requesting browser.
+
+        Returns ``(state, binding)``: ``state`` goes to the provider in the
+        authorize URL; ``binding`` must be set by the caller in a
+        short-lived HttpOnly cookie on the browser that started the flow,
+        and handed back to ``verify_oauth_state`` on the callback.
 
         ``ttl_seconds`` defaults to 5 minutes; pass a negative value in
         tests to create an already-expired token.
@@ -126,36 +142,45 @@ class AuthService:
 
         ttl = self._OAUTH_STATE_TTL_SECONDS if ttl_seconds is None else ttl_seconds
         state = secrets.token_urlsafe(32)
+        binding = secrets.token_urlsafe(32)
         now = datetime.now(UTC)
         expires_at = (now + timedelta(seconds=ttl)).isoformat()
         self.db.execute_write_sql(
             """INSERT INTO oauth_state (state, flow, user_id, created_at, expires_at)
-            VALUES (:state, :flow, :user_id, :now, :expires_at)""",
+            VALUES (:key, :flow, :user_id, :now, :expires_at)""",
             {
-                "state": state,
+                "key": self._oauth_state_key(state, binding),
                 "flow": flow,
                 "user_id": user_id,
                 "now": now.isoformat(),
                 "expires_at": expires_at,
             },
         )
-        return state
+        return state, binding
 
-    def verify_oauth_state(self, state: str) -> dict | None:
-        """Verify and consume a CSRF state token. Returns
-        ``{"flow": ..., "user_id": ...}`` or ``None`` if the token is
-        unknown, already consumed, or expired.
+    def verify_oauth_state(self, state: str, binding: str) -> dict | None:
+        """Verify and consume a browser-bound CSRF state. Returns
+        ``{"flow": ..., "user_id": ...}`` or ``None`` if the pair is
+        unknown (wrong or missing binding included), already consumed, or
+        expired.
 
-        Single-use: the row is deleted whether or not it was expired, so a
-        replayed token always fails on the second attempt.
+        Single-use and race-free: the DELETE decides. Of two callbacks
+        presenting the same pair at once, only the one whose DELETE removed
+        the row succeeds. A mismatched binding finds no row and consumes
+        nothing, so it cannot burn the legitimate browser's flow.
         """
+        key = self._oauth_state_key(state, binding)
         rows = self.db.execute_sql(
-            "SELECT flow, user_id, expires_at FROM oauth_state WHERE state = :state",
-            {"state": state},
+            "SELECT flow, user_id, expires_at FROM oauth_state WHERE state = :key",
+            {"key": key},
         )
         if not rows:
             return None
-        self.db.execute_write_sql("DELETE FROM oauth_state WHERE state = :state", {"state": state})
+        deleted = self.db.execute_write_sql(
+            "DELETE FROM oauth_state WHERE state = :key", {"key": key}
+        )
+        if deleted != 1:
+            return None
         row = rows[0]
         if datetime.now(UTC).isoformat() >= row["expires_at"]:
             return None
@@ -594,7 +619,8 @@ class AuthService:
         2. Explicit kb_permission grant
         3. KB default_role
         4. User global role
-        5. Anonymous tier (when user_id is None)
+        5. Anonymous visitor (user_id None): the lower of anonymous_tier and
+           the KB default_role; None for a `none` KB or no anonymous_tier
         """
         if user_id is not None:
             # Check if global admin
@@ -624,12 +650,18 @@ class AuthService:
                     return None
                 return rows[0]["role"]
 
-        # Anonymous user
-        if kb_default_role is not None and kb_default_role != "none":
-            return kb_default_role
-        if kb_default_role == "none":
+        # Anonymous visitor: `anonymous_tier` is a ceiling that a KB's
+        # default_role can lower but never raise. A `default_role: write` KB
+        # does not make a read-tier visitor a writer; `none` hides the KB.
+        # The read side (readable_kbs), REST writes, /ws and MCP all resolve
+        # the visitor here, so the ceiling holds on every surface.
+        ceiling = self.config.anonymous_tier
+        if ceiling is None or kb_default_role == "none":
             return None
-        return self.config.anonymous_tier
+        if kb_default_role is None:
+            return ceiling
+        levels = {"read": 0, "write": 1, "admin": 2}
+        return min(ceiling, kb_default_role, key=lambda r: levels.get(r, -1))
 
     def grant_kb_permission(self, user_id: int, kb_name: str, role: str, granted_by: int) -> None:
         """Grant or update a per-KB permission."""
@@ -909,27 +941,31 @@ class AuthService:
             name = f"ephemeral-{user_id}-{secrets.token_hex(4)}"
 
         ttl = self.config.ephemeral_default_ttl
+        # Private from the moment it exists: create_ephemeral_kb persists
+        # default_role "none" with the KB (registry row and config.yaml).
         kb = ephemeral_service.create_ephemeral_kb(
             name, ttl=ttl, description=f"Ephemeral KB for user {user_id}"
         )
 
-        # Set KB as private by default
-        kb.default_role = "none"
-
-        # Grant creator admin on the KB
+        # The creator's admin grant and the per-user count commit together.
+        # If either fails, the KB goes too, and with it any grant row for it
+        # (force_expire_kb -> db.unregister_kb deletes the KB's grants).
         now = datetime.now(UTC).isoformat()
-        self.db.execute_write_sql(
-            """INSERT INTO kb_permission (user_id, kb_name, role, granted_by, created_at)
-            VALUES (:user_id, :kb_name, 'admin', :granted_by, :now)""",
-            {"user_id": user_id, "kb_name": name, "granted_by": user_id, "now": now},
-            commit=False,
-        )
-
-        # Increment ephemeral_kb_count
-        self.db.execute_write_sql(
-            "UPDATE local_user SET ephemeral_kb_count = ephemeral_kb_count + 1 WHERE id = :user_id",
-            {"user_id": user_id},
-        )
+        try:
+            self.db.execute_write_sql(
+                """INSERT INTO kb_permission (user_id, kb_name, role, granted_by, created_at)
+                VALUES (:user_id, :kb_name, 'admin', :granted_by, :now)""",
+                {"user_id": user_id, "kb_name": name, "granted_by": user_id, "now": now},
+                commit=False,
+            )
+            self.db.execute_write_sql(
+                "UPDATE local_user SET ephemeral_kb_count = ephemeral_kb_count + 1"
+                " WHERE id = :user_id",
+                {"user_id": user_id},
+            )
+        except BaseException:
+            ephemeral_service.force_expire_kb(name)
+            raise
 
         return {
             "name": kb.name,

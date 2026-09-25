@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from ...config import PyriteConfig
-from ...exceptions import KBNotFoundError
+from ...exceptions import InvalidGitRefError, KBNotFoundError
 from ...services.export_service import ExportService
 from ...services.kb_registry_service import KBRegistryService
 from ...services.kb_service import KBService
@@ -192,6 +192,8 @@ def export_kb_to_repo(
             status_code=404,
             detail={"code": "KB_NOT_FOUND", "message": f"KB '{kb_name}' not found"},
         )
+    except InvalidGitRefError as e:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_REF", "message": str(e)})
     except Exception as e:
         raise HTTPException(
             status_code=500,

@@ -5,20 +5,15 @@ Lifecycle management for temporary knowledge bases with TTL.
 """
 
 import logging
-import re
 import shutil
 import time
 from pathlib import Path
 
 from ..config import KBConfig, PyriteConfig, save_config
 from ..storage.database import PyriteDB
+from .kb_names import PLAIN_KB_NAME_RULE, is_plain_kb_name, kb_name_in_use
 
 logger = logging.getLogger(__name__)
-
-# An ephemeral KB's name becomes a directory under <workspace>/ephemeral/ and
-# is chosen by any write-role user, so it must be a plain name: no separators,
-# no dot segments, not absolute.
-_EPHEMERAL_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 
 
 class InvalidEphemeralKBNameError(ValueError):
@@ -32,8 +27,19 @@ class EphemeralKBService:
         self.config = config
         self.db = db
 
-    def create_ephemeral_kb(self, name: str, ttl: int = 3600, description: str = "") -> KBConfig:
+    def create_ephemeral_kb(
+        self,
+        name: str,
+        ttl: int = 3600,
+        description: str = "",
+        default_role: str = "none",
+    ) -> KBConfig:
         """Create an ephemeral KB with TTL.
+
+        Ephemeral KBs are private by default (`default_role` "none": only
+        per-KB grantees and global admins). The policy is persisted with the
+        KB -- in the registry row and in config.yaml -- in the same step that
+        creates it, so every process resolves the same one.
 
         Raises InvalidEphemeralKBNameError for a name that is not a plain
         name, that another KB uses (in config or in the registry table), or
@@ -42,12 +48,13 @@ class EphemeralKBService:
         name, or of two names one case-insensitive filesystem folds together,
         exactly one gets it, and a leftover directory is never adopted.
         """
-        if not isinstance(name, str) or not _EPHEMERAL_NAME_RE.fullmatch(name):
+        # The name becomes a directory under <workspace>/ephemeral/ and is
+        # chosen by any write-role user, so it must be a plain name.
+        if not is_plain_kb_name(name):
             raise InvalidEphemeralKBNameError(
-                "Invalid ephemeral KB name: use 1-64 letters, digits, '-' or '_', "
-                "starting with a letter or digit"
+                f"Invalid ephemeral KB name: use {PLAIN_KB_NAME_RULE}"
             )
-        if self._name_in_use(name):
+        if kb_name_in_use(self.config, self.db, name):
             raise InvalidEphemeralKBNameError("That KB name is not available")
         ephemeral_dir = self._root() / name
         if not self._inside_root(ephemeral_dir):
@@ -59,26 +66,30 @@ class EphemeralKBService:
             raise InvalidEphemeralKBNameError("That KB name is not available") from None
 
         try:
-            return self._register(name, ephemeral_dir, ttl, description)
+            return self._register(name, ephemeral_dir, ttl, description, default_role)
         except BaseException:
             # The directory is ours (we just created it); do not leave a
             # leftover that would block the name forever.
             shutil.rmtree(ephemeral_dir, ignore_errors=True)
             raise
 
-    def _name_in_use(self, name: str) -> bool:
-        """True when config or the KB registry table already has this name."""
-        if self.config.get_kb(name) is not None:
-            return True
-        rows = self.db.execute_sql("SELECT 1 FROM kb WHERE name = :name", {"name": name})
-        return bool(rows)
-
-    def _register(self, name: str, ephemeral_dir: Path, ttl: int, description: str) -> KBConfig:
+    def _register(
+        self,
+        name: str,
+        ephemeral_dir: Path,
+        ttl: int,
+        description: str,
+        default_role: str,
+    ) -> KBConfig:
         description = description or f"Ephemeral KB (TTL: {ttl}s)"
         # Insert-only: another process may have registered the name since the
         # check above, and that row must not be overwritten.
         if not self.db.insert_new_kb(
-            name=name, kb_type="generic", path=str(ephemeral_dir), description=description
+            name=name,
+            kb_type="generic",
+            path=str(ephemeral_dir),
+            description=description,
+            default_role=default_role,
         ):
             raise InvalidEphemeralKBNameError("That KB name is not available")
         kb = KBConfig(
@@ -89,6 +100,7 @@ class EphemeralKBService:
             ephemeral=True,
             ttl=ttl,
             created_at_ts=time.time(),
+            default_role=default_role,
         )
         try:
             self.config.add_kb(kb)

@@ -10,13 +10,113 @@ Serves the built SvelteKit app from web/dist/ with SPA fallback:
 - Everything else → index.html (SPA client-side routing)
 """
 
+import logging
 import os
+import re
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
+
+logger = logging.getLogger(__name__)
+
+# Defence in depth for /site (pre-rendered KB content on the app's own origin):
+# no inline script and no event-handler attributes run, even if a renderer
+# ever emits one. The pages' behaviour lives in /site/_static/*.js. Inline
+# styles stay allowed; the pages use style attributes throughout.
+# Operators extend it with `settings.site_csp_extra` (see build_site_csp).
+_SITE_CSP_DIRECTIVES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("default-src", ("'self'",)),
+    ("script-src", ("'self'",)),
+    ("style-src", ("'self'", "'unsafe-inline'", "https://fonts.googleapis.com")),
+    ("font-src", ("'self'", "https://fonts.gstatic.com")),
+    ("img-src", ("'self'", "data:")),
+    ("connect-src", ("'self'",)),
+    ("object-src", ("'none'",)),
+    ("base-uri", ("'self'",)),
+    ("form-action", ("'self'",)),
+    ("frame-ancestors", ("'self'",)),
+)
+_CSP_NAME = re.compile(r"^[a-z][a-z-]*$")
+# A source expression: printable ASCII, no separators (";" "," or space).
+_CSP_SOURCE = re.compile(r"^[\x21-\x2b\x2d-\x3a\x3c-\x7e]+$")
+
+
+# Directives site_csp_extra may not widen: a plugin/embed source or a <base>
+# href would undo the point of the policy for content pages.
+_CSP_LOCKED = frozenset({"object-src", "base-uri"})
+# Sources that let injected content run as script; allowed, but warned about.
+_CSP_WEAKENING = frozenset({"'unsafe-inline'", "'unsafe-eval'", "*"})
+_CSP_SCRIPT_DIRECTIVES = frozenset({"script-src", "default-src"})
+
+
+@lru_cache(maxsize=16)
+def build_site_csp(extra: str = "") -> str:
+    """The /site Content-Security-Policy, with ``extra`` merged in.
+
+    ``extra`` is CSP syntax ("script-src https://a.example; connect-src ...").
+    Its sources are appended to the built-in directive of the same name, or
+    a new directive is added; a directive with no value (for example
+    ``upgrade-insecure-requests``) is added as is. A malformed directive
+    (bad name, or a source with a separator or control character) is
+    skipped with a warning, so a typo can neither break the header nor
+    inject another one. ``object-src`` and ``base-uri`` cannot be extended
+    (skipped with a warning); ``'unsafe-inline'``, ``'unsafe-eval'`` or
+    ``*`` on ``script-src``/``default-src`` is applied but warned about,
+    since it would let a script planted in KB content run.
+    """
+    merged: dict[str, list[str]] = {name: list(srcs) for name, srcs in _SITE_CSP_DIRECTIVES}
+    for raw in (extra or "").split(";"):
+        tokens = raw.strip().split(" ")
+        tokens = [t for t in tokens if t]
+        if not tokens:
+            continue
+        name, sources = tokens[0], tokens[1:]
+        if (
+            not _CSP_NAME.match(name)
+            or not all(_CSP_SOURCE.match(src) for src in sources)
+            or any(c in raw for c in "\r\n\t\x00")
+        ):
+            logger.warning("Ignoring malformed site_csp_extra directive: %r", raw.strip())
+            continue
+        if name in _CSP_LOCKED and sources:
+            logger.warning(
+                "Ignoring site_csp_extra directive %r: %s cannot be extended on /site",
+                raw.strip(),
+                name,
+            )
+            continue
+        if name in _CSP_SCRIPT_DIRECTIVES:
+            for src in sources:
+                if src in _CSP_WEAKENING:
+                    logger.warning(
+                        "site_csp_extra adds %s to %s: scripts planted in KB content "
+                        "could run on /site; prefer a host or a 'sha256-...' hash",
+                        src,
+                        name,
+                    )
+        target = merged.setdefault(name, [])
+        target.extend(src for src in sources if src not in target)
+    return "; ".join(" ".join([name, *srcs]) for name, srcs in merged.items())
+
+
+SITE_CSP = build_site_csp()
+SITE_SECURITY_HEADERS = {
+    "Content-Security-Policy": SITE_CSP,
+    "X-Content-Type-Options": "nosniff",
+}
+
+
+# The only files /site/_static serves: the /site pages' scripts.
+_SITE_STATIC_DIR = Path(__file__).parent / "templates"
+_SITE_STATIC_FILES = {"site.js", "site-search.js"}
+
+
+def _site_404() -> HTMLResponse:
+    return HTMLResponse(status_code=404, headers=SITE_SECURITY_HEADERS)
 
 
 def mount_site_routes(app: FastAPI) -> None:
@@ -24,6 +124,22 @@ def mount_site_routes(app: FastAPI) -> None:
     data_dir = Path(os.environ.get("PYRITE_DATA_DIR", "."))
     site_cache_dir = data_dir / "site-cache"
     viewer_dir = data_dir / "viewer"
+
+    def _public(request: Request) -> set[str]:
+        # Evaluated per request: a KB's default_role can change at runtime,
+        # and a cache rendered by an earlier version may hold private KBs.
+        from ..services.public_kbs import public_kb_names
+
+        config = getattr(request.app.state, "pyrite_config", None)
+        return set(public_kb_names(config)) if config is not None else set()
+
+    def _csp(request: Request, response: Response) -> Response:
+        # The built-in policy is already on the response; apply the
+        # operator's `site_csp_extra`, read per request like _public().
+        config = getattr(request.app.state, "pyrite_config", None)
+        extra = config.settings.site_csp_extra if config is not None else ""
+        response.headers["Content-Security-Policy"] = build_site_csp(extra)
+        return response
 
     # Sitemap
     @app.get("/site/sitemap.xml", include_in_schema=False)
@@ -33,7 +149,7 @@ def mount_site_routes(app: FastAPI) -> None:
         proto = request.headers.get("x-forwarded-proto", "")
         if proto == "https" and base.startswith("http://"):
             base = "https://" + base[7:]
-        return _generate_sitemap(site_cache_dir, base)
+        return _generate_sitemap(site_cache_dir, base, _public(request))
 
     # Robots.txt
     @app.get("/site/robots.txt", include_in_schema=False)
@@ -52,26 +168,48 @@ def mount_site_routes(app: FastAPI) -> None:
     async def viewer_index(request: Request):
         return _serve_static_dir(viewer_dir, "index.html")
 
+    # Scripts for the /site pages (CSP: script-src 'self')
+    @app.get("/site/_static/{name}", include_in_schema=False)
+    async def site_static(request: Request, name: str):
+        if name not in _SITE_STATIC_FILES:
+            return _csp(request, _site_404())
+        return _csp(
+            request,
+            FileResponse(
+                str(_SITE_STATIC_DIR / name),
+                media_type="text/javascript",
+                headers={"Cache-Control": "public, max-age=3600", **SITE_SECURITY_HEADERS},
+            ),
+        )
+
     # Search page
     @app.get("/site/search", include_in_schema=False)
     async def site_search(request: Request):
-        return _serve_search_page(site_cache_dir)
+        return _csp(request, _serve_search_page(site_cache_dir))
 
     # Serve /site/* from pre-rendered cache
     @app.get("/site/{path:path}", include_in_schema=False)
     async def site_page(request: Request, path: str):
-        return _serve_site_cached(
-            site_cache_dir,
-            path,
-            "<html><body>Page not yet rendered. Run site cache render.</body></html>",
+        return _csp(
+            request,
+            _serve_site_cached(
+                site_cache_dir,
+                path,
+                "<html><body>Page not yet rendered. Run site cache render.</body></html>",
+                public=_public(request),
+            ),
         )
 
     @app.get("/site", include_in_schema=False)
     async def site_index(request: Request):
-        return _serve_site_cached(
-            site_cache_dir,
-            "",
-            "<html><body>Site not yet rendered. Run site cache render.</body></html>",
+        return _csp(
+            request,
+            _serve_site_cached(
+                site_cache_dir,
+                "",
+                "<html><body>Site not yet rendered. Run site cache render.</body></html>",
+                public=_public(request),
+            ),
         )
 
 
@@ -147,8 +285,12 @@ def _serve_static_dir(
     return HTMLResponse(status_code=404)
 
 
-def _generate_sitemap(cache_dir: Path, base_url: str) -> Response:
-    """Generate sitemap.xml from cached HTML files."""
+def _generate_sitemap(cache_dir: Path, base_url: str, public: set[str]) -> Response:
+    """Generate sitemap.xml from cached HTML files of the public KBs only.
+
+    A cache rendered by an earlier version can hold private KBs' pages;
+    only directories named for a public KB are listed.
+    """
     urls = []
 
     if not cache_dir.is_dir():
@@ -163,7 +305,7 @@ def _generate_sitemap(cache_dir: Path, base_url: str) -> Response:
 
     # Walk KB directories
     for kb_dir in sorted(cache_dir.iterdir()):
-        if not kb_dir.is_dir():
+        if not kb_dir.is_dir() or kb_dir.name not in public:
             continue
         kb_name = kb_dir.name
 
@@ -213,34 +355,52 @@ def _serve_search_page(cache_dir: Path) -> HTMLResponse:
         html = SEARCH_PAGE_HTML
     return HTMLResponse(
         content=html,
-        headers={"Cache-Control": "public, max-age=3600"},
+        headers={"Cache-Control": "public, max-age=3600", **SITE_SECURITY_HEADERS},
     )
 
 
-def _serve_site_cached(cache_dir: Path, path: str, fallback_html: str) -> HTMLResponse:
+def _serve_site_cached(
+    cache_dir: Path, path: str, fallback_html: str, *, public: set[str]
+) -> HTMLResponse:
     """Serve a /site page from the cache directory.
 
     Cache layout:
         /site           → cache_dir/index.html
         /site/boyd      → cache_dir/boyd/index.html
         /site/boyd/ooda → cache_dir/boyd/ooda.html
+
+    Anything below the landing page is served only when the *resolved* file
+    lies in a public KB's directory. ``path`` arrives percent-decoded, so
+    ``%2e%2e`` and ``%2F`` are already ``..`` and ``/`` here: a path with a
+    ``.``, ``..`` or empty segment is refused before it is joined, and the
+    check runs again on the resolved path (symlinks included), because a
+    first-segment check alone let ``public-kb/%2e%2e/private-kb/x`` through.
     """
     if not path:
         cache_path = cache_dir / "index.html"
     else:
         parts = path.rstrip("/").split("/")
+        if any(p in ("", ".", "..") or "\\" in p or "\x00" in p for p in parts):
+            return _site_404()
+        if parts[0] not in public:
+            return _site_404()
         if len(parts) == 1:
             cache_path = cache_dir / parts[0] / "index.html"
         else:
             cache_path = cache_dir / parts[0] / ("/".join(parts[1:]) + ".html")
 
-    # Security: ensure resolved path is within cache_dir
+    # Security: the resolved file must be inside cache_dir, and (below the
+    # landing page) inside a public KB's directory.
     try:
+        root = cache_dir.resolve()
         resolved = cache_path.resolve()
-        if not resolved.is_relative_to(cache_dir.resolve()):
-            return HTMLResponse(status_code=404)
+        if not resolved.is_relative_to(root):
+            return _site_404()
+        rel = resolved.relative_to(root).parts
+        if path and (len(rel) < 2 or rel[0] not in public):
+            return _site_404()
     except (ValueError, OSError):
-        return HTMLResponse(status_code=404)
+        return _site_404()
 
     if cache_path.is_file():
         return HTMLResponse(
@@ -248,11 +408,12 @@ def _serve_site_cached(cache_dir: Path, path: str, fallback_html: str) -> HTMLRe
             headers={
                 "Cache-Control": "public, max-age=3600, s-maxage=86400",
                 "X-Pyrite-Cache": "HIT",
+                **SITE_SECURITY_HEADERS,
             },
         )
 
     # Cache miss — return SPA fallback (client-side rendering)
     return HTMLResponse(
         content=fallback_html,
-        headers={"X-Pyrite-Cache": "MISS"},
+        headers={"X-Pyrite-Cache": "MISS", **SITE_SECURITY_HEADERS},
     )

@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from pyrite.config import KBConfig, PyriteConfig
+from pyrite.config import KBConfig, PyriteConfig, Settings
 from pyrite.exceptions import KBNotFoundError, KBProtectedError
 from pyrite.services.kb_registry_service import KBRegistryService
 from pyrite.storage.database import PyriteDB
@@ -25,6 +25,9 @@ def tmp_kb_path(tmp_path):
 def config_with_kb(tmp_path, tmp_kb_path):
     """Config with one configured KB."""
     config = MagicMock(spec=PyriteConfig)
+    # Instance fields are not on a class spec; loading the registry reads
+    # settings.workspace_path (the ephemeral-KB policy repair).
+    config.settings = Settings(index_path=tmp_path / "test.db", workspace_path=tmp_path / "ws")
     kb = KBConfig(name="test-kb", path=tmp_kb_path, kb_type="research", description="Test KB")
     config.knowledge_bases = [kb]
     config.get_kb.side_effect = lambda name: kb if name == "test-kb" else None

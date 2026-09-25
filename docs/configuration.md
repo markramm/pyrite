@@ -21,6 +21,7 @@ config file at all.
 | `PYRITE_HOST` | `127.0.0.1` | Bind address. Containers need `0.0.0.0`. |
 | `PYRITE_PORT` | `8088` | Port |
 | `PYRITE_CORS_ORIGINS` | localhost dev ports | Comma-separated allowed origins |
+| `PYRITE_ALLOWED_HOSTS` | unset | Comma-separated extra hostnames a credential-free server answers (see below) |
 | `PYRITE_API_KEY` | unset | Single admin API key (legacy single-key mode). Prefer `api_keys` in `config.yaml` — hashed keys with a role each. |
 
 `config.yaml`:
@@ -35,12 +36,60 @@ settings:
       label: "Reader"
 ```
 
+### Allowed hosts and origins (credential-free servers)
+
+These rules apply when a request can change something without a credential:
+
+- auth is disabled and no `api_key` or `api_keys` are configured, so every
+  request is admin; or
+- auth is enabled with `anonymous_tier: write`, so anonymous visitors can
+  write.
+
+In API-key mode (auth disabled, keys configured), a request needs a key. With
+auth enabled and no anonymous writes, a request that changes anything needs
+a session. Neither mode is affected by these rules. In the two
+credential-free modes the server trusts the browser less:
+
+- It answers only requests addressed to `localhost`, `127.0.0.1` or `[::1]`,
+  to the bind `host` when that is not a wildcard (`0.0.0.0`, `::`), and to any
+  name in `allowed_hosts`. A request for any other `Host` gets
+  `421 Misdirected Request` and does nothing.
+- A state-changing request (`POST`, `PUT`, `PATCH`, `DELETE`) from a browser
+  must come from the server's own origin or one listed in `cors_origins`.
+  Otherwise it gets `403`. Requests that send no `Origin` or `Referer`, such as
+  the CLI, `curl` and agents, are not affected.
+
+These rules cover the whole app, including `/mcp`, `/ws` and `/site`. If you serve a
+credential-free instance under another name, such as a LAN hostname or a reverse
+proxy's public name, add that name to `allowed_hosts`. If the web UI is served
+from another origin, add the origin to `cors_origins`:
+
+```yaml
+settings:
+  allowed_hosts: [pyrite.lan]            # or PYRITE_ALLOWED_HOSTS=pyrite.lan
+  cors_origins: ["http://pyrite.lan:8088"]
+```
+
+`pyrite serve --host <addr>` adds `<addr>` automatically. The Vite dev server
+(`npm run dev` on port 5173) is already in the default `cors_origins`. If you
+run it on another port, add `http://localhost:<port>`.
+
+Behind a reverse proxy, the browser sends `Origin: https://<public name>` on
+every write, including login, logout and registration. If the proxy rewrites
+`Host` to the upstream address (nginx does unless you set
+`proxy_set_header Host $host`), that `Origin` no longer matches the server's
+own origin and every UI write gets 403. Either keep the public `Host`
+(`proxy_set_header Host $host`) and add the public name to `allowed_hosts`, or
+add the public origin (`https://<public name>`) to `cors_origins`. This applies
+to an auth-disabled instance without API keys and to one with
+`anonymous_tier: write`.
+
 ## Authentication (multi-user)
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `PYRITE_AUTH_ENABLED` | `false` | Turn on user accounts and per-KB permissions |
-| `PYRITE_AUTH_ANONYMOUS_TIER` | unset | What an unauthenticated request may do when auth is enabled (`read`, `write`, `admin`, or `none` for nothing). Unset falls back to the API-key role. |
+| `PYRITE_AUTH_ANONYMOUS_TIER` | unset | What an unauthenticated request may do when auth is enabled: `read`, `write`, or `none` for nothing. Any other value, including `admin`, is refused at startup. It is a ceiling: on each KB the visitor gets the lower of this and the KB's `default_role` (a `default_role: none` KB stays hidden, a `default_role: read` KB stays read-only, and `default_role: write` never lifts a `read` visitor to write). Unset falls back to the API-key role. |
 | `PYRITE_AUTH_ALLOW_REGISTRATION` | `false` | Let people create accounts |
 | `PYRITE_GITHUB_CLIENT_ID` / `PYRITE_GITHUB_CLIENT_SECRET` | unset | GitHub OAuth login |
 | `PYRITE_ENCRYPTION_KEY` | unset | If set, stored GitHub access tokens are encrypted at rest with it. Set it on any shared instance. |
@@ -50,6 +99,47 @@ to any authenticated user), `write`, or `none` (private: explicit grants only).
 Grants are managed over the REST API by an admin
 (`GET`/`POST /api/kbs/{name}/permissions`) or in the web UI's KB settings; there
 is no CLI command for them yet.
+
+**`default_role: read` also publishes the KB to anyone, signed in or not.**
+Such a KB is on the pre-rendered public site (`/site`, rendered with
+`POST /api/site/render`), in `/site/sitemap.xml` and in `/sitemap.xml`,
+whatever the auth settings are. A KB with `default_role` unset, `write` or
+`none` is never rendered to `/site`, and `/site` refuses its pages even if an
+older cache still holds them. To take a KB off the public site, change its
+`default_role` and re-render; purge any CDN in front of `/site`.
+
+### The public site's Content-Security-Policy
+
+`/site` pages are served with a strict policy (`script-src 'self'`, no inline
+scripts). If a reverse proxy injects a script into those pages, such as an
+analytics snippet, the browser blocks it until you allow it:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PYRITE_SITE_CSP_EXTRA` | unset | Extra sources in CSP syntax, appended to the built-in `/site` policy. Sources go on the directive with the same name; a directive the policy lacks is added. A malformed directive is ignored and logged. |
+
+```yaml
+settings:
+  # A proxy that injects <script src="https://plausible.io/..."> plus a small
+  # inline init script: allow the host, and the inline script by its hash
+  # (the browser console's CSP error prints the hash to use).
+  site_csp_extra: "script-src https://plausible.io 'sha256-<hash>'; connect-src https://plausible.io"
+```
+
+Prefer a hash to `'unsafe-inline'` in `script-src`: `'unsafe-inline'` would
+let a script planted in KB content run too.
+
+Limits on what the setting can do:
+
+- `object-src` and `base-uri` cannot be extended. A directive that tries is
+  ignored, and a warning is logged.
+- Adding `'unsafe-inline'`, `'unsafe-eval'` or `*` to `script-src` or
+  `default-src` is applied, but logs a warning (on the first `/site` request), because it lets
+  script in KB content run on `/site`.
+- A directive with no value, such as `upgrade-insecure-requests`, is added
+  as is.
+- A malformed directive is ignored and logged. That includes a bad name and
+  a source that contains `,` or a control character.
 
 ## Search and embeddings
 

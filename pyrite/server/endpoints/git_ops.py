@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
-from ...exceptions import KBNotFoundError, PyriteError
+from ...exceptions import InvalidGitRefError, KBNotFoundError, PyriteError
 from ...services.export_service import ExportService
 from ...services.kb_service import KBService
 from ..api import (
@@ -96,5 +96,7 @@ def push_kb(
         raise HTTPException(
             status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{kb_name}' not found"}
         )
+    except InvalidGitRefError as e:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_REF", "message": str(e)})
     except PyriteError as e:
         raise HTTPException(status_code=400, detail={"code": "PUSH_FAILED", "message": str(e)})

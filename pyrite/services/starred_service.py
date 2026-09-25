@@ -14,9 +14,18 @@ from ..storage.database import PyriteDB
 from ..storage.models import StarredEntry
 from .kb_service import KBService
 
+# The owner of the instance's own star list: a caller with no user identity
+# (auth disabled, an operator API key), and every star made before stars were
+# per-user. Real local_user ids start at 1.
+INSTANCE_USER = 0
+
 
 class StarredService:
-    """Service for managing starred/bookmarked entries."""
+    """Service for managing starred/bookmarked entries.
+
+    Stars are per user: every method takes the ``user_id`` whose list it
+    reads or changes, and never touches another user's rows.
+    """
 
     def __init__(self, db: PyriteDB, kb_service: KBService):
         self.db = db
@@ -24,10 +33,11 @@ class StarredService:
 
     def list_starred(
         self,
+        user_id: int,
         kb: str | None = None,
         kb_names: set[str] | list[str] | None = None,
     ) -> list[dict]:
-        """List starred entries, optionally filtered by KB.
+        """List ``user_id``'s starred entries, optionally filtered by KB.
 
         Returns a list of dicts with keys: entry_id, kb_name, title,
         sort_order, created_at.  Titles are resolved from the storage
@@ -38,7 +48,7 @@ class StarredService:
         unfiltered list leaks it. ``None`` means unrestricted; an empty
         set means no rows.
         """
-        query = self.db.session.query(StarredEntry)
+        query = self.db.session.query(StarredEntry).filter(StarredEntry.user_id == user_id)
         if kb:
             query = query.filter(StarredEntry.kb_name == kb)
         if kb_names is not None:
@@ -60,8 +70,8 @@ class StarredService:
             for r in results
         ]
 
-    def star_entry(self, entry_id: str, kb_name: str) -> dict:
-        """Star/bookmark an entry. Idempotent -- starring an already-starred
+    def star_entry(self, user_id: int, entry_id: str, kb_name: str) -> dict:
+        """Star/bookmark an entry for ``user_id``. Idempotent -- starring an already-starred
         entry returns success without modification.
 
         Returns a dict with keys: starred, entry_id, kb_name.
@@ -69,6 +79,7 @@ class StarredService:
         existing = (
             self.db.session.query(StarredEntry)
             .filter(
+                StarredEntry.user_id == user_id,
                 StarredEntry.entry_id == entry_id,
                 StarredEntry.kb_name == kb_name,
             )
@@ -77,9 +88,15 @@ class StarredService:
         if existing:
             return {"starred": True, "entry_id": entry_id, "kb_name": kb_name}
 
-        max_order = self.db.session.query(func.max(StarredEntry.sort_order)).scalar() or 0
+        max_order = (
+            self.db.session.query(func.max(StarredEntry.sort_order))
+            .filter(StarredEntry.user_id == user_id)
+            .scalar()
+            or 0
+        )
 
         starred = StarredEntry(
+            user_id=user_id,
             entry_id=entry_id,
             kb_name=kb_name,
             sort_order=max_order + 1,
@@ -90,13 +107,15 @@ class StarredService:
 
         return {"starred": True, "entry_id": entry_id, "kb_name": kb_name}
 
-    def unstar_entry(self, entry_id: str, kb_name: str | None = None) -> bool:
-        """Remove a starred entry.
+    def unstar_entry(self, user_id: int, entry_id: str, kb_name: str | None = None) -> bool:
+        """Remove one of ``user_id``'s starred entries.
 
         Returns True if the entry was found and deleted.
         Raises ValueError if no matching starred entry exists.
         """
-        query = self.db.session.query(StarredEntry).filter(StarredEntry.entry_id == entry_id)
+        query = self.db.session.query(StarredEntry).filter(
+            StarredEntry.user_id == user_id, StarredEntry.entry_id == entry_id
+        )
         if kb_name:
             query = query.filter(StarredEntry.kb_name == kb_name)
 
@@ -108,14 +127,17 @@ class StarredService:
 
         return True
 
-    def reorder_starred(self, entries: list[dict]) -> list[dict]:
-        """Update sort_order for a batch of starred entries.
+    def reorder_starred(self, user_id: int, entries: list[dict]) -> list[dict]:
+        """Update sort_order for a batch of ``user_id``'s starred entries.
+
+        An item naming an entry this user has not starred changes nothing.
 
         Each dict in *entries* must have keys: entry_id, kb_name, sort_order.
         Returns the same list after persisting the new order.
         """
         for item in entries:
             self.db.session.query(StarredEntry).filter(
+                StarredEntry.user_id == user_id,
                 StarredEntry.entry_id == item["entry_id"],
                 StarredEntry.kb_name == item["kb_name"],
             ).update({"sort_order": item["sort_order"]})
