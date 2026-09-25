@@ -505,17 +505,19 @@ has the model cached, which is precisely why no test ever caught #13.
 ## A probe script outside pytest writes the real `~/.pyrite` (#377)
 
 The suite is isolated: the repo-root `conftest.py` exports `PYRITE_CONFIG_DIR`
-and `PYRITE_DATA_DIR` (a session temp dir), and child processes inherit them.
+(a session temp dir) and clears `PYRITE_DATA_DIR`; child processes inherit both.
 A `python -c` / heredoc probe you run by hand is **not**: anything that calls
 `save_config` -- `EphemeralKBService` create/expire, `RepoService`, the admin
 CLI -- writes `current_config_file()`, which from a directory with no
 `.pyrite/config.yaml` is `~/.pyrite/config.yaml`. On 2026-09-23 a probe of
 ephemeral expiry (`ws/ephemeral/ln -> other/`, index `…/tmpXXXX/i.db`) did
 exactly that and emptied a ~50-KB registry through a symlink. `save_config`
-now refuses that shape, but prefix probes anyway:
+now refuses any save that drops a KB it was not told to remove, but sandbox
+probes anyway -- HOME and both directories in temp dirs:
 
 ```bash
-PYRITE_CONFIG_DIR=$(mktemp -d) .venv/bin/python -c '...'
+T=$(mktemp -d); HOME=$T/home PYRITE_CONFIG_DIR=$T/cfg PYRITE_DATA_DIR=$T/data \
+  .venv/bin/python -c '...'
 ```
 
 `PYRITE_CONFIG_DIR` alone now moves the index too (it defaults beside

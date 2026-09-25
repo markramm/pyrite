@@ -32,12 +32,25 @@ Cloned repos follow the same order (`$PYRITE_DATA_DIR/repos`, then `repos/`
 beside `config.yaml`). In 0.25.1 and earlier, setting only `PYRITE_CONFIG_DIR` left the
 index at `~/.pyrite/index.db`, so a sandboxed run still wrote your real index.
 
-**Pyrite will not empty a registry by accident.** Saving a configuration that
-lists no knowledge bases over a `config.yaml` that lists some fails with an
-error naming the file, unless the command just removed exactly those KBs
-(`pyrite-admin kb remove` of the last KB, for instance). Code that means it
-passes `save_config(config, allow_empty=True)`. A write through a symlinked
-`config.yaml` logs the real file it changed.
+`workspace_path` is neither read from nor written to `config.yaml`, and
+`index_path` is written only once Pyrite saves the file. So a hand-written
+config under `PYRITE_CONFIG_DIR` or a repo-local `.pyrite/` with no
+`index_path` uses that directory for both. To keep the index where it was, add
+`index_path: ~/.pyrite/index.db` under `settings:`; otherwise run
+`pyrite index sync` to rebuild it in the new place. Clones subscribed under
+`~/.pyrite/repos` can be moved into `<config dir>/repos/`.
+(`PYRITE_DATA_DIR=~/.pyrite` would keep both, but it also makes `~/.pyrite` the
+config directory, above.)
+
+**Pyrite never drops a knowledge base you did not remove.** A save that would
+drop a KB `config.yaml` lists fails. The CLI prints one error line naming the
+file and the KBs; the REST API returns a generic 409 and logs the details.
+The exceptions are commands that remove KBs (`kb remove`, `repo remove`,
+ephemeral expiry, unsubscribe), which name what they remove and check before
+deleting anything. A `config.yaml` that cannot be parsed is not overwritten
+either. Code that means to drop KBs passes `save_config(config, removed=[...])`
+or `allow_drop=True`. A write through a symlinked `config.yaml` logs the real
+file it changed.
 
 ## Server
 
