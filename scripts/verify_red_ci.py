@@ -23,7 +23,8 @@ interrupt cannot strand ``.git/index.lock`` or leave a staged merge-base file.
 **The restore**, in one ``finally``, file by file: a file that still holds what
 the revert wrote gets its original bytes back (mode kept); a file already back
 at its original needs nothing; anything else was edited during the run and is
-left as the editor left it. SIGINT and SIGTERM wait until the restore ends.
+left as the editor left it. SIGINT, SIGTERM, SIGHUP and SIGQUIT wait until the
+restore ends.
 Every file is attempted; the ones that could not be restored are named on
 stderr and the exit is non-zero (2, or the signal's own status).
 
@@ -412,8 +413,8 @@ def _put(path: str, content: bytes | None, mode: int) -> None:
 
 @contextmanager
 def _signals_held() -> Iterator[None]:
-    """SIGINT and SIGTERM wait until the block ends, then arrive as usual."""
-    held = {signal.SIGINT, signal.SIGTERM}
+    """SIGINT and the ending signals wait until the block ends, then arrive as usual."""
+    held = {signal.SIGINT, *ENDING_SIGNALS}
     old = signal.pthread_sigmask(signal.SIG_BLOCK, held)
     try:
         yield
@@ -455,7 +456,7 @@ def _restore(targets: list[Target], written: dict[str, bytes | None]) -> list[st
 def reverted(targets: list[Target]) -> Iterator[None]:
     """The files hold their merge-base content inside the block; after it, however
     it ends, they hold what they held before (see ``_restore``). A restore that
-    fails raises RestoreError -- unless SIGINT/SIGTERM is ending the run, which
+    fails raises RestoreError -- unless a signal is ending the run, which
     keeps its own exit status."""
     written: dict[str, bytes | None] = {}
     ending: BaseException | None = None
@@ -800,9 +801,10 @@ def main(argv: list[str] | None = None) -> int:
     def remaining() -> float | None:
         return None if args.budget is None else args.budget - (time.monotonic() - start)
 
-    # Python's default SIGTERM ends the process without unwinding; raise instead,
-    # so _run kills its child and `reverted` restores the tree on the way out.
-    signal.signal(signal.SIGTERM, _terminated)
+    # Python's default SIGTERM/SIGHUP/SIGQUIT end the process without unwinding;
+    # raise instead, so _run kills its child and `reverted` restores the tree.
+    for sig in ENDING_SIGNALS:
+        signal.signal(sig, _terminated)
     try:
         mb = _git("merge-base", _resolve_base(args.base), "HEAD").strip()
         if args.test:
@@ -849,6 +851,12 @@ def verify_pr(
                 print(line, flush=True)
     sink.write(LEGEND + "\n")
     return 0
+
+
+# A cancelled job or `kill` (TERM), the terminal closing or SSH dropping (HUP),
+# Ctrl-\ (QUIT): each ends the run as SystemExit(128 + signal), through the
+# restore. SIGINT is Python's KeyboardInterrupt already. SIGKILL cannot be caught.
+ENDING_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
 
 
 def _terminated(signum: int, frame: object) -> None:

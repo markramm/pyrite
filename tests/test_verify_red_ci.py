@@ -1016,8 +1016,17 @@ def _encode(text: str, flavour: str) -> bytes:
     return text.encode()
 
 
-@pytest.mark.parametrize("flavour", ["lf", "crlf", "latin-1"])
-@pytest.mark.parametrize("sig", [signal.SIGINT, signal.SIGTERM], ids=["SIGINT", "SIGTERM"])
+@pytest.mark.parametrize(
+    ("sig", "flavour"),
+    [
+        pytest.param(sig, flavour, id=f"{sig.name}-{flavour}")
+        for sig in (signal.SIGINT, signal.SIGTERM)
+        for flavour in ("lf", "crlf", "latin-1")
+    ]
+    # The terminal closing (SSH dropped) and Ctrl-\: the wrapper execs the driver,
+    # so no bash EXIT trap stands behind it any more.
+    + [pytest.param(sig, "lf", id=f"{sig.name}-lf") for sig in (signal.SIGHUP, signal.SIGQUIT)],
+)
 def test_interrupting_the_driver_restores_the_tree_and_kills_the_run(
     repo: Path, tmp_path: Path, sig: signal.Signals, flavour: str
 ) -> None:
