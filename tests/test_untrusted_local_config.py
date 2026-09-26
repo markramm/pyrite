@@ -690,7 +690,7 @@ def test_publishing_under_an_untrusted_config_is_409_over_http(world):
     client = TestClient(app)
     r = client.put("/api/kbs/shipped/default-role", json={"role": "read"})
     assert r.status_code == 409, r.text
-    assert r.json()["code"] == "CONFIG_CONFLICT"
+    assert r.json()["detail"]["code"] == "CONFIG_CONFLICT"
     with PyriteDB(cfg.settings.index_path) as db:
         assert db.execute_sql("SELECT default_role FROM kb WHERE name = 'shipped'") == [
             {"default_role": None}

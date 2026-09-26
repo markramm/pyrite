@@ -231,7 +231,7 @@ def test_update_field_type_is_refused_not_silently_swallowed(tmp_path):
     )
     assert result.exit_code != 0
     payload = _json_payload(result)
-    assert payload.get("error_code") == "VALIDATION_FAILED", payload
+    assert payload.get("error_code") == "VALIDATION_ERROR", payload
 
     after = path.read_text(encoding="utf-8")
     assert after == before
@@ -255,7 +255,7 @@ def test_update_field_empty_key_is_refused(tmp_path):
     )
     assert result.exit_code != 0
     payload = _json_payload(result)
-    assert payload.get("error_code") == "VALIDATION_FAILED", payload
+    assert payload.get("error_code") == "VALIDATION_ERROR", payload
 
     after = path.read_text(encoding="utf-8")
     assert after == before
@@ -298,7 +298,7 @@ def test_update_field_entry_type_is_refused_not_a_raw_attributeerror(tmp_path):
     assert result.exit_code != 0
     assert result.exception is None or isinstance(result.exception, SystemExit)
     payload = _json_payload(result)
-    assert payload.get("error_code") == "VALIDATION_FAILED", payload
+    assert payload.get("error_code") == "VALIDATION_ERROR", payload
 
     after = path.read_text(encoding="utf-8")
     assert after == before

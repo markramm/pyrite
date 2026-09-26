@@ -96,7 +96,14 @@ def test_env():
 
 class TestCentralExceptionHandler:
     """register_pyrite_exception_handler maps every PyriteError to a clean HTTP
-    status + {code,message} body, instead of leaking a raw 500 traceback.
+    status + ``{"detail": {"code", "message", "retryable", "hint"?}}`` body,
+    instead of leaking a raw 500 traceback.
+
+    ADR-0037 theme 2, decision 1 (maintainer, 2026-09-25): REST keeps the
+    ``detail``-wrapped shape (matching what ``HTTPException(detail={...})``
+    sites, e.g. ``write_refusal.refusal_http``, already answer) rather than
+    the flat ``{"code", "message"}`` this handler used to emit -- so the
+    wire shape is the same regardless of which of REST's paths produced it.
 
     Tested on a minimal app wired with the same registration helper create_app
     uses, so it exercises the real mapping without the full app's static-mount
@@ -165,10 +172,87 @@ class TestCentralExceptionHandler:
         resp = error_client.get(f"/probe/{name}")
         assert resp.status_code == status
         body = resp.json()
-        assert body["code"] == code
-        assert isinstance(body["message"], str) and body["message"]
+        detail = body["detail"]
+        assert detail["code"] == code
+        assert isinstance(detail["message"], str) and detail["message"]
+        assert detail["retryable"] is False
         # No traceback / internals leaked
-        assert "Traceback" not in body["message"]
+        assert "Traceback" not in detail["message"]
+
+    def test_body_has_no_top_level_code_or_message(self, error_client):
+        """The old flat shape is gone: everything lives under detail."""
+        resp = error_client.get("/probe/entry_not_found")
+        body = resp.json()
+        assert set(body) == {"detail"}
+        assert set(body["detail"]) >= {"code", "message", "retryable"}
+
+    def test_a_retryable_storage_error_says_so(self, error_client):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.exceptions import StorageBusyError
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            raise StorageBusyError("database is locked")
+
+        app.add_api_route("/probe/busy", _route, methods=["GET"])
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/probe/busy")
+        assert resp.status_code == 500
+        assert resp.json()["detail"]["retryable"] is True
+
+    def test_public_message_replaces_str_exc_when_set(self, error_client):
+        """A class-level public_message (ConfigSaveRefusedError, #377) is
+        what the caller sees; str(exc)'s operator detail never reaches the
+        response body."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.exceptions import ConfigSaveRefusedError
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            raise ConfigSaveRefusedError("/real/secret/path.yaml leaked here", dropped=["x"])
+
+        app.add_api_route("/probe/config_save", _route, methods=["GET"])
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/probe/config_save")
+        detail = resp.json()["detail"]
+        assert detail["code"] == "CONFIG_SAVE_REFUSED"
+        assert "/real/secret/path.yaml" not in detail["message"]
+
+    def test_a_suggestion_becomes_hint(self, error_client):
+        """ValidationError.suggestion, when set, appears as detail.hint --
+        matching write_refusal.refusal_http's own key name."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.exceptions import ValidationError
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            exc = ValidationError("bad field")
+            exc.suggestion = "try again with a valid field"
+            raise exc
+
+        app.add_api_route("/probe/hinted", _route, methods=["GET"])
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/probe/hinted")
+        assert resp.json()["detail"]["hint"] == "try again with a valid field"
+
+    def test_no_hint_key_when_no_suggestion(self, error_client):
+        resp = error_client.get("/probe/entry_not_found")
+        assert "hint" not in resp.json()["detail"]
 
 
 @pytest.mark.core

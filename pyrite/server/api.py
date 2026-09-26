@@ -24,23 +24,7 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from ..config import ConfigSaveRefusedError, PyriteConfig, Settings, load_config
-from ..exceptions import (
-    BrandingInvalidError,
-    ConfigError,
-    EntryNotFoundError,
-    FrontmatterError,
-    KBNotFoundError,
-    KBProtectedError,
-    KBReadOnlyError,
-    LastAdminError,
-    PluginError,
-    PyriteError,
-    QuerySyntaxError,
-    QueryTooLongError,
-    StorageError,
-    ValidationError,
-)
+from ..config import PyriteConfig, Settings, load_config
 from ..services import access_policy
 from ..services.access_policy import (
     FORBIDDEN,
@@ -80,86 +64,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
-# Domain-exception → (HTTP status, error code) mapping for the central handler.
-# Order matters: subclasses must precede their bases so isinstance() matches the
-# most specific type first (e.g. FrontmatterError before ValidationError).
-_PYRITE_ERROR_STATUS: list[tuple[type[PyriteError], int, str]] = [
-    (EntryNotFoundError, 404, "ENTRY_NOT_FOUND"),
-    (KBNotFoundError, 404, "KB_NOT_FOUND"),
-    (KBReadOnlyError, 403, "KB_READ_ONLY"),
-    (KBProtectedError, 403, "KB_PROTECTED"),
-    (FrontmatterError, 422, "INVALID_FRONTMATTER"),
-    (QueryTooLongError, 422, "QUERY_TOO_LONG"),
-    (QuerySyntaxError, 400, "QUERY_SYNTAX"),
-    # The one route that raises LastAdminError (PUT /auth/users/{id}/role)
-    # catches it itself and re-raises as HTTPException, so this row is never
-    # reached from there -- and its response shape differs from what this
-    # row would produce: the route's HTTPException(detail={...}) nests as
-    # {"detail": {"code", "message"}}, while this central handler returns
-    # {"code", "message"} flat. This row exists so a *different*,
-    # not-yet-written caller of AuthService.set_role -- one that lets
-    # LastAdminError propagate instead of catching it -- still gets 409
-    # LAST_ADMIN instead of falling through to the base ValidationError's
-    # 422. Keep it above ValidationError so isinstance() matches it first.
-    (LastAdminError, 409, "LAST_ADMIN"),
-    (ValidationError, 422, "VALIDATION_ERROR"),
-    (ConfigSaveRefusedError, 409, "CONFIG_SAVE_REFUSED"),
-    (ConfigError, 409, "CONFIG_CONFLICT"),
-    (PluginError, 502, "PLUGIN_ERROR"),
-    (StorageError, 500, "STORAGE_ERROR"),
-    # 500, not 409: this row governs the anonymous, always-public GET routes
-    # that build a BrandingService as a side effect of serving content
-    # (/config/branding, /sitemap.xml, /robots.txt) -- a broken branding.yaml
-    # there is a server misconfiguration, not something wrong with the
-    # caller's request. POST /api/site/render catches BrandingInvalidError
-    # itself before this handler ever sees it and answers 409 (#408); this
-    # row is unreached from that path.
-    (BrandingInvalidError, 500, "BRANDING_INVALID"),
-]
-
-
-def register_pyrite_exception_handler(app: FastAPI) -> None:
-    """Register a central handler mapping the PyriteError hierarchy to HTTP.
-
-    Any PyriteError an endpoint does not catch itself is converted to a proper
-    status code and a uniform ``{"code", "message"}`` JSON body, instead of
-    leaking a raw 500 with a Python traceback. The message is the exception's
-    own text — domain messages are written to be safe to show — and no
-    traceback or internals are exposed. 5xx cases are logged with a traceback
-    server-side for debugging.
-    """
-
-    def _classify(exc: PyriteError) -> tuple[int, str]:
-        for exc_type, status_code, code in _PYRITE_ERROR_STATUS:
-            if isinstance(exc, exc_type):
-                return status_code, code
-        return 500, "INTERNAL_ERROR"
-
-    def _handler(request: Request, exc: PyriteError) -> JSONResponse:
-        status_code, code = _classify(exc)
-        if status_code >= 500:
-            # The exception itself, not True: this handler runs outside the
-            # except frame, so sys.exc_info() is empty here and exc_info=True
-            # logged no traceback (#431).
-            logger.error("Unhandled %s: %s", type(exc).__name__, exc, exc_info=exc)
-        message = str(exc)
-        public_message = getattr(exc, "public_message", None)
-        if public_message is not None:
-            # `str(exc)` may name a real filesystem path or other operator
-            # detail unsafe to return over HTTP (#377's ConfigSaveRefusedError
-            # pattern, extended to any PyriteError subclass that opts in via
-            # a `public_message` class attribute -- e.g. BrandingInvalidError,
-            # #445's cold read). A 5xx already logged the detail above (with
-            # exc_info); logging it again here would double it on every
-            # request -- the #445 delta cold read's second finding. Only a
-            # sub-500 refusal needs this line, since nothing else logs it.
-            if status_code < 500:
-                logger.warning("%s", exc)
-            message = public_message
-        return JSONResponse(status_code=status_code, content={"code": code, "message": message})
-
-    app.add_exception_handler(PyriteError, _handler)
+# The central PyriteError -> HTTP handler lives in server/errors.py
+# (ADR-0037 theme 2, §3: "one mapping table per transport, in one module
+# each"). Re-exported here for existing importers
+# (`from pyrite.server.api import register_pyrite_exception_handler`);
+# server/errors.py is the source of truth.
+from .errors import register_pyrite_exception_handler  # noqa: E402  # isort:skip
 
 
 def _anonymized_key_func(request: Request) -> str:
@@ -1471,9 +1381,9 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
         ),
     )
 
-    # Central handler for the domain exception hierarchy (see
-    # register_pyrite_exception_handler): any uncaught PyriteError is mapped to
-    # a proper HTTP status + uniform {"code","message"} body instead of a 500.
+    # Central handler for the domain exception hierarchy (server/errors.py):
+    # any uncaught PyriteError is mapped to a proper HTTP status + uniform
+    # {"detail": {"code","message","retryable","hint"?}} body instead of a 500.
     register_pyrite_exception_handler(application)
 
     # Auth router (mounted outside /api, no verify_api_key dependency)

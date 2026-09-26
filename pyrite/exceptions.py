@@ -2,23 +2,63 @@
 Pyrite Exception Hierarchy
 
 Typed exceptions for distinct error conditions, replacing generic ValueError/PermissionError.
+
+ADR-0037 theme 2: **codes live on exception classes.** Every ``PyriteError``
+subclass carries a class-level ``error_code`` -- a plain string, inherited
+from its parent unless it narrows the code itself -- so a transport maps a
+code from the class alone, with no external table keyed by type to keep in
+sync. Where REST and MCP used to disagree (``NOT_FOUND`` vs
+``ENTRY_NOT_FOUND``/``KB_NOT_FOUND``, ``READ_ONLY`` vs ``KB_READ_ONLY``,
+``VALIDATION_FAILED`` vs ``VALIDATION_ERROR``, ``CONFIG_ERROR`` vs
+``CONFIG_CONFLICT``), the maintainer's decision (2026-09-25) is that REST's
+more specific code is the one on the class; MCP keeps emitting its old code
+for one release in a transitional ``legacy_error_code`` field it builds
+itself (see ``server/mcp_server._refusal``), never on the class.
+
+**Messages are public or private by construction.** ``public_message`` is
+``None`` by default -- every transport's
+``getattr(exc, "public_message", None) or str(exc)`` then falls back to
+``str(exc)``, which every refusal family here (not-found, read-only,
+validation, query errors) writes to be safe to show. A class that *can*
+carry server-side detail in ``str(exc)`` (a real filesystem path, a plugin's
+internals) sets a fixed, safe ``public_message`` instead, e.g.
+``ConfigSaveRefusedError`` (#377) and ``BrandingInvalidError`` (#445, #408).
 """
 
 
 class PyriteError(Exception):
-    """Base exception for all Pyrite errors."""
+    """Base exception for all Pyrite errors.
+
+    ``error_code`` is the fallback for any domain error that reaches a
+    transport without a more specific class -- REST's central handler and
+    MCP's ``_refusal`` both map an unrecognised ``PyriteError`` to
+    ``INTERNAL_ERROR`` today; this makes that the same string as a class
+    attribute instead of a magic literal duplicated at each site.
+    """
+
+    error_code: str = "INTERNAL_ERROR"
+    #: Safe to show over HTTP/MCP/CLI. ``None`` means "str(exc) is safe" --
+    #: see the module docstring. A subclass whose own text can carry
+    #: server-side detail (a path, a traceback fragment) sets a fixed string.
+    public_message: str | None = None
 
 
 class EntryNotFoundError(PyriteError):
     """Raised when an entry cannot be found."""
 
+    error_code = "ENTRY_NOT_FOUND"
+
 
 class KBNotFoundError(PyriteError):
     """Raised when a knowledge base cannot be found."""
 
+    error_code = "KB_NOT_FOUND"
+
 
 class KBReadOnlyError(PyriteError):
     """Raised when attempting to write to a read-only KB."""
+
+    error_code = "KB_READ_ONLY"
 
 
 class ValidationError(PyriteError):
@@ -26,11 +66,14 @@ class ValidationError(PyriteError):
 
     Every write refusal is a ValidationError, and carries a stable
     ``error_code`` that REST, MCP and the CLI all report unchanged (#378).
-    Subclasses below narrow the code; the base code is ``VALIDATION_FAILED``.
+    Subclasses below narrow the code; the base code is ``VALIDATION_ERROR``,
+    REST's historical spelling (ADR-0037 theme 2: REST's code wins -- MCP
+    used to say ``VALIDATION_FAILED`` for this base case, and now carries
+    that old spelling in ``legacy_error_code`` for one release).
     ``suggestion`` is an optional surface-neutral fix hint.
     """
 
-    error_code = "VALIDATION_FAILED"
+    error_code = "VALIDATION_ERROR"
     suggestion: str | None = None
 
 
@@ -94,12 +137,18 @@ class FrontmatterError(ValidationError):
 
     A ValidationError subclass so existing ``except ValidationError`` handlers
     continue to catch it, while callers that care specifically about parse
-    failures can catch this narrower type.
+    failures can catch this narrower type. Its own code, not the base
+    ``VALIDATION_ERROR``: REST has always answered 422 ``INVALID_FRONTMATTER``
+    for this specific case.
     """
+
+    error_code = "INVALID_FRONTMATTER"
 
 
 class PluginError(PyriteError):
     """Raised when a plugin operation fails."""
+
+    error_code = "PLUGIN_ERROR"
 
 
 class StorageError(PyriteError):
@@ -110,6 +159,7 @@ class StorageError(PyriteError):
     way every time. Only ``StorageBusyError`` sets it.
     """
 
+    error_code = "STORAGE_ERROR"
     retryable: bool = False
 
 
@@ -127,9 +177,13 @@ class StorageBusyError(StorageError):
 class KBProtectedError(PyriteError):
     """Raised when attempting to modify/remove a config-protected KB."""
 
+    error_code = "KB_PROTECTED"
+
 
 class ConfigError(PyriteError):
     """Raised when configuration is invalid."""
+
+    error_code = "CONFIG_CONFLICT"
 
 
 class BrandingInvalidError(PyriteError):
@@ -144,6 +198,7 @@ class BrandingInvalidError(PyriteError):
     (#445's cold read). ``public_message`` is safe to show; it names neither.
     """
 
+    error_code = "BRANDING_INVALID"
     public_message = (
         "The server's branding configuration is invalid and could not be loaded. "
         "An administrator needs to fix branding.yaml; the server log names the "
@@ -159,6 +214,7 @@ class ConfigSaveRefusedError(ConfigError):
     KBs. ``public_message`` is safe to return over HTTP.
     """
 
+    error_code = "CONFIG_SAVE_REFUSED"
     public_message = (
         "The configuration was not saved: the config file changed since the server "
         "loaded it. Restart the server so it reads the current file, then re-run the "
@@ -234,3 +290,35 @@ class LastAdminError(ValidationError):
     """
 
     error_code = "LAST_ADMIN"
+
+
+class AccessDenied(PyriteError):  # noqa: N818 -- named "AccessDenied" verbatim by ADR-0037 §3
+    """ADR-0037 §3: a denial is an exception in the same hierarchy, not a
+    bespoke ``HTTPException`` or MCP refusal dict a surface builds by hand.
+
+    Not raised by any surface yet -- theme 1 (the policy point, #383) and
+    theme 3b/3c (REST's write and instance routes) are what raises these.
+    This theme only needs the classes and their codes to exist, so those
+    later themes, and this theme's transports, have something to map.
+
+    A concealment denial is deliberately **not** a subclass here: an
+    unreadable KB raises the not-found exception itself
+    (``KBNotFoundError``/``EntryNotFoundError``), so no transport can tell a
+    private KB apart from a missing one, even by accident (ADR-0037 §4).
+    """
+
+
+class NotAuthenticated(AccessDenied):
+    """No principal at all -- the caller sent no credential, or an invalid
+    one. REST's 401; MCP and the CLI report the same code.
+    """
+
+    error_code = "UNAUTHENTICATED"
+
+
+class Forbidden(AccessDenied):
+    """A principal exists but lacks the action on the resource. REST's 403;
+    MCP and the CLI report the same code.
+    """
+
+    error_code = "FORBIDDEN"

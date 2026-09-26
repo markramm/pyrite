@@ -394,7 +394,7 @@ def test_cli_add_refuses_a_truncated_body(env):
     src.write_text("---\ntitle: Added Chunk\ntype: person\nbody_truncated: true\n---\n\npartial\n")
     result = _cli(env, ["add", str(src), "-k", KB])
     assert result.exit_code == 1, result.output
-    assert "[VALIDATION_FAILED]" in result.output
+    assert "[VALIDATION_ERROR]" in result.output
     assert _file(env, "added-chunk") is None
 
 
@@ -429,7 +429,7 @@ def test_bulk_create_missing_title_is_a_validation_refusal(env, mcp):
     assert res["results"][0] == {
         "created": False,
         "error": "title is required",
-        "error_code": "VALIDATION_FAILED",
+        "error_code": "VALIDATION_ERROR",
     }, res
 
 
@@ -554,7 +554,8 @@ def test_mcp_kb_update_refuses_a_marker_nested_under_any_key(env, mcp):
         "kb_update",
         {"kb_name": KB, "entry_id": eid, "body": "frag", "extra": {"body_truncated": True}},
     )
-    assert res.get("error_code") == "VALIDATION_FAILED", res
+    assert res.get("error_code") == "VALIDATION_ERROR", res
+    assert res.get("legacy_error_code") == "VALIDATION_FAILED", res
     assert "WHOLE BODY" in _file(env, eid).read_text()
 
 
@@ -572,7 +573,7 @@ def test_rest_update_refuses_a_marker_nested_under_any_key(env, rest, method):
         payload = {"kb": KB, "field": "body", "value": "frag", "extra": {"body_truncated": True}}
     resp = getattr(rest, method)("/api/entries/rest-deep", json=payload)
     assert resp.status_code == 400, resp.text
-    assert resp.json()["detail"]["code"] == "VALIDATION_FAILED"
+    assert resp.json()["detail"]["code"] == "VALIDATION_ERROR"
     assert "WHOLE" in _file(env, "rest-deep").read_text()
 
 
@@ -592,7 +593,7 @@ def test_rest_a_stray_field_key_does_not_skip_the_truncation_check(env, rest, me
     else:
         resp = rest.put("/api/entries/rest-stray", json=marked)
     assert resp.status_code == 400, resp.text
-    assert resp.json()["detail"]["code"] == "VALIDATION_FAILED"
+    assert resp.json()["detail"]["code"] == "VALIDATION_ERROR"
     assert "WHOLE" in _file(env, "rest-stray").read_text()
 
 
@@ -635,7 +636,7 @@ def test_rest_patch_refuses_a_managed_field_and_leaves_one_file(env, rest, task_
     )
     resp = rest.patch("/api/entries/pinned", json={"kb": KB, "field": "id", "value": "moved"})
     assert resp.status_code == 400, resp.text
-    assert resp.json()["detail"]["code"] == "VALIDATION_FAILED"
+    assert resp.json()["detail"]["code"] == "VALIDATION_ERROR"
     assert sorted(p.name for p in env["kb_path"].rglob("*.md")) == ["pinned.md"]
 
 
@@ -683,7 +684,7 @@ def test_rest_patch_entry_type_is_refused_cleanly_not_a_500(env, rest):
         f"/api/entries/{entry_id}", json={"kb": KB, "field": "entry_type", "value": "hacked"}
     )
     assert resp.status_code == 400, resp.text
-    assert resp.json()["detail"]["code"] == "VALIDATION_FAILED"
+    assert resp.json()["detail"]["code"] == "VALIDATION_ERROR"
 
 
 def test_rest_patch_refuses_a_task_audit_field(task_env):
@@ -715,7 +716,7 @@ def test_cli_update_refuses_an_identity_field_and_leaves_one_file(env):
     )
     result = _cli(env, ["update", "stay", "-k", KB, "--field", "id=b"])
     assert result.exit_code == 1, result.output
-    assert "VALIDATION_FAILED" in result.output
+    assert "VALIDATION_ERROR" in result.output
     assert sorted(p.name for p in env["kb_path"].rglob("*.md")) == ["stay.md"]
 
 

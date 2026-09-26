@@ -22,6 +22,8 @@ from typing import Any
 import typer
 from typer.core import TyperGroup
 
+from ..exceptions import PyriteError
+
 
 def build_error(
     message: str,
@@ -77,6 +79,37 @@ def cli_error(
         if suggestion:
             console.print("    [dim]hint:[/dim]", Text(suggestion))
     raise typer.Exit(1)
+
+
+def cli_error_from(exc: PyriteError, output_format: str = "rich") -> None:
+    """Map a caught ``PyriteError`` to the CLI's error shape and exit.
+
+    ADR-0037 theme 2, §3: "codes live on exception classes." Reads
+    ``exc.error_code`` directly -- the same attribute REST's central handler
+    (``server/errors.py``) and MCP's ``_refusal`` (``server/mcp_server.py``)
+    read -- rather than a hand-kept ``isinstance`` chain
+    (``pyrite/cli/__init__.py``'s old ``_cli_err``, which knew about exactly
+    three exception types and fell back to a bare ``"ERROR"`` for anything
+    else, including every ``StorageError``/``PluginError``/``ConfigError``).
+    Every ``PyriteError`` has a class-level code, so there is no fallback
+    case left to get wrong.
+
+    The message shown is ``exc.public_message`` when the class sets one
+    (safe by construction; see ``pyrite.exceptions``), else ``str(exc)``.
+    The CLI has no ``legacy_error_code`` concept -- that is MCP-only, for one
+    release, per the maintainer's decision (2026-09-25); a CLI caller was
+    never promised the old MCP spelling.
+
+    Always raises ``typer.Exit(1)`` (via ``cli_error``).
+    """
+    message = exc.public_message or str(exc)
+    cli_error(
+        message,
+        output_format,
+        error_code=exc.error_code,
+        suggestion=getattr(exc, "suggestion", None),
+        retryable=bool(getattr(exc, "retryable", False)),
+    )
 
 
 class PyriteCLIGroup(TyperGroup):

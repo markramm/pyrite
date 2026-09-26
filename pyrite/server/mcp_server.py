@@ -80,8 +80,24 @@ def _project_fields(entry: dict, fields: list[str] | None) -> dict:
     return out
 
 
-# Most specific first: the dispatcher takes the first isinstance match.
-_DOMAIN_ERROR_CODES: tuple[tuple[type[PyriteError], str], ...] = (
+# ADR-0037 theme 2 (maintainer decision, 2026-09-25): "one code per
+# exception, and REST's code wins. For one release, MCP keeps emitting its
+# current code in a legacy_error_code field, then switches." Codes now live
+# on the exception classes (``pyrite.exceptions``) -- REST's spelling, since
+# REST's is the more specific one where the two transports used to disagree.
+#
+# This table and _legacy_mcp_code() below reproduce *exactly* what this
+# module computed before this theme (the old _DOMAIN_ERROR_CODES lookup,
+# most-specific-first via isinstance, falling back to the class's own old
+# error_code attribute, and finally to "REQUEST_REFUSED") -- kept only to
+# detect where that disagrees with the class's new code and populate
+# ``legacy_error_code`` for one release. It is not consulted for the code
+# MCP reports going forward (``exc.error_code`` is). A hand-picked list of
+# "the codes that changed" was tried first and missed cases (FrontmatterError,
+# TruncatedBodyError, PluginError, StorageError -- anything that used to fall
+# through to the REQUEST_REFUSED fallback or inherit a base class's old
+# literal); replaying the actual old algorithm cannot miss one.
+_LEGACY_DOMAIN_ERROR_CODES: tuple[tuple[type[PyriteError], str], ...] = (
     (EntryNotFoundError, "NOT_FOUND"),
     (KBNotFoundError, "NOT_FOUND"),
     (KBReadOnlyError, "READ_ONLY"),
@@ -92,6 +108,50 @@ _DOMAIN_ERROR_CODES: tuple[tuple[type[PyriteError], str], ...] = (
     (ConfigError, "CONFIG_ERROR"),
     (BrandingInvalidError, "BRANDING_INVALID"),
 )
+#: The literal ``error_code`` every ``PyriteError`` subclass carried before
+#: this theme gave classes without their own a code at all (ADR-0037 theme
+#: 2). Anything not listed here had no class-level code pre-theme.
+_LEGACY_OWN_ERROR_CODE: dict[str, str] = {
+    "ValidationError": "VALIDATION_FAILED",
+    "UndeclaredTypeError": "UNDECLARED_TYPE",
+    "EntryExistsError": "ENTRY_EXISTS",
+    "SchemaViolationError": "SCHEMA_VIOLATION",
+    "InvalidGitRefError": "INVALID_REF",
+    "QuerySyntaxError": "QUERY_SYNTAX",
+    "QueryTooLongError": "QUERY_TOO_LONG",
+    "ClipperBlockedHostError": "CLIPPER_BLOCKED_HOST",
+    "LastAdminError": "LAST_ADMIN",
+}
+
+
+#: Classes ADR-0037 theme 2 introduces (``exceptions.AccessDenied`` and its
+#: subclasses). Never raised by any surface before this theme -- theme 1/3b's
+#: job -- so there is no old MCP behaviour to disagree with, and no
+#: ``legacy_error_code`` should be reported for them even though they are
+#: not explicitly in the tables above either.
+_NEW_IN_THIS_THEME = frozenset({"AccessDenied", "NotAuthenticated", "Forbidden"})
+
+
+def _legacy_mcp_code(exc: PyriteError) -> str | None:
+    """What this module would have reported for ``exc`` before this theme,
+    or ``None`` for a class this theme introduces (see ``_NEW_IN_THIS_THEME``).
+
+    Walks the exception's own MRO up to (and including) ``PyriteError`` so a
+    subclass with no code of its own inherits its nearest ancestor's old
+    literal, exactly as plain attribute lookup did before this theme.
+    """
+    for klass in type(exc).__mro__:
+        name = klass.__name__
+        if name in _NEW_IN_THIS_THEME:
+            return None
+        if name in _LEGACY_OWN_ERROR_CODE:
+            return _LEGACY_OWN_ERROR_CODE[name]
+        if klass is PyriteError:
+            break
+    for t, c in _LEGACY_DOMAIN_ERROR_CODES:
+        if isinstance(exc, t):
+            return c
+    return "REQUEST_REFUSED"
 
 
 def _error(
@@ -100,35 +160,52 @@ def _error(
     *,
     suggestion: str | None = None,
     retryable: bool = False,
+    legacy_error_code: str | None = None,
 ) -> dict:
     """Build a structured error response for MCP tools."""
     r: dict = {"error": message, "error_code": code, "retryable": retryable}
     if suggestion:
         r["suggestion"] = suggestion
+    if legacy_error_code is not None:
+        r["legacy_error_code"] = legacy_error_code
     return r
 
 
 def _refusal(exc: PyriteError) -> dict:
-    """Map a service refusal to the MCP envelope, keeping its own code.
+    """Map a service refusal to the MCP envelope.
 
-    Write refusals carry a stable ``error_code`` (see the ValidationError
-    subclasses in ``pyrite.exceptions``) that REST and the CLI report
-    unchanged (#378). Not retryable -- the same call fails the same way --
-    except a ``StorageError`` that says otherwise: a locked or busy database
+    The code is the exception class's own (``exc.error_code`` -- every
+    ``PyriteError`` carries one; see ``pyrite.exceptions``), which is now
+    REST's spelling. Where that differs from what MCP used to report for
+    this class (``_LEGACY_MCP_ERROR_CODES``), the old code is carried one
+    more release in ``legacy_error_code`` so an existing MCP caller matching
+    on the old string is not broken outright (ADR-0037 theme 2, maintainer
+    decision 2026-09-25). A class MCP and REST already agreed on gets no
+    ``legacy_error_code`` key at all -- there is nothing legacy to report.
+
+    Not retryable -- the same call fails the same way -- except a
+    ``StorageError`` that says otherwise: a locked or busy database
     (``StorageBusyError``) can succeed on a retry; schema drift, a missing
     table and corruption cannot (#431).
     """
-    code = getattr(exc, "error_code", None) or next(
-        (c for t, c in _DOMAIN_ERROR_CODES if isinstance(exc, t)), "REQUEST_REFUSED"
-    )
+    code = exc.error_code
+    legacy_code = _legacy_mcp_code(exc)
+    if legacy_code == code:
+        legacy_code = None
     retryable = isinstance(exc, StorageError) and exc.retryable
     # str(exc) is safe for every existing domain error here -- validation
     # messages, "not found", query syntax -- except one that opts out via a
     # `public_message` class attribute because its own str() names a real
     # filesystem path (BrandingInvalidError; the REST side's #377 pattern,
     # #445's cold read).
-    message = getattr(exc, "public_message", None) or str(exc)
-    err = _error(code, message, suggestion=getattr(exc, "suggestion", None), retryable=retryable)
+    message = exc.public_message or str(exc)
+    err = _error(
+        code,
+        message,
+        suggestion=getattr(exc, "suggestion", None),
+        retryable=retryable,
+        legacy_error_code=legacy_code,
+    )
     declared = getattr(exc, "declared_types", None)
     if declared is not None:
         err["declared_types"] = declared

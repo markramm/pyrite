@@ -418,7 +418,7 @@ class TestAISuggestLinks:
         )
         assert resp.status_code != 500
         assert resp.status_code == 400
-        assert resp.json()["code"] == "QUERY_SYNTAX"
+        assert resp.json()["detail"]["code"] == "QUERY_SYNTAX"
 
     def test_suggest_links_query_syntax_error_skips_the_keyword_retry(self, ai_env):
         """A syntax error is deterministic -- the keyword-mode retry the bare

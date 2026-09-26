@@ -1,0 +1,126 @@
+"""The single REST exception handler (ADR-0037 theme 2, §3).
+
+Every ``PyriteError`` an endpoint does not catch itself is converted here to
+a clean HTTP status and one wire shape:
+
+    {"detail": {"code": "...", "message": "...", "retryable": bool, "hint"?: "..."}}
+
+That is the same shape ``HTTPException(detail={...})`` sites already answer
+(``write_refusal.refusal_http`` is the model this handler now matches, not
+duplicates) -- so a caller reads ``resp.json()["detail"]["code"]`` no matter
+which REST code path produced the response. Endpoint ``HTTPException`` sites
+themselves are not converted in this theme (ADR-0037 migration theme 2); this
+module only unifies the *central* handler that used to answer a third, flat
+shape (``{"code", "message"}``, no ``detail`` wrapper, no ``retryable``).
+
+The code comes from the raised exception's class (``exc.error_code``,
+ADR-0037 §3: "codes live on exception classes") -- this module's only table
+maps that code string to an HTTP status, replacing the old table keyed by
+exception *type*. A status is still one per code, decided here, not on the
+exception class: the same domain condition can map to different statuses on
+different transports (REST's status codes have no MCP or CLI equivalent).
+"""
+
+import logging
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+from ..exceptions import PyriteError
+
+logger = logging.getLogger(__name__)
+
+
+# code -> HTTP status. Any code not listed here (a class that inherits
+# PyriteError.error_code == "INTERNAL_ERROR" without narrowing it, or a new
+# class whose code nobody added below yet) maps to 500 INTERNAL_ERROR --
+# fails safe, the same way an unrecognised exception type used to.
+_STATUS_BY_CODE: dict[str, int] = {
+    "ENTRY_NOT_FOUND": 404,
+    "KB_NOT_FOUND": 404,
+    "KB_READ_ONLY": 403,
+    "KB_PROTECTED": 403,
+    "INVALID_FRONTMATTER": 422,
+    "QUERY_TOO_LONG": 422,
+    "QUERY_SYNTAX": 400,
+    # The one route that raises LastAdminError (PUT /auth/users/{id}/role)
+    # catches it itself and re-raises as HTTPException, so this row is never
+    # reached from there -- kept for any future caller that lets it propagate.
+    "LAST_ADMIN": 409,
+    "VALIDATION_ERROR": 422,
+    "CONFIG_SAVE_REFUSED": 409,
+    "CONFIG_CONFLICT": 409,
+    "PLUGIN_ERROR": 502,
+    "STORAGE_ERROR": 500,
+    # 500, not 409: this row governs the anonymous, always-public GET routes
+    # that build a BrandingService as a side effect of serving content
+    # (/config/branding, /sitemap.xml, /robots.txt) -- a broken branding.yaml
+    # there is a server misconfiguration, not something wrong with the
+    # caller's request. POST /api/site/render catches BrandingInvalidError
+    # itself before this handler ever sees it and answers 409 (#408); this
+    # row is unreached from that path.
+    "BRANDING_INVALID": 500,
+    "INTERNAL_ERROR": 500,
+    # AccessDenied family (ADR-0037 §3). Not raised by any surface yet
+    # (theme 1/3b's job) -- listed so the mapping is ready when they are.
+    "UNAUTHENTICATED": 401,
+    "FORBIDDEN": 403,
+}
+
+
+def _status_for(code: str) -> int:
+    return _STATUS_BY_CODE.get(code, 500)
+
+
+def register_pyrite_exception_handler(app: FastAPI) -> None:
+    """Register the central handler mapping the PyriteError hierarchy to HTTP.
+
+    Any PyriteError an endpoint does not catch itself is converted to a proper
+    status code and the canonical ``{"detail": {...}}`` JSON body, instead of
+    leaking a raw 500 with a Python traceback. The message shown is
+    ``public_message`` when the class sets one (safe by construction -- see
+    ``pyrite.exceptions``), else ``str(exc)`` (domain messages are written to
+    be safe to show). No traceback or internals are exposed. 5xx cases are
+    logged with a traceback server-side for debugging.
+    """
+
+    def _handler(request: Request, exc: PyriteError) -> JSONResponse:
+        code = exc.error_code
+        status_code = _status_for(code)
+        if status_code >= 500:
+            # The exception itself, not True: this handler runs outside the
+            # except frame, so sys.exc_info() is empty here and exc_info=True
+            # logged no traceback (#431).
+            logger.error("Unhandled %s: %s", type(exc).__name__, exc, exc_info=exc)
+        message = str(exc)
+        public_message = exc.public_message
+        if public_message is not None:
+            # str(exc) may name a real filesystem path or other operator
+            # detail unsafe to return over HTTP (#377's ConfigSaveRefusedError
+            # pattern, extended to any PyriteError subclass that sets a
+            # public_message -- e.g. BrandingInvalidError, #445's cold read).
+            # A 5xx already logged the detail above (with exc_info); logging
+            # it again here would double it on every request -- the #445
+            # delta cold read's second finding. Only a sub-500 refusal needs
+            # this line, since nothing else logs it.
+            if status_code < 500:
+                logger.warning("%s", exc)
+            message = public_message
+        detail: dict = {"code": code, "message": message, "retryable": _retryable(exc)}
+        suggestion = getattr(exc, "suggestion", None)
+        if suggestion:
+            detail["hint"] = suggestion
+        return JSONResponse(status_code=status_code, content={"detail": detail})
+
+    app.add_exception_handler(PyriteError, _handler)
+
+
+def _retryable(exc: PyriteError) -> bool:
+    """Whether the same call could succeed if made again unchanged.
+
+    Only ``StorageBusyError`` says yes (a locked/busy database can succeed
+    once the lock is released, #431); every other domain refusal is
+    deterministic. Reads the instance attribute set by ``StorageError`` and
+    its subclasses, defaulting to ``False`` for any class that has none.
+    """
+    return bool(getattr(exc, "retryable", False))

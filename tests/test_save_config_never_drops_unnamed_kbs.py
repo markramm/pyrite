@@ -615,9 +615,9 @@ def test_rest_refusal_advice_follows_the_reason(cfg_dir, tmp_path, caplog, reaso
         db.close()
 
     assert r.status_code == 409, r.text
-    assert r.json()["code"] == "CONFIG_SAVE_REFUSED"
+    assert r.json()["detail"]["code"] == "CONFIG_SAVE_REFUSED"
     assert str(cfg_dir) not in r.text
-    _assert_advice(reason, r.json()["message"])
+    _assert_advice(reason, r.json()["detail"]["message"])
     assert any(str(cfg_dir) in rec.getMessage() for rec in caplog.records)
     assert eph.exists()
     assert (cfg_dir / "config.yaml").read_bytes() == before
