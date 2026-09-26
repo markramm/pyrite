@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 
 from ...config import PyriteConfig
 from ...exceptions import QuerySyntaxError
+from ...services.access_policy import KB, Action, ReadScope
 from ...services.auth_service import AuthService
 from ...services.kb_service import KBService
 from ...services.link_discovery_service import LinkDiscoveryService
@@ -21,13 +22,12 @@ from ..api import (
     get_kb_service,
     get_llm_service,
     get_llm_usage_service,
-    get_readable_kbs,
     get_search_service,
     get_user_llm_context,
     limiter,
-    requires_kb_read,
     requires_tier,
 )
+from ..authz import authorize
 from ..schemas import (
     AIAutoTagResponse,
     AIChatRequest,
@@ -40,8 +40,8 @@ from ..schemas import (
 
 logger = logging.getLogger(__name__)
 
-# requires_kb_read() on the router, not per-route: every route here names
-# a KB in its body (`kb_name`, or `kb` for chat), and all four both read
+# authorize(Action.KB_READ, KB) on the router, not per-route: every route
+# here names a KB in its body (`kb_name`, or `kb` for chat), and all four both read
 # an entry and feed retrieval. The write-tier check alone was not enough
 # -- a caller with global write tier but no grant on a private KB passed
 # it, then had the entry's body summarised back to them.
@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/ai",
     tags=["AI"],
-    dependencies=[Depends(requires_tier("write")), Depends(requires_kb_read())],
+    dependencies=[Depends(requires_tier("write")), Depends(authorize(Action.KB_READ, KB))],
 )
 
 
@@ -229,7 +229,7 @@ async def ai_suggest_links(
     config: PyriteConfig = Depends(get_config),
     auth_service: AuthService = Depends(get_auth_service),
     usage_svc: LLMUsageService = Depends(get_llm_usage_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """Suggest wikilinks for an entry using AI + search.
 
@@ -244,7 +244,7 @@ async def ai_suggest_links(
     body = entry.get("body", "") or ""
     title = entry.get("title", "")
 
-    kb_names = None if req.kb_name else readable
+    kb_names = None if req.kb_name else scope.as_set()
     # Build the query from the title's own words, quoted and OR-joined
     # (same helper LinkDiscoveryService.suggest_links uses) instead of
     # handing the raw title to search(): a real title routinely carries
@@ -346,7 +346,7 @@ async def ai_chat(
     svc: KBService = Depends(get_kb_service),
     search_svc: SearchService = Depends(get_search_service),
     user_ctx: dict | None = Depends(get_user_llm_context),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """Chat with your knowledge base using RAG. Returns SSE stream.
 
@@ -369,7 +369,7 @@ async def ai_chat(
     # RAG: search KB for context
     sources = []
     context_text = ""
-    kb_names = None if req.kb else readable
+    kb_names = None if req.kb else scope.as_set()
     try:
         # The message is not a query the caller wrote: search its words,
         # quoted and OR-joined like suggest-links', so it cannot fail to
@@ -409,7 +409,7 @@ async def ai_chat(
                 )
 
         for r in results:
-            if readable is not None and r.get("kb_name") not in readable:
+            if not scope.permits(r.get("kb_name")):
                 continue
             sources.append(
                 {

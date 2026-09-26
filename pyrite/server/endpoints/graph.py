@@ -5,8 +5,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 
+from ...services.access_policy import KB, Action, ReadScope
 from ...services.graph_service import GraphService
-from ..api import get_graph_service, get_readable_kbs, limiter, requires_kb_read
+from ..api import get_graph_service, limiter
+from ..authz import authorize
 from ..schemas import GraphEdge, GraphNode, GraphResponse
 
 router = APIRouter(tags=["Graph"])
@@ -82,7 +84,7 @@ def compute_betweenness_centrality(
     return centrality
 
 
-@router.get("/graph", response_model=GraphResponse, dependencies=[Depends(requires_kb_read())])
+@router.get("/graph", response_model=GraphResponse)
 @limiter.limit("60/minute")
 def get_graph(
     request: Request,
@@ -94,7 +96,7 @@ def get_graph(
     limit: int = Query(500, ge=1, le=2000, description="Max nodes"),
     include_centrality: bool = Query(False, description="Compute betweenness centrality"),
     graph_svc: GraphService = Depends(get_graph_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """Get graph data for knowledge graph visualization."""
     data = graph_svc.get_graph(
@@ -105,9 +107,9 @@ def get_graph(
         depth=depth,
         limit=limit,
     )
-    if readable is not None:
+    if not scope.unscoped:
         # Private KBs are absent from the graph, edges to them included.
-        data["nodes"] = [n for n in data["nodes"] if n.get("kb_name") in readable]
+        data["nodes"] = [n for n in data["nodes"] if scope.permits(n.get("kb_name"))]
         keep = {(n["id"], n["kb_name"]) for n in data["nodes"]}
         data["edges"] = [
             e

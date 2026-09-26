@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ...exceptions import KBNotFoundError
+from ...services.access_policy import KB, Action
 from ...services.kb_service import KBService
 from ..api import (
     TIER_LEVELS,
@@ -12,9 +13,9 @@ from ..api import (
     get_kb_role_resolver,
     get_kb_service,
     limiter,
-    requires_kb_read,
     requires_kb_tier,
 )
+from ..authz import authorize
 from ..schemas import DailyDatesResponse, EntryResponse
 
 router = APIRouter(tags=["Daily Notes"])
@@ -34,7 +35,7 @@ def _default_daily_body(date_str: str) -> str:
 @router.get(
     "/daily/dates",
     response_model=DailyDatesResponse,
-    dependencies=[Depends(requires_kb_read())],
+    dependencies=[Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("60/minute")
 def list_daily_dates(
@@ -159,7 +160,7 @@ def _validate_date(date_str: str) -> None:
 @router.get(
     "/daily/{date_str}",
     response_model=EntryResponse,
-    dependencies=[Depends(requires_kb_read())],
+    dependencies=[Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("60/minute")
 async def get_or_create_daily_note(

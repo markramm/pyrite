@@ -53,7 +53,7 @@ from ..services.task_service import TaskService
 from ..services.version_service import VersionService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
-from .authz import get_principal
+from .authz import get_principal, not_authenticated
 
 if TYPE_CHECKING:
     from ..services.auth_service import AuthService
@@ -218,8 +218,8 @@ def get_llm_service(
         ai_model=model,
         ai_api_base=base_url,
     )
-    auth_user = getattr(request.state, "auth_user", None)
-    user_id = auth_user["id"] if auth_user else None
+    principal = get_principal(request)
+    user_id = principal.user_id if principal else None
     usage_service = LLMUsageService(db)
     return LLMService(settings, usage_service=usage_service, user_id=user_id)
 
@@ -234,13 +234,13 @@ def get_user_llm_context(
     Returns {"provider": ..., "api_key": ..., "model": ...} if the user
     has a stored BYOK key, otherwise None.
     """
-    auth_user = getattr(request.state, "auth_user", None)
-    if not auth_user:
+    principal = get_principal(request)
+    if principal is None or principal.user_id is None:
         return None
     from ..services.auth_service import AuthService
 
     auth_svc = AuthService(db, config.settings.auth)
-    return auth_svc.get_user_api_key(auth_user["id"])
+    return auth_svc.get_user_api_key(principal.user_id)
 
 
 def get_kb_registry(
@@ -263,12 +263,12 @@ def get_repo_service(
     svc = RepoService(config, db)
 
     # Inject user's stored GitHub token if available
-    auth_user = getattr(request, "state", None) and getattr(request.state, "auth_user", None)
-    if auth_user:
+    principal = get_principal(request)
+    if principal is not None and principal.user_id is not None:
         from ..services.auth_service import AuthService
 
         auth_service = AuthService(db, config.settings.auth)
-        gh_token, _ = auth_service.get_github_token_for_user(auth_user["id"])
+        gh_token, _ = auth_service.get_github_token_for_user(principal.user_id)
         if gh_token:
             svc._github_token = gh_token
         else:
@@ -368,6 +368,17 @@ def get_auth_service(
     from ..services.auth_service import AuthService
 
     return AuthService(db, config.settings.auth)
+
+
+def get_access_policy(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> AccessPolicy:
+    """The access policy, for this request's config and DB handle (ADR-0037 §1).
+
+    What `authz.authorize(...)` asks; one per request, like every provider here.
+    """
+    return AccessPolicy(config, db)
 
 
 def get_qa_service(
@@ -742,7 +753,7 @@ async def resolve_effective_kb_role(
         return principal.role
 
     # A signed-in user, or the anonymous visitor: the one per-KB rule, the
-    # same one `readable_kbs` uses, so an anonymous visitor's write check can
+    # same one `AccessPolicy.read_scope` uses, so an anonymous visitor's write check can
     # never be looser than their read check.
     return AccessPolicy(config, db).effective_kb_role(principal, kb_name)
 
@@ -796,8 +807,9 @@ def readable_kbs_for_user(
 
     The one rule, framework-free: no `Request`, so the MCP transport can
     apply exactly what the REST routes apply. `readable_kbs()` below is a
-    thin Request-reading wrapper over it, and `mcp_routes._resolve_bearer_auth`
-    is the other caller. **Do not add a second implementation** -- two copies
+    thin Request-reading wrapper over it; the routes themselves ask
+    `AccessPolicy.read_scope` through `authz.authorize`, the same walk.
+    **Do not add a second implementation** -- two copies
     drift, and a grant honoured on one surface but refused on the other is
     the bug this whole shape exists to prevent (#201).
 
@@ -818,33 +830,21 @@ def readable_kbs_for_user(
 async def readable_kbs(request: Request, config: PyriteConfig, db: PyriteDB) -> set[str] | None:
     """The KBs this caller may read, or None when the caller is not scoped.
 
-    Request-reading wrapper over `readable_kbs_for_user`: it pulls the
-    identity off `request.state` and caches the answer on the request. The
-    rule itself lives in the helper, shared with the MCP transport.
+    For in-process callers that want a plain set; a route declares
+    `authz.authorize(Action.KB_READ, KB | AnyKB)` and takes a `ReadScope`
+    instead (ADR-0037 §2). The caller comes from `authz.get_principal`, the
+    one place REST reads identity off the request, and the rule is the shared
+    `readable_kbs_for_user` -- the helper the MCP transport uses too, so the
+    two surfaces cannot drift (#201).
 
-    Not scoped: global admins, and API-key callers (an API key is the
-    operator's credential, not a peer's). A logged-in user is scoped to the KBs
-    where their effective role (grant → KB default_role → global role) is at
-    least read; an anonymous visitor on an auth-enabled instance is scoped the
-    same way with no grants. Cached on the request.
+    No principal is refused (401), never read as "not scoped".
     """
-    cached = getattr(request.state, "readable_kbs", _UNSET)
-    if cached is not _UNSET:
-        return cached
-
-    role = getattr(request.state, "api_role", None)
-    auth_user = getattr(request.state, "auth_user", None)
-    anonymous = getattr(request.state, "anonymous", False)
-    result = readable_kbs_for_user(
-        config,
-        db,
-        auth_user["id"] if auth_user else None,
-        role,
-        # An operator API key, or auth disabled: no user identity to scope by.
-        scoped=bool(auth_user or anonymous),
+    principal = get_principal(request)
+    if principal is None:
+        raise not_authenticated()
+    return readable_kbs_for_user(
+        config, db, principal.user_id, principal.role, scoped=principal.scoped
     )
-    request.state.readable_kbs = result
-    return result
 
 
 def kb_not_found(kb_name: str) -> HTTPException:
@@ -853,63 +853,6 @@ def kb_not_found(kb_name: str) -> HTTPException:
         status_code=404,
         detail={"code": "KB_NOT_FOUND", "message": f"KB '{kb_name}' not found"},
     )
-
-
-async def assert_kb_readable(
-    request: Request, config: PyriteConfig, db: PyriteDB, kb_name: str | None
-) -> None:
-    """Raise 404 if kb_name is given and the caller may not read it."""
-    if not kb_name:
-        return
-    allowed = await readable_kbs(request, config, db)
-    if allowed is not None and kb_name not in allowed:
-        raise kb_not_found(kb_name)
-
-
-async def get_readable_kbs(
-    request: Request,
-    config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
-) -> set[str] | None:
-    """Dependency form of readable_kbs() for routes that span KBs (sync or async)."""
-    return await readable_kbs(request, config, db)
-
-
-def requires_kb_read():
-    """FastAPI dependency: **every** KB named by the request must be readable.
-
-    Read-side counterpart of requires_kb_tier("write"). Resolves the KB from
-    `kb` / `kb_name` in query, path and body -- all of them, not the first
-    one found -- and 404s on any value the caller may not read. Naming a
-    readable KB alongside a private one therefore buys nothing.
-
-    Routes that span KBs (no kb given) filter with readable_kbs() instead.
-
-    Note for the AI router: the dependency reads the request body. Starlette
-    caches it on the request, so the handler's own body parsing is unaffected.
-    """
-
-    async def _check(
-        request: Request,
-        config: PyriteConfig = Depends(get_config),
-        db: PyriteDB = Depends(get_db),
-    ):
-        try:
-            names = await _resolve_kb_names(request)
-        except _UnparseableBodyError:
-            # Fail closed: an unreadable body names an unknown set of KBs,
-            # and "names none" is what lets a request through.
-            raise HTTPException(
-                status_code=400,
-                detail={"code": "INVALID_BODY", "message": "Request body could not be parsed"},
-            ) from None
-        for name in names:
-            await assert_kb_readable(request, config, db, name)
-
-    return _check
-
-
-_UNSET = object()
 
 
 def kb_exists(config: PyriteConfig, db: PyriteDB, kb_name: str) -> bool:

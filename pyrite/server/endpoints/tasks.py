@@ -9,19 +9,19 @@ already uses -- no service-layer duplication.
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
+from ...services.access_policy import KB, Action, ReadScope
 from ...services.task_service import TaskService
 from ..api import (
-    get_readable_kbs,
     get_task_service,
     limiter,
-    requires_kb_read,
     requires_kb_tier,
 )
+from ..authz import authorize
 
 router = APIRouter(tags=["Tasks"])
 
 
-@router.get("/tasks", dependencies=[Depends(requires_kb_read())])
+@router.get("/tasks")
 @limiter.limit("120/minute")
 def list_tasks(
     request: Request,
@@ -30,7 +30,7 @@ def list_tasks(
     assignee: str | None = Query(None, description="Filter by assignee, e.g. 'mark'"),
     parent: str | None = Query(None, description="Filter by parent task id"),
     svc: TaskService = Depends(get_task_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """List tasks across one KB or every readable one.
 
@@ -45,7 +45,7 @@ def list_tasks(
         status=status,
         assignee=assignee,
         parent=parent,
-        kb_names=None if kb else readable,
+        kb_names=None if kb else scope.as_set(),
     )
     return {"count": len(tasks), "tasks": tasks}
 

@@ -1,10 +1,11 @@
 """Every /api route is scoped to the KBs its caller may read -- structurally.
 
-Per-KB read scoping (`requires_kb_read`, `get_readable_kbs` in
-`pyrite/server/api.py`) is what keeps a private KB invisible to a caller
-without a grant. Nothing enforced that a *new* route picked it up, so
-sixteen endpoint modules shipped without it and the rule lived only in a
-docstring. This test is the enforcement: it walks the real app's routes
+Per-KB read scoping (`authorize(Action.KB_READ, KB | AnyKB)` in
+`pyrite/server/authz.py`, which replaced `requires_kb_read` and
+`get_readable_kbs` in ADR-0037 theme 3a) is what keeps a private KB
+invisible to a caller without a grant. Nothing enforced that a *new*
+route picked it up, so sixteen endpoint modules shipped without it and the
+rule lived only in a docstring. This test is the enforcement: it walks the real app's routes
 and fails for any `/api` route that is neither scoped nor explicitly
 allowlisted with a reason.
 
@@ -47,8 +48,9 @@ a variable of the same name, and it gives no way to be sure the check
 actually runs on every request. A FastAPI dependency does run on every
 request, and the dependant tree is the framework's own record of that.
 The cost is a real constraint on authors: **scope a route by declaring
-`Depends(requires_kb_read())` or taking `Depends(get_readable_kbs)`**,
-never by calling `readable_kbs()` ad hoc inside the handler. Both forms
+`Depends(authorize(Action.KB_READ, KB))` or taking
+`scope: ReadScope = Depends(authorize(Action.KB_READ, AnyKB))`**, never by
+calling `readable_kbs()` ad hoc inside the handler. Both forms
 appear in the tree; a bare call does not, and this test will fail --
 correctly, because such a call is invisible to review.
 """
@@ -65,14 +67,15 @@ from pyrite.server.api import create_app
 pytestmark = pytest.mark.core  # the local smoke set; see scripts/test-affected
 
 # Qualified names of the dependencies that scope a route's reads. A route
-# whose dependant tree contains any of these is scoped:
-#   - requires_kb_read()  -- 404s a named KB the caller may not read
-#   - get_readable_kbs    -- hands the handler the readable set to filter by
-#   - assert_kb_readable  -- the underlying assertion, if wired as a dependency
+# whose dependant tree contains any of these is scoped (ADR-0037 theme 3a:
+# `authz.authorize` replaced `requires_kb_read()` and `get_readable_kbs`):
+#   - authorize(Action.KB_READ, KB)    -- 404s a named KB the caller may not
+#                                         read, and hands over the ReadScope
+#   - authorize(Action.KB_READ, AnyKB) -- hands the handler the ReadScope to
+#                                         filter by
 SCOPING_DEPENDENCIES = {
-    "pyrite.server.api.requires_kb_read.<locals>._check",
-    "pyrite.server.api.get_readable_kbs",
-    "pyrite.server.api.assert_kb_readable",
+    "pyrite.server.authz.authorize.<locals>.authorize_kb_read_named",
+    "pyrite.server.authz.authorize.<locals>.authorize_kb_read_any",
 }
 
 # The parameter names `_resolve_kb_names` inspects, in every location it
@@ -221,18 +224,18 @@ has no grant on it.
 Scope it, in pyrite/server/endpoints/<module>.py:
 
   * names a KB (`kb` / `kb_name` in query, path or body) -->
-        @router.get("/thing", dependencies=[Depends(requires_kb_read())])
+        @router.get("/thing", dependencies=[Depends(authorize(Action.KB_READ, KB))])
     which answers 404 KB_NOT_FOUND -- never 403 -- for a KB the caller
     may not read, byte-identical to a KB that does not exist.
 
   * spans KBs (no kb parameter) -->
-        readable: set[str] | None = Depends(get_readable_kbs)
-    and push `kb_names=readable` into the service/query, as
+        scope: ReadScope = Depends(authorize(Action.KB_READ, AnyKB))
+    and push `kb_names=scope.as_set()` into the service/query, as
     endpoints/search.py does. Filtering the rows in Python after the
     fact is not enough where a count, total or has_more would still
     reveal the private rows.
 
-Both helpers live in pyrite/server/api.py. A route that genuinely serves
+`authorize` lives in pyrite/server/authz.py. A route that genuinely serves
 no KB content goes in ALLOWLIST in this file, with a reason.
 """
 
@@ -364,7 +367,7 @@ def _is_kb_parameter(name: str) -> bool:
 def test_scoped_routes_declare_no_kb_parameter_the_resolver_ignores():
     """A scoped route must read its KB from a place the resolver inspects.
 
-    Attaching `requires_kb_read()` proves a check runs; it does not prove
+    Attaching `authorize(Action.KB_READ, KB)` proves a check runs; it does not prove
     the check looked at the KB the handler will serve from. This closes
     that gap: for every route counted as scoped, each KB-bearing parameter
     the handler declares must be one `_resolve_kb_names` reads, or be

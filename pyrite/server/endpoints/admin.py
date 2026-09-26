@@ -6,7 +6,7 @@ from collections.abc import Callable
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
 from ...exceptions import ConfigError, KBNotFoundError, KBProtectedError
-from ...services.access_policy import ROLES
+from ...services.access_policy import ROLES, Action, AnyKB, ReadScope
 from ...services.auth_service import AuthService
 from ...services.embedding_worker import EmbeddingWorker
 from ...services.ephemeral_service import EphemeralKBService, InvalidEphemeralKBNameError
@@ -26,11 +26,11 @@ from ..api import (
     get_kb_registry,
     get_llm_service,
     get_llm_usage_service,
-    get_readable_kbs,
     get_site_cache_factory,
     limiter,
     requires_tier,
 )
+from ..authz import authorize
 from ..schemas import (
     AIStatusResponse,
     KBReindexResponse,
@@ -49,10 +49,10 @@ router = APIRouter(tags=["Admin"])
 def get_stats(
     request: Request,
     index_mgr: IndexManager = Depends(get_index_mgr),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, AnyKB)),
 ):
     """Get index statistics, over the KBs the caller may read."""
-    stats = index_mgr.get_index_stats(kb_names=readable)
+    stats = index_mgr.get_index_stats(kb_names=scope.as_set())
     return StatsResponse(**stats)
 
 

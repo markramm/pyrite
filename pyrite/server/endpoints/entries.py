@@ -14,6 +14,7 @@ from ...exceptions import (
     PyriteError,
     ValidationError,
 )
+from ...services.access_policy import KB, Action, AnyKB, ReadScope
 from ...services.block_service import BlockService
 from ...services.kb_service import KBService
 from ...services.read_shaping import parse_fields_param, project_fields
@@ -21,14 +22,13 @@ from ..api import (
     get_block_service,
     get_config,
     get_kb_service,
-    get_readable_kbs,
     get_worktree_resolver,
     kb_not_found,
     limiter,
     negotiate_response,
-    requires_kb_read,
     requires_kb_tier,
 )
+from ..authz import authorize
 from ..schemas import (
     CreateEntryRequest,
     CreateResponse,
@@ -54,9 +54,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Entries"])
 
 
-@router.get(
-    "/entries", response_model=EntryListResponse, dependencies=[Depends(requires_kb_read())]
-)
+@router.get("/entries", response_model=EntryListResponse)
 @limiter.limit("100/minute")
 def list_entries(
     request: Request,
@@ -71,10 +69,10 @@ def list_entries(
     offset: int = Query(0, ge=0),
     svc: KBService = Depends(get_kb_service),
     resolver=Depends(get_worktree_resolver),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """List entries with pagination, limited to KBs the caller may read."""
-    kb_names = None if kb else readable
+    kb_names = None if kb else scope.as_set()
     # Use overlay so user sees their own edits in lists
     auth_user = getattr(request.state, "auth_user", None)
     if auth_user and kb:
@@ -124,24 +122,20 @@ def list_entries(
     return EntryListResponse(entries=entries, total=total, limit=limit, offset=offset)
 
 
-@router.get(
-    "/entries/types",
-    response_model=EntryTypesResponse,
-    dependencies=[Depends(requires_kb_read())],
-)
+@router.get("/entries/types", response_model=EntryTypesResponse)
 @limiter.limit("100/minute")
 def list_entry_types(
     request: Request,
     kb: str | None = Query(None, description="Filter by KB name"),
     svc: KBService = Depends(get_kb_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """Get distinct entry types, limited to KBs the caller may read."""
-    types = svc.get_distinct_types(kb_name=kb, kb_names=None if kb else readable)
+    types = svc.get_distinct_types(kb_name=kb, kb_names=None if kb else scope.as_set())
     return EntryTypesResponse(types=types)
 
 
-@router.get("/entries/type-schemas", dependencies=[Depends(requires_kb_read())])
+@router.get("/entries/type-schemas", dependencies=[Depends(authorize(Action.KB_READ, KB))])
 @limiter.limit("100/minute")
 def list_type_schemas(
     request: Request,
@@ -289,7 +283,7 @@ def _guess_field_type(field_name: str) -> str:
 @router.get(
     "/entries/titles",
     response_model=EntryTitlesResponse,
-    dependencies=[Depends(requires_kb_read())],
+    dependencies=[Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("100/minute")
 def list_entry_titles(
@@ -330,7 +324,7 @@ def list_entry_titles(
 @router.post(
     "/entries/resolve-batch",
     response_model=ResolveBatchResponse,
-    dependencies=[Depends(requires_kb_read())],
+    dependencies=[Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("100/minute")
 def resolve_batch(
@@ -349,7 +343,7 @@ def batch_read_entries(
     request: Request,
     body: dict,
     svc: KBService = Depends(get_kb_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, AnyKB)),
 ):
     """Batch-read multiple entries in one call."""
     entries_spec = body.get("entries", [])
@@ -411,9 +405,9 @@ def batch_read_entries(
         )
 
     ids = [(e["entry_id"], e["kb_name"]) for e in entries_spec]
-    if readable is not None:
+    if not scope.unscoped:
         # Items in KBs the caller may not read are reported as not found.
-        ids = [(eid, kb) for eid, kb in ids if kb in readable]
+        ids = [(eid, kb) for eid, kb in ids if scope.permits(kb)]
     results = svc.get_entries(ids)
 
     if fields_param:
@@ -438,7 +432,7 @@ def batch_read_entries(
 @router.get(
     "/entries/wanted",
     response_model=WantedPagesResponse,
-    dependencies=[Depends(requires_kb_read())],
+    dependencies=[Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("100/minute")
 def list_wanted_pages(
@@ -465,7 +459,9 @@ def list_wanted_pages(
 
 
 @router.get(
-    "/entries/resolve", response_model=ResolveResponse, dependencies=[Depends(requires_kb_read())]
+    "/entries/resolve",
+    response_model=ResolveResponse,
+    dependencies=[Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("100/minute")
 def resolve_entry(
@@ -519,7 +515,7 @@ def resolve_entry(
 # =============================================================================
 
 
-@router.get("/entries/export", dependencies=[Depends(requires_kb_read())])
+@router.get("/entries/export", dependencies=[Depends(authorize(Action.KB_READ, KB))])
 @limiter.limit("30/minute")
 def export_entries(
     request: Request,
@@ -659,9 +655,7 @@ async def import_entries(
 # =============================================================================
 
 
-@router.get(
-    "/entries/{entry_id}", response_model=EntryResponse, dependencies=[Depends(requires_kb_read())]
-)
+@router.get("/entries/{entry_id}", response_model=EntryResponse)
 @limiter.limit("100/minute")
 def get_entry(
     request: Request,
@@ -678,7 +672,7 @@ def get_entry(
     ),
     svc: KBService = Depends(get_kb_service),
     resolver=Depends(get_worktree_resolver),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """Get entry by ID."""
     # Use overlay so user sees their own edits
@@ -699,7 +693,7 @@ def get_entry(
             result.setdefault("outlinks", [])
             result.setdefault("backlinks", [])
 
-    if result and readable is not None and result.get("kb_name") not in readable:
+    if result and not scope.permits(result.get("kb_name")):
         # kb was omitted and the lookup landed in a KB the caller may not read.
         raise kb_not_found(result.get("kb_name", ""))
     if not result:
