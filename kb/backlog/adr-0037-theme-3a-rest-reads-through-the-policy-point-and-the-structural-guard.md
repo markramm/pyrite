@@ -7,10 +7,11 @@ tags:
 - security
 importance: 5
 kind: tech_debt
-status: proposed
+status: in_progress
 priority: high
 effort: L
 rank: 0
+assignee: agent:pyrite-worker
 ---
 
 Source: ADR-0037, migration theme 3a. Milestone 0.26 (maintainer, 2026-09-25). Meets the 0.26 definition-of-done structural guard.
