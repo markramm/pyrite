@@ -78,6 +78,11 @@ _STATUS_BY_CODE: dict[str, int] = {
     "INVALID_REF": 422,
     "CONFIG_SAVE_REFUSED": 409,
     "CONFIG_CONFLICT": 409,
+    # KBAlreadyExistsError's own code (#506) -- listed explicitly so its
+    # status doesn't depend on _BASE_CLASS_FALLBACK's ConfigError row (which
+    # happens to answer the same 409 today, but coincidentally: nothing pins
+    # CONFLICT itself to a status without this row).
+    "CONFLICT": 409,
     "PLUGIN_ERROR": 502,
     "STORAGE_ERROR": 500,
     # 500, not 409: this row governs the anonymous, always-public GET routes

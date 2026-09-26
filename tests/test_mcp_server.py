@@ -2082,5 +2082,28 @@ class TestBodyChunking:
             assert len(entry["body"]) == 8000
 
 
+class TestKBRegistryAddDuplicateName:
+    """#506 item 1: `kb_registry_add` over MCP answered a duplicate name
+    with the generic, fixed `ConfigError.public_message` ("The configuration
+    is invalid...") once #501 gave the base class a fixed message -- REST's
+    own `except ConfigError` catch at this same call (`admin.py` ~278) still
+    names the conflict via `str(e)`. A narrow `ConfigError` subclass for
+    exactly this refusal, with its own `public_message = None`, is safe by
+    construction (the message only ever names the KB and says it exists),
+    so both transports say what happened."""
+
+    def test_mcp_names_the_conflict_like_rest_does(self):
+        kb_defs = [{"name": "test-kb", "kb_type": "generic"}]
+        with _make_mcp_server(kb_defs, tier="admin") as ctx:
+            server = ctx["server"]
+            result = server._dispatch_tool(
+                "kb_registry_add",
+                {"name": "test-kb", "path": "/tmp/wherever-506"},
+            )
+            assert "error" in result, result
+            assert result["error"] == "KB 'test-kb' already exists", result
+            assert result["error_code"] == "CONFLICT", result
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

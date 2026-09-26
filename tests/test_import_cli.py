@@ -209,3 +209,48 @@ class TestImportCommand:
             # The JSON importer defaults "title" to "Untitled", so both may succeed.
             # But bulk_create_entries requires a non-empty title check.
             assert result.exit_code == 0
+
+    def test_import_dropped_hook_refusal_shows_the_safe_hint_not_the_generic_masking(
+        self, import_env
+    ):
+        """#506 item 2/3: `bulk_create_entries`'s per-item results go through
+        `kb_service._refusal_result`, shared by REST, MCP and this CLI
+        command alike -- masking there is correct (it's the boundary for
+        REST/MCP too), so this path needs no CLI-only bypass. Once the
+        dropped-before-hook refusal (`hook_runner.py`) raises a narrow
+        PluginError subclass with its own public_message=None (safe by
+        construction: it names only the hook name and KB type), the real
+        text reaches this CLI's `_refusal_line` unmasked -- proving the
+        fix at the raise site, not a special case in the CLI itself."""
+        from pyrite.plugins.registry import get_registry
+
+        class BadPlugin:
+            name = "bad_before_hook_plugin_506"
+
+            def get_hooks(self):
+                return {"before_save": [lambda entry: entry]}  # 1-arg -- wrong
+
+        reg = get_registry()
+        reg.register(BadPlugin())
+        entries = {"entries": [{"title": "Doomed", "entry_type": "note", "body": "x"}]}
+        json_file = import_env["tmpdir"] / "doomed.json"
+        json_file.write_text(json.dumps(entries))
+
+        try:
+            with _patch_config(import_env):
+                result = runner.invoke(app, ["import", str(json_file), "--kb", "test-kb"])
+        finally:
+            # `del reg._plugins[name]` alone (the pattern several other test
+            # files already use for this same cleanup) leaves a stale entry
+            # in `_conformance_cache` -- the registry has no public
+            # unregister, so `register()`'s own re-register path (which pops
+            # this same cache entry) is the model here: pop both, not just
+            # `_plugins`, so a later test that registers a DIFFERENT plugin
+            # under this name can't be served this plugin's cached
+            # conformance (#509 round 1 cold read).
+            del reg._plugins["bad_before_hook_plugin_506"]
+            reg._conformance_cache.pop("bad_before_hook_plugin_506", None)
+
+        assert result.exit_code != 0, result.output
+        assert "before_save dispatch refused" in result.output, result.output
+        assert "A plugin operation failed" not in result.output, result.output

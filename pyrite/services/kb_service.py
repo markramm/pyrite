@@ -21,11 +21,11 @@ from ..config import KBConfig, PyriteConfig
 from ..exceptions import (
     EntryExistsError,
     EntryNotFoundError,
+    IndexSyncRecoveryHintError,
     KBNotFoundError,
     KBReadOnlyError,
     PyriteError,
     SchemaViolationError,
-    StorageError,
     UndeclaredTypeError,
     ValidationError,
 )
@@ -1239,15 +1239,28 @@ class KBService:
             try:
                 self._index_mgr.sync_incremental(kb_name)
             except Exception as e:
-                raise StorageError(
+                # `e` itself is NOT interpolated into the message: it can be
+                # an OSError carrying a real filesystem path, or a driver's
+                # own error text -- neither is safe by construction, unlike
+                # the fixed sentence below (which names only the two entry
+                # ids). Logged here, with a traceback, since nothing else
+                # will (this is the one and only place `e` is available).
+                logger.error(
+                    "Index sync failed after renaming %r -> %r in KB %r",
+                    old_id,
+                    new_id,
+                    kb_name,
+                    exc_info=e,
+                )
+                raise IndexSyncRecoveryHintError(
                     f"Renamed {old_id!r} -> {new_id!r} on disk, but the index "
-                    f"sync failed ({e}). Run `pyrite index sync` to recover — "
+                    f"sync failed. Run `pyrite index sync` to recover — "
                     f"until then, search/lookups may resolve the old id and "
                     f"miss the new one."
                 ) from e
 
             if self.db.get_entry(new_id, kb_name) is None:
-                raise StorageError(
+                raise IndexSyncRecoveryHintError(
                     f"Renamed {old_id!r} -> {new_id!r} on disk, but {new_id!r} "
                     f"did not resolve in the index after sync. Run "
                     f"`pyrite index sync` to recover."

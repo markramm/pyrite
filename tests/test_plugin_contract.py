@@ -124,6 +124,40 @@ class TestDroppedBeforeHookFailsClosed:
         with pytest.raises(Exception):  # noqa: B017 -- the exact type isn't the contract
             runner.run_before_save(entry, {})
 
+    def test_wrong_arity_before_save_hook_message_reaches_callers_unmasked(self):
+        """#506 item 2: the dropped-hook refusal names only the hook name and
+        the KB type -- both caller-controlled/plugin-registration values,
+        never server-side detail -- so it's safe by construction. #501 gave
+        the base PluginError a fixed, generic public_message ("A plugin
+        operation failed...") for raise sites that DO carry unsafe detail
+        (a traceback fragment, a real path); this specific refusal needs its
+        own narrow subclass with public_message=None so REST/MCP/CLI callers
+        still see what actually happened."""
+        from pyrite.exceptions import PluginError
+        from pyrite.models.core_types import NoteEntry
+        from pyrite.plugins.registry import PluginRegistry
+        from pyrite.services.hook_runner import HookRunner
+
+        class BadPlugin:
+            name = "bad_before_hook_plugin"
+            capabilities = {Capability.STORAGE}
+
+            def get_hooks(self):
+                return {"before_save": [lambda entry: entry]}  # 1-arg -- wrong
+
+        reg = PluginRegistry()
+        reg.register(BadPlugin())
+        reg._discovered = True
+        runner = HookRunner(plugin_registry=reg)
+
+        entry = NoteEntry(id="test", title="Test")
+        with pytest.raises(PluginError) as excinfo:
+            runner.run_before_save(entry, {})
+
+        exc = excinfo.value
+        assert exc.public_message is None
+        assert "before_save dispatch refused" in str(exc)
+
     def test_a_failed_dropped_hook_lookup_refuses_the_write(self):
         """#422 delta cold read: if the registry cannot say which before_*
         hooks were dropped, dispatch must fail closed, like a failed hook

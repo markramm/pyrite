@@ -323,6 +323,40 @@ class TestLLMServiceMissingSDK:
             with pytest.raises(PluginError, match="openai"):
                 asyncio.run(svc.complete("Hello"))
 
+    def test_anthropic_missing_sdk_message_reaches_callers_unmasked(self):
+        """#506 item 2: "Install it with: pip install 'pyrite[ai]'" names no
+        server-side detail -- it's the same fixed hint for every caller --
+        so it's safe by construction. #501 gave the base PluginError a
+        fixed, generic public_message for raise sites that DO carry unsafe
+        detail (a traceback fragment, a real path); this specific hint needs
+        its own narrow subclass with public_message=None."""
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="anthropic", ai_api_key="sk-test")
+        svc = LLMService(settings)
+
+        with patch("pyrite.services.llm_service._import_anthropic", return_value=None):
+            with pytest.raises(PluginError) as excinfo:
+                asyncio.run(svc.complete("Hello"))
+
+        exc = excinfo.value
+        assert exc.public_message is None
+        assert "pip install" in str(exc)
+
+    def test_openai_missing_sdk_message_reaches_callers_unmasked(self):
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="openai", ai_api_key="sk-test")
+        svc = LLMService(settings)
+
+        with patch("pyrite.services.llm_service._import_openai", return_value=None):
+            with pytest.raises(PluginError) as excinfo:
+                asyncio.run(svc.complete("Hello"))
+
+        exc = excinfo.value
+        assert exc.public_message is None
+        assert "pip install" in str(exc)
+
 
 class TestLLMServiceAnthropicMocked:
     """Test Anthropic provider with mocked SDK."""

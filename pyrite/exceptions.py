@@ -199,6 +199,38 @@ class PluginError(PyriteError):
     )
 
 
+class DroppedHookRefusedError(PluginError):
+    """`hook_runner.py` refused a write because a plugin's `before_*` hook
+    for this KB type was dropped at registration for not matching the
+    `(entry, ctx)` contract (#506, narrowing #501's fixed
+    `PluginError.public_message`).
+
+    The message names only the hook name and the KB type -- both
+    caller/plugin-registration values, never server-side detail (no
+    traceback fragment, no real path) -- so it is safe by construction,
+    unlike the base `PluginError`, which also covers raise sites that do
+    carry unsafe detail.
+    """
+
+    #: Overrides the base PluginError's fixed sentence -- this class's own
+    #: message is always safe, so str(exc) should reach every transport.
+    public_message = None
+
+
+class MissingOptionalDependencyError(PluginError):
+    """A provider client needed an optional dependency that is not
+    installed (`llm_service.py`'s Anthropic/OpenAI SDK checks, #506,
+    narrowing #501's fixed `PluginError.public_message`).
+
+    The message is a fixed, safe `pip install` hint naming the package --
+    never server-side detail -- so it is safe by construction.
+    """
+
+    #: Overrides the base PluginError's fixed sentence -- this class's own
+    #: message is always safe, so str(exc) should reach every transport.
+    public_message = None
+
+
 class StorageError(PyriteError):
     """Raised when a storage operation fails.
 
@@ -220,6 +252,27 @@ class StorageError(PyriteError):
         "log for the underlying error."
     )
     retryable: bool = False
+
+
+class IndexSyncRecoveryHintError(StorageError):
+    """A rename's file operation on disk succeeded, but the index sync that
+    should follow it failed or left the new id unresolved (`kb_service.py`'s
+    `rename_entry`, #506, narrowing #501's fixed `StorageError.public_message`).
+
+    The message names only the two entry ids -- never a real filesystem path
+    or driver detail -- so it is safe by construction; the recovery hint
+    ("Run `pyrite index sync`") is real and actionable, unlike the base
+    `StorageError`'s generic "check the server log" (written for raise sites
+    that genuinely can't say more). The caught exception that triggered this
+    (an OSError naming a real path, a driver's own error text -- NOT
+    guaranteed safe) is deliberately never interpolated into the message; it
+    is logged instead (#509 round 1 cold read caught an earlier version that
+    did interpolate it).
+    """
+
+    #: Overrides the base StorageError's fixed sentence -- this class's own
+    #: message is always safe, so str(exc) should reach every transport.
+    public_message = None
 
 
 class StorageBusyError(StorageError):
@@ -279,6 +332,25 @@ class BrandingInvalidError(PyriteError):
         "An administrator needs to fix branding.yaml; the server log names the "
         "file and the problem."
     )
+
+
+class KBAlreadyExistsError(ConfigError):
+    """`KBRegistryService.add_kb` refused: a KB with this name is already
+    registered (#506, narrowing #501's fixed `ConfigError.public_message`).
+
+    The message names only the KB's own name -- caller-supplied, never
+    server-side detail -- so it is safe by construction; unlike the base
+    `ConfigError`, which also covers raise sites that DO carry unsafe detail
+    (a confined-root path, a driver's own text), this one never does. REST's
+    own `except ConfigError` catch at this call (`admin.py`) already answers
+    ``{"code": "CONFLICT", "message": str(e)}`` by hand; giving MCP the same
+    code and an unmasked message here is what makes both transports agree.
+    """
+
+    error_code = "CONFLICT"
+    #: Overrides the base ConfigError's fixed sentence -- this class's own
+    #: message is always safe, so str(exc) should reach every transport.
+    public_message = None
 
 
 class ConfigSaveRefusedError(ConfigError):

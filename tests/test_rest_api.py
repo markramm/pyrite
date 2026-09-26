@@ -118,6 +118,7 @@ class TestCentralExceptionHandler:
             ConfigError,
             EntryNotFoundError,
             FrontmatterError,
+            KBAlreadyExistsError,
             KBNotFoundError,
             KBProtectedError,
             LastAdminError,
@@ -139,6 +140,7 @@ class TestCentralExceptionHandler:
             "last_admin": LastAdminError("cannot demote the last admin"),
             "frontmatter": FrontmatterError("bad yaml"),
             "config": ConfigError("dup kb"),
+            "kb_already_exists": KBAlreadyExistsError("KB 'x' already exists"),
             "plugin": PluginError("missing sdk"),
             "storage": StorageError("disk gone"),
             "base": PyriteError("generic domain error"),
@@ -153,6 +155,19 @@ class TestCentralExceptionHandler:
         # our handler should mean none are actually unhandled.
         return TestClient(app, raise_server_exceptions=False)
 
+    def test_conflict_code_has_its_own_status_by_code_row_not_just_the_fallback(self):
+        """#509 round 1: KBAlreadyExistsError's CONFLICT code answered 409
+        only via _BASE_CLASS_FALLBACK's ConfigError row (a class whose code
+        isn't in _STATUS_BY_CODE falls back to its base's status) -- correct
+        today, since ConfigError's own fallback is also 409, but coincidental:
+        nothing pinned CONFLICT's status to the table itself. A future
+        CONFLICT-coded class that DIDN'T inherit ConfigError (or a change to
+        ConfigError's fallback status) would silently answer a different
+        code from a table lookup that was never actually populated for it."""
+        from pyrite.server.errors import _STATUS_BY_CODE
+
+        assert _STATUS_BY_CODE.get("CONFLICT") == 409
+
     @pytest.mark.parametrize(
         ("name", "status", "code"),
         [
@@ -163,6 +178,7 @@ class TestCentralExceptionHandler:
             ("validation", 422, "VALIDATION_FAILED"),
             ("last_admin", 409, "LAST_ADMIN"),
             ("config", 409, "CONFIG_CONFLICT"),
+            ("kb_already_exists", 409, "CONFLICT"),
             ("plugin", 502, "PLUGIN_ERROR"),
             ("storage", 500, "STORAGE_ERROR"),
             ("base", 500, "INTERNAL_ERROR"),
@@ -278,6 +294,36 @@ class TestCentralExceptionHandler:
 
         resp = self._fallback_probe(KBProtectedError, "SOME_PROTECTED_CODE_NOBODY_ADDED")
         assert resp.status_code == 403, resp.json()
+
+    def test_a_class_inheriting_two_base_class_fallback_bases_takes_the_first_in_tuple_order(
+        self,
+    ):
+        """#506 item 4: `_BASE_CLASS_FALLBACK` is a tuple walked in order, not
+        the class's MRO -- for a class inheriting from two of its eight
+        listed bases, which one wins is a decision, not an accident. Today's
+        order lists `ValidationError` (422) before `ConfigError` (409), so a
+        class inheriting both -- and whose own code is not in
+        `_STATUS_BY_CODE` -- resolves to `ValidationError`'s 422, not
+        `ConfigError`'s 409. Pinned here so re-ordering the tuple is a
+        reviewed change to this test, not a silent behaviour flip."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.exceptions import ConfigError, ValidationError
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        class _BothBasesError(ValidationError, ConfigError):
+            error_code = "SOME_DUAL_BASE_CODE_NOBODY_ADDED"
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            raise _BothBasesError("not in the table")
+
+        app.add_api_route("/probe/dual-base", _route, methods=["GET"])
+        resp = TestClient(app, raise_server_exceptions=False).get("/probe/dual-base")
+        assert resp.status_code == 422, resp.json()
 
     def test_body_has_no_top_level_code_or_message(self, error_client):
         """The old flat shape is gone: everything lives under detail."""

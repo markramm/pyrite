@@ -108,6 +108,86 @@ class TestRenameIndexVerification:
             with pytest.raises(StorageError, match="index"):
                 kb_service.rename_entry(old_id, "renamed-entry-id", kb_name)
 
+    def test_index_sync_failure_message_reaches_callers_unmasked(
+        self, indexed_test_env, sample_events
+    ):
+        """#506 item 2: the "Run `pyrite index sync` to recover" hint is safe
+        by construction -- it names only the two entry ids, and (since #509
+        round 1's cold read) never the caught exception's own text, which is
+        NOT guaranteed safe (an OSError names a real path; a driver raises
+        its own error text) -- so it should reach REST/MCP/CLI callers as-is,
+        not the base StorageError's fixed, generic public_message from #501.
+        A narrow StorageError subclass with public_message=None is the fix;
+        the base StorageError's masking (for OTHER raise sites that DO carry
+        unsafe detail) is untouched."""
+        kb_service = _kb_service(indexed_test_env)
+        old_id = sample_events[0].id
+        kb_name = indexed_test_env["events_kb"].name
+
+        with patch.object(
+            kb_service._index_mgr,
+            "sync_incremental",
+            side_effect=RuntimeError("simulated index failure"),
+        ):
+            with pytest.raises(StorageError) as excinfo:
+                kb_service.rename_entry(old_id, "renamed-entry-id", kb_name)
+
+        exc = excinfo.value
+        assert exc.public_message is None
+        assert "pyrite index sync" in str(exc)
+        # The caught exception's own text is logged, not interpolated --
+        # see test_index_sync_failure_never_interpolates_the_caught_exceptions_text
+        # for the case where that text would be unsafe to show.
+        assert "simulated index failure" not in str(exc)
+
+    def test_index_sync_missing_id_message_reaches_callers_unmasked(
+        self, indexed_test_env, sample_events
+    ):
+        """Same fix, the other raise site in this method (sync succeeds but
+        the new id still doesn't resolve)."""
+        kb_service = _kb_service(indexed_test_env)
+        old_id = sample_events[0].id
+        kb_name = indexed_test_env["events_kb"].name
+
+        with patch.object(
+            kb_service._index_mgr, "sync_incremental", return_value={"added": 0, "updated": 0}
+        ):
+            with pytest.raises(StorageError) as excinfo:
+                kb_service.rename_entry(old_id, "renamed-entry-id", kb_name)
+
+        exc = excinfo.value
+        assert exc.public_message is None
+        assert "pyrite index sync" in str(exc)
+
+    def test_index_sync_failure_never_interpolates_the_caught_exceptions_text(
+        self, indexed_test_env, sample_events
+    ):
+        """#509 round 1 cold read: the message used to interpolate `({e})`
+        from whatever sync_incremental raised. That's the caught exception's
+        OWN text, which is not guaranteed to be safe -- an OSError carries a
+        real filesystem path, a driver raises its own error text -- so
+        IndexSyncRecoveryHintError.public_message=None was unmasking
+        server-side detail, not a safe-by-construction message. The fixed
+        message names only the two entry ids; `e` itself is logged, not
+        interpolated."""
+        kb_service = _kb_service(indexed_test_env)
+        old_id = sample_events[0].id
+        kb_name = indexed_test_env["events_kb"].name
+
+        real_path = "/srv/secret/kb/x.md"
+        with patch.object(
+            kb_service._index_mgr,
+            "sync_incremental",
+            side_effect=OSError(2, "No such file or directory", real_path),
+        ):
+            with pytest.raises(StorageError) as excinfo:
+                kb_service.rename_entry(old_id, "renamed-entry-id", kb_name)
+
+        exc = excinfo.value
+        assert real_path not in str(exc)
+        assert real_path not in (exc.public_message or "")
+        assert "pyrite index sync" in str(exc)
+
     def test_dry_run_skips_index_verification(self, indexed_test_env, sample_events):
         """A dry run never touches the filesystem or the index -- there is
         nothing to verify, and it must not raise. (dry_run still reports

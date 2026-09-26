@@ -75,15 +75,11 @@
     `push_error`, the batch link write-back's per-position error, and the
     index job `error` field (admin `GET /index/jobs`, MCP
     `kb_index_job_status`).
-  - CLI: `zettel new`, `sw new-adr` and bulk create print the fixed
-    message; the raw text still reaches the terminal through the log on
-    stderr.
-
-  Known limits in this release (follow-up issue): `kb_registry_add` over
-  MCP answers a duplicate KB name with the generic "configuration is
-  invalid" message where REST still names the conflict; a few recovery
-  hints ("run `pyrite index sync`", a plugin's `pip install` hint) now
-  reach only the log; and the three CLI sites above mask text on the
-  operator's own terminal for no security gain.
+  - CLI: bulk create (`pyrite import`) prints the fixed message for a bare
+    `StorageError`/`PluginError`/`ConfigError`; the raw text still reaches
+    the terminal through the log on stderr. `zettel new` and `sw new-adr`
+    print `str(e)` unconditionally (#506 -- there is no transport boundary
+    to protect on the operator's own terminal, so this release never ships
+    with those two masked).
 
   (ADR-0037 theme 2)
