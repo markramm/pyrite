@@ -214,6 +214,16 @@ Each cost a review round of 30–60 minutes plus a full suite. Answering a plan 
 
 Sonnet mechanical themes skip the plan.
 
+### Security confirmation is a failing regression test
+
+When a brief asks an agent to confirm a suspected security defect, it asks
+for **one pytest test that asserts the required property**. The test is red
+on `dev`, and the fix keeps it. Never ask for a reproduction, a probe of the
+endpoint, a request sequence or an exploit. Under the probe framing a safety
+classifier stopped 2 of 6 audit runs. Under the test framing none stopped,
+and the tests went straight to the fix workers (retro 14; maintainer,
+2026-09-26).
+
 ### Keep the layer boundary ratcheting down
 
 The boundary test from #380 (`tests/test_layer_boundaries.py`) only lets its allowlist shrink. Two rules keep it shrinking:

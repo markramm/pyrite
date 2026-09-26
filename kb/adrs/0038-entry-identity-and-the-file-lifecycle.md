@@ -322,15 +322,17 @@ Backlog items, one per step: [[storage-invariants-harness-land-the-adr-0038-stat
    in the KB's git history. Removing a claim from the record (a legal or
    defamation concern) is a separate purge or redaction operation that delete
    does not provide.
-2. **`previous_ids` or `aliases`.** A separate managed field (this ADR), or
+2. **`previous_ids` or `aliases`. DECIDED (maintainer, 2026-09-26): a separate managed `previous_ids`.** Old ids and history follow the entry; user-facing `aliases` stays the user's. A separate managed field (this ADR), or
    the existing user-facing `aliases`, which would also make `[[old-id]]`
    resolve after a rename.
-3. **Duplicate winner.** Lexicographically first KB-relative path (this ADR),
+3. **Duplicate winner. DECIDED (maintainer, 2026-09-26): the lexicographically first KB-relative path wins, and the duplicate is reported loudly by `index health` and sync; the other id is never silently dropped.** Lexicographically first KB-relative path (this ADR),
    or the most recently modified file, or refuse to index either until the
    duplicate is resolved.
-4. **Staleness signal.** mtime or size (cheap; misses a same-size edit that
+4. **Staleness signal. DECIDED (maintainer, 2026-09-26): mtime or size for sync, with a content hash on rebuild and in `index health`.** mtime or size (cheap; misses a same-size edit that
    keeps the mtime), or always hash (exact; one full read per file per
    sync). This ADR takes mtime or size and leaves hash-always for measurement.
+
+5. **Derived id when a file has no `id:`. DECIDED (maintainer, 2026-09-26): from the filename, not the title.** Filenames are stable; titles change. This unblocks step 2.
 
 ---
 

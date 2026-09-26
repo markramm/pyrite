@@ -3,7 +3,7 @@ id: adr-0037
 type: adr
 title: "One authorization policy point and one error contract"
 adr_number: 37
-status: proposed
+status: accepted
 date: 2026-09-25
 tags: [architecture, authorization, security, api, mcp, cli, errors]
 links:
@@ -463,6 +463,10 @@ byte-identical except where a line below says otherwise. Order:
     concealment, and a handful of capabilities.
   - An engine adds a dependency, a policy language contributors must learn,
     and a deployment story, for no expressiveness Pyrite needs.
+
+## Accepted (maintainer, 2026-09-26)
+
+Accepted after theme 1 landed (#500), with themes 0-3a on `dev` (#476, #500, #501, #504, #508).
 
 ## Decisions recorded (maintainer, 2026-09-25)
 

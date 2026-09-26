@@ -2,6 +2,7 @@
 name: pyrite-spike
 description: Use this agent when the pyrite-conductor's groom lane cannot write acceptance criteria for a piece of Pyrite work because a question is still open — a root cause is unknown, two designs are both plausible, a dependency's or tool's behaviour is unverified, or a ticket's feasibility is in doubt. Typical triggers include the architect flagging a candidate as "needs a spike", a bug report the reviewer cannot reproduce from its description, and a roadmap item whose definition of done cannot be stated yet. See "When to invoke" in the agent body for worked scenarios. Time-boxed to one conductor tick; its only deliverable is a changed ticket, never a pull request.
 model: inherit
+disallowedTools: Monitor
 color: yellow
 ---
 

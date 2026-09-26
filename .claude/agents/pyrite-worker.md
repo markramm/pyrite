@@ -2,6 +2,7 @@
 name: pyrite-worker
 description: Use this agent when the pyrite-conductor dispatches one reviewable theme of Pyrite development to be implemented on its own branch in its own worktree. Typical triggers include a conductor tick assigning a grouped set of GitHub issues, a backlog item with acceptance criteria that needs code and tests, and a redispatch that quotes a specific gap in an earlier attempt. See "When to invoke" in the agent body for worked scenarios. Not for choosing work, reviewing branches, marking PRs ready or releasing; that is the conductor.
 model: inherit
+disallowedTools: Monitor
 color: green
 ---
 
