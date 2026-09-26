@@ -317,3 +317,73 @@ def test_a_symlinked_config_stays_a_symlink_and_its_target_is_replaced_atomicall
     assert real.stat().st_ino != ino
     assert _names(real) == ["a", "b"]
     assert _leftovers(cfg_dir) == [] and _leftovers(real_dir) == []
+
+
+# ---------------------------------------------------------------------------
+# Round 1 of the review (#514)
+# ---------------------------------------------------------------------------
+
+
+def test_a_directory_fsync_that_fails_does_not_fail_a_save_already_renamed(
+    cfg_dir, tmp_path, monkeypatch, caplog
+):
+    """Some filesystems reject fsync on a directory (EINVAL). The rename has
+    already published the new content, so the save succeeded."""
+    import errno
+
+    _write_registry(cfg_dir, tmp_path, "a")
+    real_fsync = os.fsync
+
+    def fsync(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError(errno.EINVAL, "Invalid argument")
+        return real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+    save_config(_config_with_b(tmp_path))
+
+    assert _names(cfg_dir / "config.yaml") == ["a", "b"]
+    assert _leftovers(cfg_dir) == []
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root may write a 0o444 file")
+def test_a_read_only_file_in_a_writable_directory_is_still_refused(cfg_dir, tmp_path):
+    """open(path, "w") raised PermissionError on a 0o444 config.yaml; a rename
+    would replace it silently, so the save refuses before writing anything."""
+    before = _write_registry(cfg_dir, tmp_path, "a")
+    (cfg_dir / "config.yaml").chmod(0o444)
+    config = _config_with_b(tmp_path)
+    try:
+        with pytest.raises(PermissionError):
+            save_config(config)
+        assert (cfg_dir / "config.yaml").read_bytes() == before
+        assert stat.S_IMODE((cfg_dir / "config.yaml").stat().st_mode) == 0o444
+        assert _leftovers(cfg_dir) == []
+    finally:
+        (cfg_dir / "config.yaml").chmod(0o644)
+
+
+def test_an_untrusted_config_with_null_knowledge_bases_loads_empty_but_a_save_refuses(
+    tmp_path, monkeypatch
+):
+    """Pinned on purpose (#514 review): a repo-local config's registry is
+    filtered by _restrict_untrusted, which reads null as empty, so it loads.
+    The save check does not branch on trust: null is not a registry the
+    trusted loader can read, and refusing to overwrite it costs one manual
+    fix, where guessing costs a registry."""
+    from pyrite.exceptions import ConfigFileUnreadableError
+
+    local = tmp_path / "tree" / ".pyrite"
+    local.mkdir(parents=True)
+    (local / "config.yaml").write_text("knowledge_bases: null\n")
+    monkeypatch.setattr(config_module, "CONFIG_DIR", local)
+    monkeypatch.setattr(config_module, "CONFIG_FILE", local / "config.yaml")
+    monkeypatch.setattr(config_module, "_UNTRUSTED_IMPORT_DIR", local)
+    monkeypatch.delenv("PYRITE_DATA_DIR", raising=False)
+    assert config_module.current_config_source() == (local / "config.yaml", False)
+
+    config = load_config()
+    assert config.knowledge_bases == []
+    with pytest.raises(ConfigFileUnreadableError):
+        save_config(config)
+    assert (local / "config.yaml").read_text() == "knowledge_bases: null\n"

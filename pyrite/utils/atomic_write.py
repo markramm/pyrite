@@ -18,11 +18,20 @@ is handled explicitly:
 
 Every fallback logs a warning naming the file and why the write was not
 atomic. A symlink is followed: the rename happens in the target's directory,
-so the link stays a link.
+so the link stays a link. A file this process may not write (``0o444``) is
+refused with ``PermissionError``, as ``open(path, "w")`` refused it, even
+when the directory would allow the rename.
+
+Not carried across the rename: ACLs and extended attributes (macOS
+``com.apple.*``, SELinux labels); the new file gets the directory's defaults.
+A crash between creating the temp file and the rename can leave a
+``.<name>.<hex>.tmp`` file beside the real one. Nothing reads or removes it;
+it is safe to delete.
 """
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import secrets
@@ -33,12 +42,17 @@ logger = logging.getLogger(__name__)
 
 
 def _fsync_directory(directory: Path) -> None:
+    """Make the rename durable. Best effort: it runs after the rename has
+    published the new content, so a failure here must not fail the save."""
     try:
         fd = os.open(directory, os.O_RDONLY)
-    except OSError:  # a platform that cannot open a directory (Windows)
+    except OSError as e:  # a platform that cannot open a directory (Windows)
+        logger.debug("Cannot open %s to fsync it: %s", directory, e)
         return
     try:
         os.fsync(fd)
+    except OSError as e:  # EINVAL on filesystems that reject a directory fsync
+        logger.debug("fsync of directory %s failed: %s", directory, e)
     finally:
         os.close(fd)
 
@@ -74,6 +88,11 @@ def atomic_write_text(path: str | os.PathLike[str], text: str, *, encoding: str 
         original: os.stat_result | None = os.stat(target)
     except FileNotFoundError:
         original = None
+
+    # open(path, "w") refused a file this process may not write; a rename
+    # would replace it anyway (the directory decides that), so refuse too.
+    if original is not None and not os.access(target, os.W_OK):
+        raise PermissionError(errno.EACCES, os.strerror(errno.EACCES), str(target))
 
     if original is not None and original.st_nlink > 1:
         _write_in_place(target, data, f"it has {original.st_nlink} hard links")

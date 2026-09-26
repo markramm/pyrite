@@ -1315,7 +1315,10 @@ def _kb_names_on_disk(config_file: Path) -> list[str]:
     if not isinstance(data, dict):
         raise unreadable("it is not a YAML mapping")
     # An absent key is an empty registry; a present one must be a list, as
-    # from_dict iterates it (null or false would fail to load, #405).
+    # from_dict iterates it (null or false would fail to load, #405). An
+    # untrusted repo-local file with null still *loads* (_restrict_untrusted
+    # reads it as empty); this check deliberately does not branch on trust:
+    # refusing to overwrite a malformed registry costs one manual fix.
     kbs = data.get("knowledge_bases", [])
     if not isinstance(kbs, list):
         raise unreadable("its knowledge_bases is not a list")
