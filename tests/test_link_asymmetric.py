@@ -4,6 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
+from click import unstyle
 import pytest
 from typer.testing import CliRunner
 
@@ -247,5 +248,6 @@ class TestAsymmetricCLI:
         result = runner.invoke(app, ["links", "asymmetric", "--help"])
 
         assert result.exit_code == 0
-        assert "-k" in result.output
-        assert "--kb linkkb" in result.output
+        help_text = unstyle(result.output)
+        assert "-k" in help_text
+        assert "--kb linkkb" in help_text
