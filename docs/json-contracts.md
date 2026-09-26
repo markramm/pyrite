@@ -7,8 +7,15 @@ operator's memory — see `docs-operational-contracts-travel-with-tool`.
 
 ## Error shape
 
-Every error surface (CLI `cli_error`, MCP tool `_error`, REST
-`PyriteError` handler) returns the same structure:
+Every error surface that can emit JSON at all (MCP tool `_error`, REST
+`PyriteError` handler, and CLI commands that have a `--format` flag, via
+`cli_error`) returns the same structure. Some write commands
+(`create`, `add`, `delete`, `link`) have no `--format` flag and always
+print Rich-formatted text, never this JSON shape, on error or success —
+see `docs/agent-write-path.md` for the per-command table. Making CLI
+output consistent regardless of TTY is **#303** (open); this page
+describes the shape you get when you do get JSON, not a promise that
+every command gives you the option.
 
 ```json
 {
@@ -92,6 +99,11 @@ plugin type, keep working in a KB that declares types.
 Source of truth: `pyrite/services/kb_service.py` (`_prepare`,
 `bulk_create_entries`, `update`, `updatable_fields`) and the
 `ValidationError` subclasses in `pyrite/exceptions.py`.
+
+**Success shapes.** What `create`/`update`/`bulk_create` return when they
+*don't* refuse — per surface (CLI, MCP, REST), plus how to discover a
+type's required fields (including the plugin-type gap, #232) and an
+"error X, do Y" table — is `docs/agent-write-path.md`.
 
 ## Repo endpoint errors
 
@@ -277,10 +289,17 @@ allowed, and is never persisted as entry content.
 
 ## `--format` defaults
 
-Most commands default to `--format json`. A few interactive/status
+Most *read* commands default to `--format json`. A few interactive/status
 commands (`task` subcommands, `config`) default to a rich terminal
 view instead — pass `--format json` explicitly when scripting against
 those.
+
+**Write commands are not uniform, and some have no `--format` at all:**
+`create`, `add`, `delete` and `link` always print Rich text, with no flag
+to ask for JSON; `update` and `rename` do have `--format`, defaulting to
+`json`. See `docs/agent-write-path.md` for the full per-command table and
+success shapes, and cite **#303** (open) for the consistency this page
+used to claim already existed.
 
 ## Related contracts
 
