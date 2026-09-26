@@ -26,7 +26,15 @@ exists, fails `test_the_lists_hold_only_what_is_still_owed`, so the room it
 leaves cannot be reused. Adding an entry is not the fix for a new route:
 declare `authorize(...)` on it. `PUBLIC_ENTRY_POINTS` is the other list:
 routes that answer before anyone is authenticated (login, the OAuth dance,
-SEO, branding, health, the static site and viewer), each with a reason.
+SEO, branding, health, the static site and viewer), each with a reason; it
+is pinned too, and no `/api` operation may be on it unless it is also on
+`PUBLIC_API_OPERATIONS` (empty) with a reason.
+
+**A read declaration does not settle a write.** A non-GET operation whose
+only declaration is `authorize(Action.KB_READ, ...)` fails unless it is on
+`REST_WRITE_TIER_NOT_YET_MIGRATED` (its write or admin tier is still decided
+by `requires_tier` or an inline check: what 3b/3c owe) or on
+`REST_READS_OVER_POST` (a POST that only reads). Both are pinned.
 
 Not here yet, by the ADR's own sequencing: the grep ratchet over role
 comparisons (§5.3) turns on in theme 5, and the generated principal matrix
@@ -90,6 +98,13 @@ PUBLIC_ENTRY_POINTS: dict[str, str] = {
     "GET /viewer": "the SPA's static files; the API calls it makes are guarded",
     "GET /viewer/{path:path}": "the SPA's static files; the API calls it makes are guarded",
 }
+PUBLIC_ENTRY_POINTS_SIZE = 18  # lower it with every entry removed; never raise it
+
+#: The `/api` operations allowed in `PUBLIC_ENTRY_POINTS`, each with its reason.
+#: None today: everything under `/api` sits behind `verify_api_key`, so a public
+#: `/api` entry is a read route escaping the policy, not a login page.
+PUBLIC_API_OPERATIONS: dict[str, str] = {}
+PUBLIC_API_OPERATIONS_SIZE = 0  # never raise it
 
 #: REST operations whose migration theme has not landed. Only shrinks.
 REST_NOT_YET_MIGRATED: dict[str, str] = {
@@ -171,6 +186,43 @@ REST_NOT_YET_MIGRATED: dict[str, str] = {
     "PUT /auth/users/{user_id}/role": "3c: _ADMIN_ONLY, Action.USER_MANAGE",
 }
 REST_NOT_YET_MIGRATED_SIZE = 68  # lower it with every entry removed; never raise it
+
+#: Non-GET operations that pass the policy only with a *read* declaration while
+#: their write or admin tier is still decided by `requires_tier`, the repos
+#: guard or an inline check. They count as migrated for the read half only;
+#: this is what themes 3b/3c owe on them. Only shrinks.
+REST_WRITE_TIER_NOT_YET_MIGRATED: dict[str, str] = {
+    "DELETE /api/repos/{name:path}": (
+        "3b: requires_tier('write') and _repo_kb_guard's inline admin tier per KB"
+    ),
+    "POST /api/repos/{name:path}/sync": (
+        "3b: requires_tier('write') and _repo_kb_guard's inline write tier per KB"
+    ),
+    "POST /api/repos/{name:path}/pr": (
+        "3b: requires_tier('write') and _repo_kb_guard's inline write tier per KB"
+    ),
+    "POST /api/ai/auto-tag": "3c: requires_tier('write') on the ai router (ai_ep.py)",
+    "POST /api/ai/chat": "3c: requires_tier('write') on the ai router (ai_ep.py)",
+    "POST /api/ai/suggest-links": "3c: requires_tier('write') on the ai router (ai_ep.py)",
+    "POST /api/ai/summarize": "3c: requires_tier('write') on the ai router (ai_ep.py)",
+    "POST /api/starred": "3c: requires_tier('write'), Action.SELF (starred.py)",
+    "DELETE /api/starred/{entry_id}": "3c: requires_tier('write'), Action.SELF (starred.py)",
+    "POST /api/kbs/{kb_name}/export": "3c: requires_tier('write') (kbs.py)",
+}
+REST_WRITE_TIER_NOT_YET_MIGRATED_SIZE = 10  # lower it with every entry removed; never raise it
+
+#: Non-GET operations that only read: a POST because the request carries a
+#: body, not because it changes anything. A read declaration is their whole
+#: answer. Each with its reason; pinned.
+REST_READS_OVER_POST: dict[str, str] = {
+    "POST /api/entries/batch": "batch read of entries named in the body",
+    "POST /api/entries/resolve-batch": "resolves wikilink targets named in the body",
+    "POST /api/collections/query-preview": "evaluates a collection query without saving it",
+    "POST /api/kbs/{kb_name}/templates/{template_name}/render": (
+        "renders a template's text for the caller; writes nothing"
+    ),
+}
+REST_READS_OVER_POST_SIZE = 4  # a new entry is a reviewed diff to this constant
 
 #: MCP tools that do not resolve an `Action` yet: all of them until theme 4.
 MCP_NOT_YET_MIGRATED: frozenset[str] = frozenset(
@@ -342,6 +394,15 @@ def _operations(app=None) -> dict[str, APIRoute]:
     return out
 
 
+# "Exactly one" stays exactly one when 3b/3c migrate the routes in
+# REST_WRITE_TIER_NOT_YET_MIGRATED: a route asks the policy ONE question, the
+# strongest it needs, and never a read declaration beside a write one. A
+# per-KB write declares authorize(Action.KB_WRITE, KB), which subsumes the read
+# (the policy answers NOT_FOUND for an unreadable KB before FORBIDDEN for a
+# readable one, ADR-0037 §4). A route that needs a global tier *and* a per-KB
+# read (the ai router: write tier, read on the named KB) gets its own Action
+# or Resource in the policy, decided in 3b/3c -- not two declarations -- so
+# the §5.4 matrix has one declared answer per route to compare against.
 def check_rest(
     operations: dict[str, APIRoute],
     public: dict[str, str],
@@ -379,6 +440,58 @@ def check_lists_owe(
     assert not stale, "stale entries:\n  " + "\n  ".join(stale)
 
 
+def _is_read_declaration(call) -> bool:
+    """`authorize(Action.KB_READ, ...)`: its closure is named for the action."""
+    return "_kb_read_" in call.__qualname__
+
+
+def _only_reads(route: APIRoute) -> bool:
+    declared = _authorize_declarations(route.dependant)
+    return bool(declared) and all(_is_read_declaration(c) for c in declared)
+
+
+def check_write_tiers(
+    operations: dict[str, APIRoute],
+    owed: dict[str, str],
+    reads_over_post: dict[str, str],
+) -> None:
+    """A non-GET operation whose only declaration is a read must be owed (its
+    write tier is decided elsewhere until 3b/3c) or be a read over POST; a
+    listed operation that is gone, GET, or no longer read-only must leave."""
+    unlisted, stale = [], []
+    for name, route in sorted(operations.items()):
+        if name.startswith("GET ") or not _only_reads(route):
+            continue
+        if name not in owed and name not in reads_over_post:
+            where = f"{route.endpoint.__module__}.{route.endpoint.__qualname__}"
+            unlisted.append(f"{name}  ({where})")
+    for name in sorted({**owed, **reads_over_post}):
+        if name not in operations:
+            stale.append(f"{name}  (no such operation)")
+        elif name.startswith("GET ") or not _only_reads(operations[name]):
+            stale.append(f"{name}  (no longer a non-GET with only a read declaration: remove it)")
+    assert not unlisted, (
+        "non-GET operations that pass the policy only with a read declaration:\n  "
+        + "\n  ".join(unlisted)
+        + "\nDeclare the write it makes (authorize(Action.KB_WRITE, ...)), or, if it only "
+        "reads, list it in REST_READS_OVER_POST with the reason."
+    )
+    assert not stale, "stale write-tier entries:\n  " + "\n  ".join(stale)
+
+
+def check_public(public: dict[str, str], allowed_api: dict[str, str]) -> None:
+    """No `/api` operation is public unless it is on the explicit short list."""
+    api = sorted(
+        name
+        for name in public
+        if name.split(" ", 1)[1].startswith("/api") and name not in allowed_api
+    )
+    assert not api, (
+        "/api operations in PUBLIC_ENTRY_POINTS -- everything under /api answers to the "
+        "policy; declare authorize(...) instead:\n  " + "\n  ".join(api)
+    )
+
+
 @functools.cache
 def _real_operations() -> dict[str, APIRoute]:
     return _operations()
@@ -398,8 +511,33 @@ def test_the_lists_hold_only_what_is_still_owed():
     check_lists_owe(_real_operations(), PUBLIC_ENTRY_POINTS, REST_NOT_YET_MIGRATED)
 
 
+def test_non_get_routes_declare_their_write_or_are_owed():
+    check_write_tiers(_real_operations(), REST_WRITE_TIER_NOT_YET_MIGRATED, REST_READS_OVER_POST)
+
+
+def test_no_api_operation_is_public():
+    check_public(PUBLIC_ENTRY_POINTS, PUBLIC_API_OPERATIONS)
+
+
 @_SELF_TEST
 def test_the_lists_only_shrink():
+    pinned = {
+        "PUBLIC_ENTRY_POINTS": (PUBLIC_ENTRY_POINTS, PUBLIC_ENTRY_POINTS_SIZE),
+        "PUBLIC_API_OPERATIONS": (PUBLIC_API_OPERATIONS, PUBLIC_API_OPERATIONS_SIZE),
+        "REST_WRITE_TIER_NOT_YET_MIGRATED": (
+            REST_WRITE_TIER_NOT_YET_MIGRATED,
+            REST_WRITE_TIER_NOT_YET_MIGRATED_SIZE,
+        ),
+        "REST_READS_OVER_POST": (REST_READS_OVER_POST, REST_READS_OVER_POST_SIZE),
+    }
+    for label, (listed, size) in pinned.items():
+        assert len(listed) == size, (
+            f"{label} has {len(listed)} entries, its _SIZE is {size}. Removing an entry: "
+            "lower the size to match. Adding one is a reviewed change to the constant."
+        )
+        for name, reason in listed.items():
+            assert reason.strip(), f"{label}: {name} has no reason"
+    assert not set(REST_WRITE_TIER_NOT_YET_MIGRATED) & set(REST_READS_OVER_POST)
     assert len(REST_NOT_YET_MIGRATED) == REST_NOT_YET_MIGRATED_SIZE, (
         f"REST_NOT_YET_MIGRATED has {len(REST_NOT_YET_MIGRATED)} entries, "
         f"REST_NOT_YET_MIGRATED_SIZE is {REST_NOT_YET_MIGRATED_SIZE}. Removing an entry: "
@@ -457,7 +595,32 @@ def _toy_app() -> FastAPI:
     def through_a_helper():
         return {}
 
+    @app.post("/api/writes-behind-a-read", dependencies=[Depends(named)])
+    def writes_behind_a_read():
+        return {}
+
     return app
+
+
+@_SELF_TEST
+def test_a_non_get_route_with_only_a_read_declaration_fails_unless_listed():
+    ops = {k: v for k, v in _operations(_toy_app()).items() if "asks-twice" not in k}
+    with pytest.raises(AssertionError, match=r"POST /api/writes-behind-a-read  \("):
+        check_write_tiers(ops, {}, {})
+    check_write_tiers(ops, {"POST /api/writes-behind-a-read": "3b"}, {})
+    check_write_tiers(ops, {}, {"POST /api/writes-behind-a-read": "reads a body"})
+    with pytest.raises(AssertionError, match=r"GET /api/declares  \(no longer a non-GET"):
+        check_write_tiers(
+            ops, {"POST /api/writes-behind-a-read": "3b", "GET /api/declares": "x"}, {}
+        )
+
+
+@_SELF_TEST
+def test_an_api_route_listed_as_public_fails_by_name():
+    public = {"GET /health": "probe", "GET /api/entries": "a read route slipped in"}
+    with pytest.raises(AssertionError, match=r"GET /api/entries"):
+        check_public(public, PUBLIC_API_OPERATIONS)
+    check_public(public, {"GET /api/entries": "listed on purpose, with a reason"})
 
 
 @_SELF_TEST
