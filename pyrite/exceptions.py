@@ -259,11 +259,15 @@ class IndexSyncRecoveryHintError(StorageError):
     should follow it failed or left the new id unresolved (`kb_service.py`'s
     `rename_entry`, #506, narrowing #501's fixed `StorageError.public_message`).
 
-    The message names only the two entry ids and the caught exception's own
-    text -- never a real filesystem path or driver detail -- so it is safe
-    by construction; the recovery hint ("Run `pyrite index sync`") is real
-    and actionable, unlike the base `StorageError`'s generic "check the
-    server log" (written for raise sites that genuinely can't say more).
+    The message names only the two entry ids -- never a real filesystem path
+    or driver detail -- so it is safe by construction; the recovery hint
+    ("Run `pyrite index sync`") is real and actionable, unlike the base
+    `StorageError`'s generic "check the server log" (written for raise sites
+    that genuinely can't say more). The caught exception that triggered this
+    (an OSError naming a real path, a driver's own error text -- NOT
+    guaranteed safe) is deliberately never interpolated into the message; it
+    is logged instead (#509 round 1 cold read caught an earlier version that
+    did interpolate it).
     """
 
     #: Overrides the base StorageError's fixed sentence -- this class's own

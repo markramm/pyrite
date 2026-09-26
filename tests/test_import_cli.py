@@ -240,7 +240,16 @@ class TestImportCommand:
             with _patch_config(import_env):
                 result = runner.invoke(app, ["import", str(json_file), "--kb", "test-kb"])
         finally:
+            # `del reg._plugins[name]` alone (the pattern several other test
+            # files already use for this same cleanup) leaves a stale entry
+            # in `_conformance_cache` -- the registry has no public
+            # unregister, so `register()`'s own re-register path (which pops
+            # this same cache entry) is the model here: pop both, not just
+            # `_plugins`, so a later test that registers a DIFFERENT plugin
+            # under this name can't be served this plugin's cached
+            # conformance (#509 round 1 cold read).
             del reg._plugins["bad_before_hook_plugin_506"]
+            reg._conformance_cache.pop("bad_before_hook_plugin_506", None)
 
         assert result.exit_code != 0, result.output
         assert "before_save dispatch refused" in result.output, result.output
