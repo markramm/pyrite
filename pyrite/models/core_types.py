@@ -466,12 +466,13 @@ def _frontmatter_of(text: str) -> tuple[dict, str] | None:
     return meta, parts[1].strip()
 
 
-def entry_id_from_markdown(
+def read_entry_id(
     text: str, migrate: Callable[[dict[str, Any]], dict[str, Any]] | None = None
 ) -> str | None:
     """The id an entry file's text holds: THE answer to "which id does this
     file hold" (ADR-0038 decision 1). Lookup (``KBRepository.find_file``,
-    and through it create's exists check and delete), and history all ask it.
+    and through it create's exists check and delete) and history
+    (``entry_id_from_markdown``) all ask it.
 
     It is the loader's rule: the frontmatter split as ``Entry.from_markdown``
     splits it (the closing ``---`` must be a line of its own, not the first
@@ -481,22 +482,32 @@ def entry_id_from_markdown(
     schema migration, applied to the frontmatter before the id is read, as
     the loader applies it.
 
-    None when the text is not an entry. Also used to tell a rename of one
-    entry from a replacement by another: git pairs files by content
-    similarity, and entries share frontmatter boilerplate, so similarity
-    alone links unrelated entries (#432).
+    None when the text has no frontmatter; raises what the loader would
+    raise on malformed frontmatter.
+    """
+    parsed = _frontmatter_of(text)
+    if parsed is None:
+        return None
+    meta, body = parsed
+    if migrate is not None:
+        meta = migrate(meta)
+    entry_id = entry_from_frontmatter(meta, body).id
+    return str(entry_id) if entry_id not in (None, "") else None
+
+
+def entry_id_from_markdown(text: str) -> str | None:
+    """``read_entry_id``, with None for text that is not an entry.
+
+    Used to tell a rename of one entry from a replacement by another: git
+    pairs files by content similarity, and entries share frontmatter
+    boilerplate, so similarity alone links unrelated entries (#432).
+    Comparing ids assumes an id is unique within a KB, which the index
+    already relies on.
     """
     try:
-        parsed = _frontmatter_of(text)
-        if parsed is None:
-            return None
-        meta, body = parsed
-        if migrate is not None:
-            meta = migrate(meta)
-        entry_id = entry_from_frontmatter(meta, body).id
+        return read_entry_id(text)
     except Exception:
         return None
-    return str(entry_id) if entry_id not in (None, "") else None
 
 
 def explicit_entry_id(text: str) -> str | None:

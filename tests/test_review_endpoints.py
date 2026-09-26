@@ -22,7 +22,7 @@ def setup(tmp_path):
 
     # Write a real markdown file so the service can read content
     entry_file = kb_path / "entry-1.md"
-    entry_file.write_text("---\ntitle: Test Entry\ntype: note\n---\nHello world\n")
+    entry_file.write_text("---\nid: entry-1\ntitle: Test Entry\ntype: note\n---\nHello world\n")
 
     config = PyriteConfig(
         knowledge_bases=[KBConfig(name="test-kb", path=kb_path, kb_type="generic")],

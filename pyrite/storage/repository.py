@@ -21,7 +21,7 @@ from ..exceptions import (
 from ..migrations import get_migration_registry, load_plugin_migrations
 from ..models import Entry, EventEntry
 from ..models.collection import CollectionEntry
-from ..models.core_types import entry_from_frontmatter, entry_id_from_markdown
+from ..models.core_types import entry_from_frontmatter, read_entry_id
 from ..schema import CORE_TYPES
 from ..utils.yaml import load_yaml_file
 
@@ -306,18 +306,17 @@ class KBRepository:
         """The id ``file_path`` holds, by the loader's rule; None when it is
         not a readable entry.
 
-        Markdown goes through ``entry_id_from_markdown`` -- the one function
-        that answers this (ADR-0038 decision 1) -- with this KB's schema
+        Markdown goes through ``read_entry_id`` -- the one function that
+        answers this (ADR-0038 decision 1) -- with this KB's schema
         migrations applied first, as ``_load_entry`` applies them.
         """
         try:
             if file_path.name == "__collection.yaml":
                 return self._load_collection(file_path).id or None
-            text = file_path.read_text(encoding="utf-8")
+            return read_entry_id(file_path.read_text(encoding="utf-8"), migrate=self._maybe_migrate)
         except Exception as e:
             logger.warning("Skipping unreadable file during id lookup: %s (%s)", file_path, e)
             return None
-        return entry_id_from_markdown(text, migrate=self._maybe_migrate)
 
     def find_file(self, entry_id: str) -> Path | None:
         """The file that holds ``entry_id``, or None (ADR-0038 I8).
