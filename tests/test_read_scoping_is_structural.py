@@ -144,14 +144,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "GET",
         "/api/collections/types",
     ): "serves no KB content: static + plugin collection type descriptors",
-    (
-        "GET",
-        "/api/entries/types",
-    ): "serves no KB content: distinct entry-type names, scoped in part 2 with the type-schema routes",
-    (
-        "GET",
-        "/api/entries/type-schemas",
-    ): "serves no KB content: plugin-declared type schemas, not KB rows",
     # -- write routes: guarded by requires_kb_tier('write')/requires_tier -
     # A write-tier caller on a KB can necessarily read it, so the per-KB
     # write guard subsumes the read guard. Listed rather than silently

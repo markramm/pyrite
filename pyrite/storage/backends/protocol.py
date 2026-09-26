@@ -68,7 +68,11 @@ class SearchBackend(Protocol):
         """Count entries matching filters."""
         ...
 
-    def get_distinct_types(self, kb_name: str | None = None) -> list[str]:
+    def get_distinct_types(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[str]:
         """Get distinct entry types."""
         ...
 

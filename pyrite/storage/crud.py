@@ -78,9 +78,13 @@ class CRUDMixin:
             min_importance=min_importance,
         )
 
-    def get_distinct_types(self, kb_name: str | None = None) -> list[str]:
-        """Get distinct entry types, optionally filtered by KB."""
-        return self._backend.get_distinct_types(kb_name)
+    def get_distinct_types(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[str]:
+        """Get distinct entry types, optionally filtered by KB or scoped to kb_names."""
+        return self._backend.get_distinct_types(kb_name, kb_names)
 
     def get_entries_for_indexing(self, kb_name: str) -> list[dict[str, Any]]:
         """Get entry id, file_path, indexed_at for incremental indexing."""

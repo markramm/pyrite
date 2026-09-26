@@ -124,19 +124,24 @@ def list_entries(
     return EntryListResponse(entries=entries, total=total, limit=limit, offset=offset)
 
 
-@router.get("/entries/types", response_model=EntryTypesResponse)
+@router.get(
+    "/entries/types",
+    response_model=EntryTypesResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("100/minute")
 def list_entry_types(
     request: Request,
     kb: str | None = Query(None, description="Filter by KB name"),
     svc: KBService = Depends(get_kb_service),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
-    """Get distinct entry types."""
-    types = svc.get_distinct_types(kb_name=kb)
+    """Get distinct entry types, limited to KBs the caller may read."""
+    types = svc.get_distinct_types(kb_name=kb, kb_names=None if kb else readable)
     return EntryTypesResponse(types=types)
 
 
-@router.get("/entries/type-schemas")
+@router.get("/entries/type-schemas", dependencies=[Depends(requires_kb_read())])
 @limiter.limit("100/minute")
 def list_type_schemas(
     request: Request,
