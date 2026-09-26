@@ -20,10 +20,31 @@ logger = logging.getLogger(__name__)
 class KBRegistryService:
     """Unified KB registry backed by the DB kb table."""
 
-    def __init__(self, config: PyriteConfig, db: PyriteDB, index_mgr: IndexManager):
+    def __init__(self, config: PyriteConfig, db: PyriteDB, index_mgr: IndexManager | None = None):
+        # `index_mgr` is needed only by the operations that index (add, reindex,
+        # health); the access policy reads registrations without one.
         self.config = config
         self.db = db
         self.index_mgr = index_mgr
+
+    def is_registered(self, name: str) -> bool:
+        """Does the index registry hold a KB called `name`?
+
+        A plain read of the `kb` table through this service's session, never
+        the ORM identity map: committed rows are seen at once; a row written but
+        not yet committed on another connection is not.
+        """
+        return bool(self.db.execute_sql("SELECT 1 FROM kb WHERE name = :name", {"name": name}))
+
+    def registered_default_role(self, name: str) -> str | None:
+        """The `default_role` the registry row stores, as stored -- unconfined.
+
+        None when the row has none or there is no row. Whether an untrusted
+        config may honour it is the access policy's question
+        (`PyriteConfig.confined_default_role`), not the registry's.
+        """
+        rows = self.db.execute_sql("SELECT default_role FROM kb WHERE name = :name", {"name": name})
+        return rows[0]["default_role"] if rows else None
 
     def seed_from_config(self) -> int:
         """Reconcile config.yaml KB ownership in the DB. Idempotent.

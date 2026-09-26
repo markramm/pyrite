@@ -11,7 +11,6 @@ limiter, and the application factory.
 import hashlib
 import logging
 import os
-import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -42,6 +41,16 @@ from ..exceptions import (
     StorageError,
     ValidationError,
 )
+from ..services import access_policy
+from ..services.access_policy import (
+    FORBIDDEN,
+    ROLE_LEVELS,
+    AccessPolicy,
+    Action,
+    Principal,
+    authorize_tier,
+    resolve_api_key_role,
+)
 from ..services.block_service import BlockService
 from ..services.ephemeral_service import EphemeralKBService
 from ..services.export_service import ExportService
@@ -60,6 +69,7 @@ from ..services.task_service import TaskService
 from ..services.version_service import VersionService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
+from .authz import get_principal
 
 if TYPE_CHECKING:
     from ..services.auth_service import AuthService
@@ -545,50 +555,11 @@ def invalidate_llm_service():
     """
 
 
-TIER_LEVELS = {"read": 0, "write": 1, "admin": 2}
-
-
-def resolve_api_key_role(key: str | None, config: PyriteConfig) -> str | None:
-    """Resolve an API key to its role (read/write/admin).
-
-    Returns:
-        - "admin" when no keys are configured and auth is disabled (open access)
-        - None when no keys are configured and auth is enabled: no key is
-          valid, so the caller falls through to its session or the anonymous
-          tier (any key used to answer "admin" here)
-        - "admin" when key matches the legacy single api_key
-        - The configured role when key hash matches an api_keys entry
-        - None when key is invalid or missing (auth enabled but key wrong)
-    """
-    import hashlib
-
-    has_single_key = bool(config.settings.api_key)
-    has_key_list = bool(config.settings.api_keys)
-
-    # No keys configured: open access only when auth is also disabled.
-    # With auth enabled there is no valid key, so any key is refused.
-    if not has_single_key and not has_key_list:
-        return None if config.settings.auth.enabled else "admin"
-
-    if not key:
-        return None
-
-    # Check api_keys list first (takes precedence)
-    if has_key_list:
-        key_hash = hashlib.sha256(key.encode()).hexdigest()
-        for entry in config.settings.api_keys:
-            if secrets.compare_digest(key_hash, entry.get("key_hash", "")):
-                return entry.get("role", "read")
-
-    # Fall back to legacy single api_key (grants admin)
-    # Compare via hash to avoid holding plaintext key in config memory
-    if has_single_key:
-        key_hash = hashlib.sha256(key.encode()).hexdigest()
-        stored_hash = hashlib.sha256(config.settings.api_key.encode()).hexdigest()
-        if secrets.compare_digest(key_hash, stored_hash):
-            return "admin"
-
-    return None
+# The role ladder, re-exported for the handlers that still compare inline
+# (`daily.py`, `repos.py`, `settings_ep.py`; ADR-0037 themes 3b/3c move them).
+# It is written out once, in `services/access_policy.py`, as is
+# `resolve_api_key_role`, imported above and re-exported from here.
+TIER_LEVELS = ROLE_LEVELS
 
 
 async def verify_api_key(
@@ -667,16 +638,23 @@ def requires_tier(tier: str):
     """
 
     async def _check_tier(request: Request):
-        role = getattr(request.state, "api_role", None)
-        if role is None:
-            raise HTTPException(status_code=401, detail="Invalid or missing API key")
-        if TIER_LEVELS.get(role, -1) < TIER_LEVELS.get(tier, 99):
-            raise HTTPException(
-                status_code=403,
-                detail=f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'",
-            )
+        _enforce_tier(get_principal(request), tier)
 
     return _check_tier
+
+
+def _enforce_tier(principal: Principal | None, tier: str) -> None:
+    """The global-role check, answered as REST always has: 401 with no
+    principal, 403 naming the tier and the role when it is too low."""
+    decision = authorize_tier(principal, tier)
+    if decision.allowed:
+        return
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    raise HTTPException(
+        status_code=403,
+        detail=f"Insufficient permissions: requires '{tier}' tier, your role is '{principal.role}'",
+    )
 
 
 # The parameter names that name a knowledge base, in every location a
@@ -812,17 +790,8 @@ async def _resolve_kb_name(request: Request) -> str | None:
 
 
 def resolve_kb_default_role(config: PyriteConfig, db: PyriteDB, kb_name: str) -> str | None:
-    """Resolve a KB's default_role from config or DB.
-
-    Config takes precedence; falls back to DB for user-registered KBs.
-    """
-    kb_config = config.get_kb(kb_name)
-    if kb_config and kb_config.default_role is not None:
-        return kb_config.default_role
-    row = db._raw_conn.execute("SELECT default_role FROM kb WHERE name = ?", (kb_name,)).fetchone()
-    # Under an untrusted config the index belongs to the tree: a value in it
-    # that opens a KB is ignored (see PyriteConfig.confined_default_role).
-    return config.confined_default_role(row[0]) if row else None
+    """A KB's default_role: `AccessPolicy.kb_default_role`."""
+    return AccessPolicy(config, db).kb_default_role(kb_name)
 
 
 async def resolve_effective_kb_role(
@@ -849,47 +818,33 @@ async def resolve_effective_kb_role(
     `requires_kb_tier` does -- resolves them with `_resolve_kb_names` and
     calls this once per name.
     """
-    role = getattr(request.state, "api_role", None)
-    if role is None:
+    principal = get_principal(request)
+    if principal is None:
         return None
-
-    if role == "admin":
-        return "admin"
-
-    auth_user = getattr(request.state, "auth_user", None)
-    anonymous = getattr(request.state, "anonymous", False)
-    if not auth_user and not anonymous:
-        # An operator API key, or auth disabled: no identity to scope by.
-        return role
+    if not principal.per_kb:
+        # The admin role, an operator API key, or auth disabled: the same
+        # role on every KB, so no KB need be resolved from the request.
+        return principal.role
 
     if kb_name is None:
         kb_name = await _resolve_kb_name(request)
     if not kb_name:
-        return role
+        return principal.role
 
-    # A signed-in user, or the anonymous visitor (user_id None): the one
-    # per-KB rule -- grant, then the KB's default_role, then the global role
-    # or anonymous_tier. `readable_kbs` uses the same rule, so an anonymous
-    # visitor's write check can never be looser than their read check.
-    return effective_kb_role_for_user(config, db, auth_user["id"] if auth_user else None, kb_name)
+    # A signed-in user, or the anonymous visitor: the one per-KB rule, the
+    # same one `readable_kbs` uses, so an anonymous visitor's write check can
+    # never be looser than their read check.
+    return AccessPolicy(config, db).effective_kb_role(principal, kb_name)
 
 
 def effective_kb_role_for_user(
     config: PyriteConfig, db: PyriteDB, user_id: int | None, kb_name: str, auth_service=None
 ) -> str | None:
-    """The per-KB role rule, framework-free: grant → KB default_role → global role.
-
-    The one implementation. `resolve_effective_kb_role` (REST's per-KB tier
-    check), `kbs_for_user_at_tier` (the readable and writable sets MCP and
-    `/ws` resolve per connection) all call it. `user_id=None` is the anonymous
-    visitor on an auth-enabled instance.
+    """The per-KB role rule: `AccessPolicy.user_kb_role`, where the one
+    implementation lives. `user_id=None` is the anonymous visitor on an
+    auth-enabled instance.
     """
-    if auth_service is None:
-        from ..services.auth_service import AuthService
-
-        auth_service = AuthService(db, config.settings.auth)
-    default_role = resolve_kb_default_role(config, db, kb_name)
-    return auth_service.get_kb_role(user_id, kb_name, default_role)
+    return AccessPolicy(config, db, auth_service).user_kb_role(user_id, kb_name)
 
 
 def kbs_for_user_at_tier(
@@ -906,19 +861,17 @@ def kbs_for_user_at_tier(
     disabled). See `readable_kbs_for_user` for the scoping rules; this is the
     same walk at any tier, so the read and write sets cannot drift apart.
     """
-    if role == "admin" or not scoped:
-        return None
+    return AccessPolicy(config, db).kbs_at_tier(principal_for(user_id, role, scoped=scoped), tier)
 
-    from ..services.auth_service import AuthService
 
-    auth_service = AuthService(db, config.settings.auth)
-    wanted = TIER_LEVELS[tier]
-    result: set[str] = set()
-    for kb in config.all_kbs():
-        effective = effective_kb_role_for_user(config, db, user_id, kb.name, auth_service)
-        if effective is not None and TIER_LEVELS.get(effective, -1) >= wanted:
-            result.add(kb.name)
-    return result
+def principal_for(user_id: int | None, role: str | None, *, scoped: bool = True) -> Principal:
+    """The `Principal` the set helpers' `(user_id, role, scoped)` arguments name:
+    a user, the anonymous visitor (scoped, no user), or no identity."""
+    if not scoped:
+        return Principal.from_api_key(role)
+    if user_id is not None:
+        return Principal.user(user_id, role)
+    return Principal.anonymous(role)
 
 
 def readable_kbs_for_user(
@@ -1050,11 +1003,8 @@ _UNSET = object()
 
 
 def kb_exists(config: PyriteConfig, db: PyriteDB, kb_name: str) -> bool:
-    """Is `kb_name` a KB this instance knows -- in config or registered in the DB?"""
-    if config.get_kb(kb_name):
-        return True
-    row = db._raw_conn.execute("SELECT 1 FROM kb WHERE name = ?", (kb_name,)).fetchone()
-    return row is not None
+    """Is `kb_name` a KB this instance knows? `AccessPolicy.kb_exists`."""
+    return AccessPolicy(config, db).kb_exists(kb_name)
 
 
 @dataclass(frozen=True)
@@ -1089,21 +1039,22 @@ async def _enforce_kb_tier(
     for private KB names -- and 403 when the caller can read it but not
     write it.
     """
-    if not kb_exists(config, db, kb_name):
-        # Before the role: a missing KB must answer exactly like a private
-        # one, for every caller and on every write route -- not with whatever
-        # the handler behind this guard happens to say about a missing KB.
-        raise not_found
-    effective = await resolve_effective_kb_role(request, config, db, kb_name)
-    level = TIER_LEVELS.get(effective, -1) if effective is not None else -1
-    if level >= TIER_LEVELS.get(tier, 99):
-        return
-    if level < TIER_LEVELS["read"]:
-        raise not_found
-    raise HTTPException(
-        status_code=403,
-        detail=f"Insufficient permissions on KB '{kb_name}': requires '{tier}' tier",
+    # The policy checks existence before role (ADR-0037 §4): a missing KB
+    # answers exactly like a private one, for every caller and on every write
+    # route -- not with whatever the handler behind this guard says.
+    decision = AccessPolicy(config, db).authorize(
+        get_principal(request), Action.at_tier(tier), access_policy.KB(kb_name)
     )
+    if decision.allowed:
+        return
+    if decision.code == FORBIDDEN:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Insufficient permissions on KB '{kb_name}': requires '{tier}' tier",
+        )
+    # NOT_FOUND -- and UNAUTHENTICATED, which both callers answer with 401
+    # before reaching here, and which this guard always answered as 404.
+    raise not_found
 
 
 def requires_kb_tier(tier: str, *, resolve_kb=None):
@@ -1130,6 +1081,7 @@ def requires_kb_tier(tier: str, *, resolve_kb=None):
       looks the row up and returns a `RowKB`; the rule is applied to the
       row's own KB, and anything the request names is ignored.
     """
+    Action.at_tier(tier)  # an unknown tier fails here, when the route is declared
     if resolve_kb is not None:
 
         async def _identityless_floor(request: Request) -> None:
@@ -1142,17 +1094,9 @@ def requires_kb_tier(tier: str, *, resolve_kb=None):
             and an anonymous visitor a KB's default_role, above the global
             role, so for them the row's KB decides, below.
             """
-            role = getattr(request.state, "api_role", None)
-            if role is None:
-                raise HTTPException(status_code=401, detail="Invalid or missing API key")
-            identityless = not getattr(request.state, "auth_user", None) and not getattr(
-                request.state, "anonymous", False
-            )
-            if identityless and TIER_LEVELS.get(role, -1) < TIER_LEVELS.get(tier, 99):
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'",
-                )
+            principal = get_principal(request)
+            if principal is None or not principal.scoped:
+                _enforce_tier(principal, tier)
 
         async def _check_row_kb_tier(
             request: Request,
@@ -1172,8 +1116,8 @@ def requires_kb_tier(tier: str, *, resolve_kb=None):
         config: PyriteConfig = Depends(get_config),
         db: PyriteDB = Depends(get_db),
     ):
-        role = getattr(request.state, "api_role", None)
-        if role is None:
+        principal = get_principal(request)
+        if principal is None:
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
         try:
@@ -1187,11 +1131,7 @@ def requires_kb_tier(tier: str, *, resolve_kb=None):
         if not kb_names:
             # Only reachable on a route the structural test would reject: no
             # KB-bearing parameter, so the global role is all there is.
-            if TIER_LEVELS.get(role, -1) < TIER_LEVELS.get(tier, 99):
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'",
-                )
+            _enforce_tier(principal, tier)
             return
 
         for kb_name in kb_names:

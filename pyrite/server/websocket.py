@@ -27,6 +27,7 @@ from fastapi import HTTPException, WebSocket
 from starlette.requests import HTTPConnection
 
 from ..config import PyriteConfig
+from ..services.access_policy import AccessPolicy, Principal, resolve_api_key_role
 from ..services.credential_events import CredentialChange
 from ..storage.database import PyriteDB
 from .request_guard import origin_permitted
@@ -125,12 +126,13 @@ def resolve_socket_scope(conn: HTTPConnection, config: PyriteConfig, db: PyriteD
     - otherwise ``HandshakeRejectedError``.
 
     Identity comes from ``mcp_routes._resolve_credential`` and the rule from
-    ``api.readable_kbs_for_user`` -- no third implementation of either.
+    the access policy (``AccessPolicy.read_scope``) -- no third
+    implementation of either.
     """
-    from .api import readable_kbs_for_user, resolve_api_key_role
     from .mcp_routes import _resolve_credential
 
     settings = config.settings
+    policy = AccessPolicy(config, db)
 
     # An operator key, which `resolve_api_key_role` accepts only when keys are
     # configured or auth is disabled (#331).
@@ -139,13 +141,13 @@ def resolve_socket_scope(conn: HTTPConnection, config: PyriteConfig, db: PyriteD
         return SocketScope(readable=None)
 
     try:
-        ctx = _resolve_credential(conn, config, db)
+        ctx = _resolve_credential(conn, config, db, policy)
     except HTTPException:
         ctx = None
 
     if ctx is not None and ctx.get("user_id") is not None:
         return SocketScope(
-            readable=readable_kbs_for_user(config, db, ctx["user_id"], ctx["role"]),
+            readable=policy.read_scope(Principal.user(ctx["user_id"], ctx["role"])).as_set(),
             user_id=ctx["user_id"],
             session_hash=ctx.get("session_hash"),
             expires_at=ctx.get("session_expires_at"),
@@ -155,7 +157,7 @@ def resolve_socket_scope(conn: HTTPConnection, config: PyriteConfig, db: PyriteD
 
     if settings.auth.enabled and settings.auth.anonymous_tier:
         return SocketScope(
-            readable=readable_kbs_for_user(config, db, None, settings.auth.anonymous_tier)
+            readable=policy.read_scope(Principal.anonymous(settings.auth.anonymous_tier)).as_set()
         )
     raise HandshakeRejectedError
 

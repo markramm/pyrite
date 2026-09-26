@@ -31,6 +31,7 @@ from ..exceptions import (
     StorageError,
     ValidationError,
 )
+from ..services.access_policy import ROLES
 from ..services.body_bounds import (
     MARKER_KEYS,
     BodyBounds,
@@ -253,7 +254,7 @@ class PyriteMCPServer:
     Tier controls which tools are available.
     """
 
-    VALID_TIERS = ("read", "write", "admin")
+    VALID_TIERS = ROLES
 
     def __init__(self, config: PyriteConfig | None = None, tier: str = "read"):
         if tier not in self.VALID_TIERS:
@@ -2401,7 +2402,7 @@ def main():
     parser = argparse.ArgumentParser(prog="pyrite-server", description="Pyrite MCP Server")
     parser.add_argument(
         "--tier",
-        choices=["read", "write", "admin"],
+        choices=list(ROLES),
         default="read",
         help="Access tier (default: read)",
     )
