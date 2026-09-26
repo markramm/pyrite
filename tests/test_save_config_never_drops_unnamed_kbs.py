@@ -155,10 +155,17 @@ class TestTheRule:
     @pytest.mark.parametrize(
         "content",
         [
-            "knowledge_bases: [\n  - name: broken\n",  # unparseable YAML
-            "- just\n- a list\n",  # not a mapping
-            "knowledge_bases: not-a-list\n",
-            "knowledge_bases:\n- path: /no/name\n",  # an entry with no name
+            # #377's cases: already refused as unreadable; #405 only tightens
+            # the assertion from the base class.
+            *(
+                pytest.param(c, marks=pytest.mark.control(reason="refused before #405"))
+                for c in (
+                    "knowledge_bases: [\n  - name: broken\n",  # unparseable YAML
+                    "- just\n- a list\n",  # not a mapping
+                    "knowledge_bases: not-a-list\n",
+                    "knowledge_bases:\n- path: /no/name\n",  # an entry with no name
+                )
+            ),
             # #405: from_dict reads kb_data["path"] and iterates the value of a
             # present knowledge_bases key, so none of these loads either.
             "knowledge_bases:\n- name: no-path\n",

@@ -255,6 +255,7 @@ def test_a_read_only_directory_means_an_in_place_write_and_a_warning(cfg_dir, tm
     )
 
 
+@pytest.mark.control(reason="the old in-place write failed here too; the fallback must not hide it")
 @pytest.mark.skipif(os.geteuid() == 0, reason="root can write a 0o555 directory")
 def test_a_read_only_directory_with_no_file_still_fails(cfg_dir, tmp_path):
     """There is nothing to write in place: the error is the directory's."""
