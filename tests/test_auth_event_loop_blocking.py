@@ -53,9 +53,17 @@ from fastapi.testclient import TestClient
 from pyrite.config import AuthConfig, KBConfig, OAuthProviderConfig, PyriteConfig, Settings
 from pyrite.server.api import create_app, get_config, get_db
 from pyrite.services.oauth_providers import OAuthProfile, OAuthToken
-from pyrite.storage.connection import SQLITE_BUSY_TIMEOUT_MS
 from pyrite.storage.database import PyriteDB
 from tests.auth_seed import seed_user
+
+try:
+    # New in this PR (#440). Falls back to pysqlite's own previously-implicit
+    # default so this file still collects, and its RED tests still run and
+    # fail for the real reason (the event loop blocks), against a tree that
+    # predates the constant.
+    from pyrite.storage.connection import SQLITE_BUSY_TIMEOUT_MS
+except ImportError:
+    SQLITE_BUSY_TIMEOUT_MS = 5000
 
 _BARRIER_TIMEOUT = 60.0
 _LOCK_TIMEOUT = 60.0

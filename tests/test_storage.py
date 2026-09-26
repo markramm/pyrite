@@ -2229,6 +2229,10 @@ class TestTransactionMode:
         """The raw pysqlite connection backing the calling thread's session."""
         return db.session.connection().connection.dbapi_connection
 
+    @pytest.mark.control(
+        reason="pins pysqlite's existing legacy transaction mode; dev's "
+        "behaviour is unchanged by this PR, only pinned"
+    )
     def test_select_leaves_in_transaction_false(self, db):
         from sqlalchemy import text
 
@@ -2240,6 +2244,10 @@ class TestTransactionMode:
             "write-lock-first ordering no longer holds"
         )
 
+    @pytest.mark.control(
+        reason="pins pysqlite's existing legacy transaction mode; dev's "
+        "behaviour is unchanged by this PR, only pinned"
+    )
     def test_write_starts_a_deferred_transaction(self, db):
         from sqlalchemy import text
 
