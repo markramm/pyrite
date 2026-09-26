@@ -1081,10 +1081,42 @@ class IndexManager:
                     if indexed_at:
                         try:
                             if self._is_stale(file_path, indexed_at):
-                                # Stale — parse and re-index
+                                # Stale — parse and re-index.
                                 entry = repo.load_entry_from_file(file_path)
                                 self.index_entry(entry, kb.name, file_path)
                                 results["updated"] += 1
+                                # #391 cold read round 2: a rename that keeps
+                                # the file's PATH fixed (a file_pattern type
+                                # with no {id}/{slug} placeholder) changes
+                                # the frontmatter id without moving the file,
+                                # so the id now on disk can differ from the
+                                # one this path was last indexed under.
+                                # `entry_id` (the STALE id) was marked "seen"
+                                # above so the cleanup loop below would not
+                                # otherwise retire it -- it would survive as
+                                # a stale duplicate row pointing at the same
+                                # (now-renamed) file. Retire it explicitly and
+                                # mark the entry's ACTUAL (current) id seen.
+                                #
+                                # #391 cold read round 3: retiring `entry_id`
+                                # unconditionally could delete a ROW THAT IS
+                                # NO LONGER STALE -- e.g. two files SWAP ids
+                                # in one pass (a.md: x->y, b.md: y->x). By the
+                                # time b.md is processed, `entry_id` (y, the
+                                # id b.md held before) may already have been
+                                # rewritten by a.md's own processing to point
+                                # at a.md -- removing it here would undo that
+                                # correct write. Read the row live and only
+                                # retire it if it still points at THIS file:
+                                # if some other file already re-claimed the
+                                # id this pass, that write wins, not this
+                                # cleanup.
+                                if entry.id != entry_id:
+                                    current = self.db.get_entry(entry_id, kb.name)
+                                    if current and current.get("file_path") == fp_str:
+                                        self.remove_entry(entry_id, kb.name)
+                                        results["removed"] += 1
+                                    seen_ids.add(entry.id)
                         except FrontmatterError as e:
                             # Malformed frontmatter is content drift, not a
                             # Pyrite bug. Surface in the summary; log one-line.

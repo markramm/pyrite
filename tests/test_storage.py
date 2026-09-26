@@ -1253,6 +1253,148 @@ class TestSyncRecoversFromBrokenTimestamp:
             db.close()
 
 
+class TestSyncIncrementalRetiresTheOldIdWhenAFileIsRenamedInPlace:
+    """#391 cold read round 2: a rename that keeps the file's PATH fixed
+    (a `file_pattern` type with no `{id}`/`{slug}` placeholder, e.g. the
+    software-kb `adr` type's `{adr_number:04d}-{title}.md`) changes the
+    frontmatter `id:` without moving the file. `sync_incremental`'s
+    "known file" branch keyed its `seen_ids` bookkeeping off the file's
+    PATH, so the id it read from the index at that path (the OLD, stale
+    id) was marked "seen" regardless of what the file's frontmatter says
+    now -- the old id survived forever as a duplicate row pointing at the
+    same, now-renamed file, alongside the file's real, current id.
+    """
+
+    def test_sync_removes_the_stale_id_and_keeps_only_the_current_one(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "index.db"
+            kb_path = tmpdir / "kb"
+            kb_path.mkdir()
+
+            db = PyriteDB(db_path)
+            kb_config = KBConfig(
+                name="test-kb", path=kb_path, kb_type="generic", description="Test KB"
+            )
+            config = PyriteConfig(
+                knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
+            )
+
+            md_file = kb_path / "entry-a.md"
+            md_file.write_text("---\nid: entry-a\ntype: note\ntitle: Original\n---\n\nBody.\n")
+
+            index_mgr = IndexManager(db, config)
+            index_mgr.index_all()
+            assert db.get_entry("entry-a", "test-kb") is not None
+
+            # Simulate a rename that keeps the SAME file path (the `adr`
+            # file_pattern scenario): only the frontmatter id changes.
+            md_file.write_text("---\nid: entry-b\ntype: note\ntitle: Original\n---\n\nBody.\n")
+
+            results = index_mgr.sync_incremental("test-kb")
+
+            assert db.get_entry("entry-b", "test-kb") is not None, (
+                f"the renamed id must be indexed: {results}"
+            )
+            assert db.get_entry("entry-a", "test-kb") is None, (
+                "the stale old id must not survive as a duplicate row "
+                f"pointing at the same file: {results}"
+            )
+            assert results["removed"] >= 1, results
+
+            db.close()
+
+
+class TestSyncIncrementalRetireIsPerFile:
+    """#391 cold read round 3 item 2(a): round 2's fix retired the old id
+    unconditionally (`self.remove_entry(entry_id, kb.name)`) without checking
+    that its row still pointed at the file being processed. Two files that
+    SWAP ids in one sync pass exposed this: by the time the second file is
+    processed, the first file's own re-index may already have re-claimed the
+    id the second file used to hold, and the unconditional remove deleted
+    that fresh, correct row instead of a genuinely stale one -- ending with
+    `{x: None, y: a.md}` where dev ends with `{x: b.md, y: a.md}`. The fix
+    reads the old id's row live and only retires it if it still points at
+    THIS file; if some other file already reclaimed it this pass, that
+    write wins.
+    """
+
+    def _env(self, tmp_path):
+        db_path = tmp_path / "index.db"
+        kb_path = tmp_path / "kb"
+        kb_path.mkdir()
+        db = PyriteDB(db_path)
+        kb_config = KBConfig(name="test-kb", path=kb_path, kb_type="generic")
+        config = PyriteConfig(knowledge_bases=[kb_config], settings=Settings(index_path=db_path))
+        return db, kb_path, IndexManager(db, config)
+
+    @pytest.mark.control(
+        reason="dev never attempts to remove an id-changed row at all (no "
+        "such branch exists there) -- in a swap, BOTH ids stay in use by "
+        "some file, so plain index_entry rewrites naturally land each id at "
+        "its new path with nothing to remove. Round 2's own unconditional "
+        "remove_entry was the novel bug this scenario exposes; dev was "
+        "already correct here by construction, not by having solved this."
+    )
+    def test_two_files_swapping_ids_end_up_like_dev(self, tmp_path):
+        db, kb_path, index_mgr = self._env(tmp_path)
+        try:
+            a_file = kb_path / "a.md"
+            b_file = kb_path / "b.md"
+            a_file.write_text("---\nid: x\ntype: note\ntitle: A\n---\n\nBody A.\n")
+            b_file.write_text("---\nid: y\ntype: note\ntitle: B\n---\n\nBody B.\n")
+            index_mgr.index_all()
+
+            # Swap: a.md takes y, b.md takes x.
+            a_file.write_text("---\nid: y\ntype: note\ntitle: A\n---\n\nBody A.\n")
+            b_file.write_text("---\nid: x\ntype: note\ntitle: B\n---\n\nBody B.\n")
+
+            results = index_mgr.sync_incremental("test-kb")
+
+            x_row = db.get_entry("x", "test-kb")
+            y_row = db.get_entry("y", "test-kb")
+            assert x_row is not None and x_row["file_path"] == str(b_file), (
+                f"x must resolve to b.md, like dev: {results}"
+            )
+            assert y_row is not None and y_row["file_path"] == str(a_file), (
+                f"y must resolve to a.md, like dev: {results}"
+            )
+        finally:
+            db.close()
+
+    @pytest.mark.control(
+        reason="same as test_two_files_swapping_ids_end_up_like_dev: both x "
+        "and z stay claimed by some file, so dev's plain index_entry writes "
+        "already land the right rows without ever attempting a removal"
+    )
+    def test_a_new_file_takes_an_id_while_the_old_file_changes_to_another(self, tmp_path):
+        """a.md (id x) changes to id z; a brand-new c.md takes id x. Neither
+        the new claim on x nor a's fresh row for z may be lost, whichever
+        order the sync happens to visit the two files in."""
+        db, kb_path, index_mgr = self._env(tmp_path)
+        try:
+            a_file = kb_path / "a.md"
+            a_file.write_text("---\nid: x\ntype: note\ntitle: A\n---\n\nBody A.\n")
+            index_mgr.index_all()
+
+            a_file.write_text("---\nid: z\ntype: note\ntitle: A\n---\n\nBody A.\n")
+            c_file = kb_path / "c.md"
+            c_file.write_text("---\nid: x\ntype: note\ntitle: C\n---\n\nBody C.\n")
+
+            results = index_mgr.sync_incremental("test-kb")
+
+            x_row = db.get_entry("x", "test-kb")
+            z_row = db.get_entry("z", "test-kb")
+            assert x_row is not None and x_row["file_path"] == str(c_file), (
+                f"x must resolve to the new file c.md, like dev: {results}"
+            )
+            assert z_row is not None and z_row["file_path"] == str(a_file), (
+                f"z must resolve to a.md, like dev: {results}"
+            )
+        finally:
+            db.close()
+
+
 class TestUndeclaredTypesInHealth:
     """`check_health` must surface entries whose `entry_type` is not declared
     in the KB's `kb.yaml` types section.

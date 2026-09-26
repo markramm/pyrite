@@ -334,10 +334,17 @@ class SocialPlugin:
                 db.close()
 
     def _mcp_post(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Create a new writeup."""
-        from pyrite.schema import generate_entry_id
-        from pyrite.storage.index import IndexManager
-        from pyrite.storage.repository import KBRepository
+        """Create a new writeup through the KBService write pipeline (#391).
+
+        Was: build a WriteupEntry, `KBRepository.save` then
+        `IndexManager.index_entry` directly, skipping `KBService._prepare` --
+        no exists check (an existing id was silently overwritten), no
+        validators, no before/after-save hooks, and error responses carried no
+        `error_code`. Now goes through `KBService.create_entry`, the same
+        pipeline `software-kb`'s `_mcp_create_backlog_item` uses.
+        """
+        from pyrite.exceptions import PyriteError
+        from pyrite.services.kb_service import KBService
 
         db, should_close = self._get_db()
         config = self.ctx.config if self.ctx else None
@@ -349,24 +356,28 @@ class SocialPlugin:
         kb_name = args["kb_name"]
         kb_config = config.get_kb(kb_name)
         if not kb_config:
-            return {"error": f"KB '{kb_name}' not found"}
-
-        entry = WriteupEntry(
-            id=generate_entry_id(args["title"]),
-            title=args["title"],
-            body=args["body"],
-            author_id=args["author_id"],
-            writeup_type=args.get("writeup_type", "essay"),
-            tags=args.get("tags", []),
-        )
-
-        repo = KBRepository(kb_config)
-        file_path = repo.save(entry)
+            return {"error": f"KB '{kb_name}' not found", "error_code": "KB_NOT_FOUND"}
 
         try:
-            index_mgr = IndexManager(db, config)
-            index_mgr.index_entry(entry, kb_name, file_path)
+            svc = KBService(config, db)
+            entry = svc.create_entry(
+                kb_name,
+                None,
+                args["title"],
+                "writeup",
+                args["body"],
+                author_id=args["author_id"],
+                writeup_type=args.get("writeup_type", "essay"),
+                tags=args.get("tags", []),
+            )
+            from pyrite.storage.repository import KBRepository
+
+            repo = KBRepository(kb_config)
+            file_path = repo._resolve_file_path(entry, repo._infer_subdir(entry))
             return {"created": True, "entry_id": entry.id, "file_path": str(file_path)}
+        except PyriteError as e:
+            code = getattr(e, "error_code", None) or "CREATE_FAILED"
+            return {"error": str(e), "error_code": code}
         finally:
             if should_close:
                 db.close()

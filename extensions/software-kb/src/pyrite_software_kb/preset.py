@@ -9,6 +9,11 @@ SOFTWARE_KB_PRESET = {
             "required": ["title"],
             "optional": ["adr_number", "status", "deciders", "date", "superseded_by"],
             "subdirectory": "adrs/",
+            # #391: keeps the pre-pipeline `NNNN-slug.md` convention through
+            # KBService.create -- {adr_number:04d} is an entry-field
+            # placeholder with a format spec (TypeSchema.resolve_filename),
+            # {title} is the existing fixed (slugified) placeholder.
+            "file_pattern": "{adr_number:04d}-{title}.md",
         },
         "design_doc": {
             "description": "Design document or specification",

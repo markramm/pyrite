@@ -528,3 +528,133 @@ class TestCoreIntegration:
         presets = registry.get_all_kb_presets()
         assert "zettelkasten" in presets
         assert "social" in presets
+
+
+# =========================================================================
+# _mcp_post goes through the write pipeline (#391)
+# =========================================================================
+
+
+class TestMcpPostGoesThroughPipeline:
+    """`social_post` used to call `KBRepository.save` + `IndexManager.index_entry`
+    directly (plugin.py:336-372 before this fix), skipping `KBService._prepare`:
+    no exists check (an existing id was silently overwritten), no hooks, and
+    error responses had no `error_code`. These tests pin the pipeline instead.
+    """
+
+    @pytest.fixture
+    def env(self, tmp_path):
+        from pyrite.config import KBConfig, PyriteConfig, Settings
+        from pyrite.storage.database import PyriteDB
+        from pyrite.storage.index import IndexManager
+
+        kb_path = tmp_path / "social-kb"
+        kb_path.mkdir()
+        (kb_path / "kb.yaml").write_text(
+            "name: social-kb\n"
+            "kb_type: social\n"
+            "validation:\n"
+            "  enforce: true\n"
+            "types:\n"
+            "  writeup:\n"
+            "    optional: [writeup_type, allow_voting, author_id]\n"
+            "    subdirectory: writeups/\n"
+        )
+        db_path = tmp_path / "index.db"
+        config = PyriteConfig(
+            knowledge_bases=[KBConfig(name="social-kb", path=kb_path, kb_type="social")],
+            settings=Settings(index_path=db_path, auto_embed=False),
+        )
+        db = PyriteDB(db_path)
+        IndexManager(db, config).index_all()
+        return {"config": config, "kb_path": kb_path, "db": db}
+
+    @pytest.fixture
+    def plugin(self, env):
+        from pyrite.plugins.context import PluginContext
+
+        p = SocialPlugin()
+        p.set_context(PluginContext(config=env["config"], db=env["db"], kb_name="social-kb"))
+        return p
+
+    def _file(self, env, entry_id):
+        found = list(env["kb_path"].rglob(f"{entry_id}.md"))
+        assert len(found) <= 1, found
+        return found[0] if found else None
+
+    @pytest.mark.control(
+        reason="the old direct IndexManager.index_entry call already indexed "
+        "immediately; this pins that the pipeline keeps doing so, not the bug"
+    )
+    def test_new_post_is_indexed_immediately(self, env, plugin):
+        result = plugin._mcp_post(
+            {
+                "kb_name": "social-kb",
+                "title": "My First Post",
+                "body": "Hello world",
+                "author_id": "alice",
+            }
+        )
+        assert result["created"] is True, result
+        row = env["db"].get_entry("my-first-post", "social-kb")
+        assert row is not None, "new post should be indexed without a separate sync"
+        assert self._file(env, "my-first-post") is not None
+
+    def test_new_post_runs_before_and_after_save_hooks(self, env, plugin, monkeypatch):
+        from pyrite.plugins.registry import get_registry
+
+        before_calls = []
+        after_calls = []
+
+        def before_save(entry, ctx):
+            before_calls.append(entry.id)
+
+        def after_save(entry, ctx):
+            after_calls.append(entry.id)
+
+        class ProbePlugin:
+            name = "probe_hook_plugin"
+
+            def get_hooks(self):
+                return {"before_save": [before_save], "after_save": [after_save]}
+
+        reg = get_registry()
+        reg.register(ProbePlugin())
+        try:
+            result = plugin._mcp_post(
+                {
+                    "kb_name": "social-kb",
+                    "title": "Hooked Post",
+                    "body": "Body",
+                    "author_id": "alice",
+                }
+            )
+            assert result["created"] is True, result
+            assert before_calls == ["hooked-post"], before_calls
+            assert after_calls == ["hooked-post"], after_calls
+        finally:
+            del reg._plugins["probe_hook_plugin"]
+
+    def test_existing_id_is_refused_with_entry_exists_and_file_untouched(self, env, plugin):
+        first = plugin._mcp_post(
+            {
+                "kb_name": "social-kb",
+                "title": "Same Title",
+                "body": "ORIGINAL",
+                "author_id": "alice",
+            }
+        )
+        assert first["created"] is True, first
+        original = self._file(env, "same-title").read_bytes()
+
+        result = plugin._mcp_post(
+            {
+                "kb_name": "social-kb",
+                "title": "Same Title",
+                "body": "REPLACED",
+                "author_id": "bob",
+            }
+        )
+        assert result.get("created") is not True, result
+        assert result.get("error_code") == "ENTRY_EXISTS", result
+        assert self._file(env, "same-title").read_bytes() == original

@@ -166,8 +166,16 @@ class TypeSchema:
             return ""
         return expand_subdirectory_template(self.subdirectory, entry)
 
+    #: A bare field name only: no attribute/index access (`{title.upper}`,
+    #: `{items[0]}`), no positional/auto placeholders (`{0}`, `{}`).
+    _PLACEHOLDER_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+    #: A resolved filename component this long is refused (#391 cold read
+    #: item 4) rather than handed to the filesystem, where the failure mode
+    #: varies by OS.
+    _MAX_COMPONENT_BYTES = 200
+
     def resolve_filename(self, entry: Entry) -> str | None:
-        """Return a custom filename for the entry, or None to use default.
+        """Return a custom filename for the entry, or None to use the default.
 
         Supported placeholders:
           - ``{id}`` — entry ID
@@ -175,24 +183,148 @@ class TypeSchema:
           - ``{date}`` — entry date field (YYYY-MM-DD)
           - ``{title}`` — slugified title
           - ``{type}`` — entry type
+          - any other ``{field}`` — a plain field name only (no
+            ``{title.upper}`` attribute access, no ``{items[0]}`` index
+            access, no positional ``{0}``/auto ``{}}``): one of the entry's
+            own dataclass fields, falling back to ``entry.metadata[field]``,
+            with an optional Python format spec, e.g. ``{adr_number:04d}``
+            (#391 — the software-kb ``adr`` type keeps its ``NNNN-slug.md``
+            convention through ``KBService.create`` this way).
+
+        A field this entry does not have -- or one that IS missing in the
+        sense that matters for a filename (``None``, ``""``, whitespace-only,
+        or a value starting with ``.``) -- falls back to the default filename
+        (returns ``None``), the recorded #391 acceptance: a placeholder is a
+        convenience, not a requirement the caller must satisfy field by
+        field. A placeholder using anything but a plain field name (`{0}`,
+        `{title.upper}`, a non-data attribute like `{save}`), a format spec
+        the value cannot satisfy (e.g. ``:04d`` on a string), a NUL byte, or
+        a resolved filename longer than ~200 bytes all raise
+        :class:`~pyrite.exceptions.ValidationError` instead -- these are
+        pattern/data BUGS, not an ordinarily-absent field, and must not
+        reach the filesystem as a raw ``ValueError``/``TypeError``/``OSError``.
+        The resolved filename is also refused if it would escape the type's
+        folder: any path separator, or a ``..`` PATH COMPONENT (not merely a
+        ``..`` substring -- a real name like ``v1..2`` must not be refused).
 
         Example: ``file_pattern: "{date}--{slug}.md"``
         """
         if not self.file_pattern:
             return None
+        from ..exceptions import ValidationError
         from ..schema import generate_entry_id
 
-        replacements = {
+        fixed = {
             "id": entry.id,
             "slug": entry.id,
             "date": getattr(entry, "date", "") or "",
             "title": generate_entry_id(entry.title),
             "type": entry.entry_type,
         }
+
+        import dataclasses
+        from string import Formatter
+
+        data_fields = (
+            {f.name for f in dataclasses.fields(entry)}
+            if dataclasses.is_dataclass(entry)
+            else set()
+        )
+        meta = getattr(entry, "metadata", None) or {}
+
+        def _is_missing(value: Any) -> bool:
+            if value is None:
+                return True
+            if isinstance(value, str):
+                stripped = value.strip()
+                return stripped == "" or stripped.startswith(".")
+            return False
+
+        values: dict[str, Any] = {}
+        for _literal, field_name, _format_spec, conversion in Formatter().parse(self.file_pattern):
+            if field_name is None:
+                continue
+            if field_name in fixed:
+                values[field_name] = fixed[field_name]
+                continue
+            if not self._PLACEHOLDER_NAME_RE.match(field_name):
+                raise ValidationError(
+                    f"file_pattern {self.file_pattern!r} has placeholder "
+                    f"{{{field_name}}}, which is not a plain field name (no "
+                    "attribute/index access, no positional placeholders); "
+                    "refusing to resolve it"
+                )
+            if field_name in data_fields:
+                value = getattr(entry, field_name, None)
+            elif field_name in meta:
+                value = meta[field_name]
+            elif hasattr(entry, field_name):
+                # A plain identifier that resolves to something on the
+                # entry that is NOT a data field -- a method (`{save}`), a
+                # property, whatever -- puts that object's repr in the
+                # filename if we let `.format()` touch it. That is a
+                # pattern bug, refused, not an ordinarily-missing field.
+                raise ValidationError(
+                    f"file_pattern {self.file_pattern!r} names {{{field_name}}}, "
+                    f"which is not a data field of entry {entry.id!r} (type "
+                    f"{entry.entry_type!r}); refusing to resolve it"
+                )
+            else:
+                # Genuinely absent: fall back to the default filename rather
+                # than refuse (#391 recorded acceptance).
+                return None
+            if _is_missing(value):
+                return None
+            values[field_name] = value
+            if conversion:
+                # `!r`/`!s`/`!a` are format-string features we do not need
+                # and do not want to reason about (they can call arbitrary
+                # __repr__/__str__); a plain field value only.
+                raise ValidationError(
+                    f"file_pattern {self.file_pattern!r} uses a conversion "
+                    f"(!{conversion}) on {{{field_name}}}, which is not "
+                    "supported; refusing to resolve it"
+                )
+
         try:
-            return self.file_pattern.format(**replacements)
-        except (KeyError, IndexError):
-            return None
+            result = self.file_pattern.format(**values)
+        except (ValueError, TypeError, IndexError, KeyError) as e:
+            raise ValidationError(
+                f"file_pattern {self.file_pattern!r} could not be resolved for entry "
+                f"{entry.id!r}: {e}"
+            ) from e
+
+        if "\x00" in result:
+            raise ValidationError(
+                f"file_pattern {self.file_pattern!r} resolved to a filename "
+                f"containing a NUL byte for entry {entry.id!r}; refusing to write it"
+            )
+
+        # `resolve_filename` produces a single filename component, never a
+        # path (the caller joins it under the type's own subdirectory), so
+        # ANY path separator is refused outright -- and a resolved name that
+        # is exactly the `..` PATH COMPONENT is refused as traversal. This is
+        # a whole-component check, not a substring one: `v1..2` is a
+        # legitimate filename fragment and must not be refused.
+        if "/" in result or "\\" in result:
+            raise ValidationError(
+                f"file_pattern {self.file_pattern!r} resolved to {result!r} for entry "
+                f"{entry.id!r}, which contains a path separator; refusing to write it"
+            )
+        if result in (".", ".."):
+            raise ValidationError(
+                f"file_pattern {self.file_pattern!r} resolved to {result!r} for entry "
+                f"{entry.id!r}, which is a '..'/'.' path component; refusing to write it"
+            )
+
+        if len(result.encode("utf-8", errors="surrogateescape")) > self._MAX_COMPONENT_BYTES:
+            raise ValidationError(
+                f"file_pattern {self.file_pattern!r} resolved to a filename over "
+                f"{self._MAX_COMPONENT_BYTES} bytes for entry {entry.id!r}; "
+                "refusing to write it"
+            )
+
+        return result
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {"description": self.description}

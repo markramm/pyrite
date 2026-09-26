@@ -372,7 +372,13 @@ class KBRepository:
             return None
 
     def save(
-        self, entry: Entry, subdir: str | None = None, *, touch_updated_at: bool = True
+        self,
+        entry: Entry,
+        subdir: str | None = None,
+        *,
+        touch_updated_at: bool = True,
+        keep_filename: bool = False,
+        exclusive: bool = False,
     ) -> Path:
         """
         Save an entry to file.
@@ -384,6 +390,23 @@ class KBRepository:
                 writing. Callers that already stamped it -- or that write a
                 caller-supplied ``updated_at`` and must not overwrite it
                 (#151) -- pass ``False``.
+            keep_filename: A file's name is fixed at creation (#391 cold
+                read). ``True`` (an update) keeps ``entry.file_path``'s
+                existing filename instead of re-running
+                ``resolve_filename``/``file_pattern`` -- a title or field
+                edit must not rename the file every time. ``False`` (a
+                create, or a caller with no on-disk path yet) resolves a
+                fresh filename as before. Ignored -- falls back to a fresh
+                resolution -- when ``entry.file_path`` is unset, since there
+                is no existing filename to keep.
+            exclusive: Passed to ``Entry.save``: publish with ``os.link``
+                instead of ``os.replace``, so a target that already exists
+                raises ``FileExistsError`` instead of being silently
+                overwritten (#391 cold read round 2 -- narrows, at the one
+                filesystem-atomic point available, the TOCTOU window
+                between the write pipeline's own exists() check and the
+                write that follows it). Create-path callers only; an update
+                means to overwrite.
 
         Returns:
             Path to the saved file
@@ -394,8 +417,15 @@ class KBRepository:
         if subdir is None:
             subdir = self._infer_subdir(entry)
 
-        # Check for custom file_pattern in the type schema
-        file_path = self._resolve_file_path(entry, subdir)
+        if keep_filename and entry.file_path is not None:
+            filename = entry.file_path.name
+            if subdir:
+                file_path = self._contained(self.path / subdir / filename)
+            else:
+                file_path = self._contained(self.path / filename)
+        else:
+            # Check for custom file_pattern in the type schema
+            file_path = self._resolve_file_path(entry, subdir)
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Stamp current schema version on save
@@ -406,7 +436,7 @@ class KBRepository:
 
         if touch_updated_at:
             entry.touch_updated_at()
-        entry.save(file_path)
+        entry.save(file_path, exclusive=exclusive)
         entry.kb_name = self.name
         entry.file_path = file_path
 
@@ -549,10 +579,31 @@ class KBRepository:
         # the explicit relative subdir of the old file.
         rel = src.parent.relative_to(self.path)
         subdir = str(rel) if str(rel) != "." else None
-        self.save(entry, subdir=subdir)
 
-        # Delete the old file only AFTER the new one is on disk.
-        if src.exists():
+        # #391 cold read (round 2): a file's name is fixed at creation, so a
+        # `file_pattern` type's filename is NOT re-derived from the new id on
+        # rename -- only the frontmatter `id:` changes, exactly as an update
+        # already keeps the file where it is. Without this, a pattern with
+        # no `{id}`/`{slug}` placeholder (e.g. the software-kb `adr` type's
+        # `{adr_number:04d}-{title}.md`) re-resolves to the SAME path as the
+        # source (neither field changes on a rename), and the unconditional
+        # `src.unlink()` below used to delete the file it had just written.
+        schema = self.config.kb_schema
+        type_schema = schema.get_type_schema(entry.entry_type)
+        has_file_pattern = bool(type_schema and type_schema.file_pattern)
+        if has_file_pattern:
+            entry.file_path = src
+            file_path = self.save(entry, subdir=subdir, keep_filename=True)
+        else:
+            file_path = self.save(entry, subdir=subdir)
+
+        # Delete the old file only AFTER the new one is on disk, and only if
+        # the rename actually produced a DIFFERENT file -- never unlink a
+        # path that IS the file just written (defense in depth: the
+        # file_pattern branch above already keeps them equal by construction,
+        # but this also covers any other case where resolution happens to
+        # collide, e.g. a template that ignores id entirely).
+        if src.exists() and src.resolve() != file_path.resolve():
             src.unlink()
 
         return {

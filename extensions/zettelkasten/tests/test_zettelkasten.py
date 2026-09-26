@@ -1,5 +1,6 @@
 """Tests for the Zettelkasten extension."""
 
+import pytest
 from pyrite_zettelkasten.entry_types import LiteratureNoteEntry, ZettelEntry
 from pyrite_zettelkasten.plugin import ZettelkastenPlugin
 from pyrite_zettelkasten.preset import ZETTELKASTEN_PRESET
@@ -475,3 +476,131 @@ class TestInboxNarrowsToTheReadableSet:
         assert out["count"] == 1
         assert out["inbox"][0]["id"] == "z1"
         assert db.calls[0]["kb_names"] == {"public-kb"}
+
+
+# =========================================================================
+# `zettel new` goes through the write pipeline (#391)
+# =========================================================================
+
+
+class TestZettelNewGoesThroughPipeline:
+    """`zettel new` used to call `repo.save(entry)` directly (cli.py:69-70
+    before this fix): no exists check (an existing id was silently
+    overwritten), no validators, no hooks, and nothing indexed the entry
+    until a separate `pyrite index sync`. These tests pin the pipeline.
+    """
+
+    @pytest.fixture
+    def env(self, tmp_path):
+        from pyrite.config import KBConfig, PyriteConfig, Settings
+        from pyrite.storage.database import PyriteDB
+        from pyrite.storage.index import IndexManager
+
+        kb_path = tmp_path / "zettel-kb"
+        kb_path.mkdir()
+        (kb_path / "kb.yaml").write_text(
+            "name: zettel-kb\n"
+            "kb_type: zettelkasten\n"
+            "validation:\n"
+            "  enforce: true\n"
+            "types:\n"
+            "  zettel:\n"
+            "    optional: [zettel_type, maturity, source_ref, processing_stage]\n"
+            "    subdirectory: zettels/\n"
+        )
+        db_path = tmp_path / "index.db"
+        config = PyriteConfig(
+            knowledge_bases=[KBConfig(name="zettel-kb", path=kb_path, kb_type="zettelkasten")],
+            settings=Settings(index_path=db_path, auto_embed=False),
+        )
+        db = PyriteDB(db_path)
+        IndexManager(db, config).index_all()
+        db.close()
+        return {"config": config, "kb_path": kb_path, "db_path": db_path}
+
+    def _file(self, env, entry_id):
+        found = list(env["kb_path"].rglob(f"{entry_id}.md"))
+        assert len(found) <= 1, found
+        return found[0] if found else None
+
+    def _run(self, env, args):
+        from unittest.mock import patch
+
+        from pyrite_zettelkasten.cli import zettel_app
+        from typer.testing import CliRunner
+
+        runner = CliRunner()
+        with patch("pyrite_zettelkasten.cli.load_config", return_value=env["config"]):
+            return runner.invoke(zettel_app, args)
+
+    def test_new_zettel_is_indexed_immediately(self, env):
+        result = self._run(env, ["new", "My First Zettel", "--kb", "zettel-kb"])
+        assert result.exit_code == 0, result.output
+
+        from pyrite.storage.database import PyriteDB
+
+        db = PyriteDB(env["db_path"])
+        try:
+            row = db.get_entry("my-first-zettel", "zettel-kb")
+            assert row is not None, "a new zettel should be indexed without `index sync`"
+        finally:
+            db.close()
+        assert self._file(env, "my-first-zettel") is not None
+
+    def test_new_zettel_runs_before_and_after_save_hooks(self, env):
+        from pyrite.plugins.registry import get_registry
+
+        before_calls = []
+        after_calls = []
+
+        def before_save(entry, ctx):
+            before_calls.append(entry.id)
+
+        def after_save(entry, ctx):
+            after_calls.append(entry.id)
+
+        class ProbePlugin:
+            name = "probe_hook_plugin_zettel"
+
+            def get_hooks(self):
+                return {"before_save": [before_save], "after_save": [after_save]}
+
+        reg = get_registry()
+        reg.register(ProbePlugin())
+        try:
+            result = self._run(env, ["new", "Hooked Zettel", "--kb", "zettel-kb"])
+            assert result.exit_code == 0, result.output
+            assert before_calls == ["hooked-zettel"], before_calls
+            assert after_calls == ["hooked-zettel"], after_calls
+        finally:
+            del reg._plugins["probe_hook_plugin_zettel"]
+
+    def test_existing_id_is_refused_with_entry_exists_and_file_untouched(self, env):
+        first = self._run(env, ["new", "Same Title", "--kb", "zettel-kb"])
+        assert first.exit_code == 0, first.output
+        original = self._file(env, "same-title").read_bytes()
+
+        result = self._run(env, ["new", "Same Title", "--kb", "zettel-kb"])
+        assert result.exit_code != 0, result.output
+        assert "ENTRY_EXISTS" in result.output, result.output
+        assert self._file(env, "same-title").read_bytes() == original
+
+    def test_no_kb_found_carries_an_error_code(self, tmp_path):
+        """#391 cold read item 9: 'No KB found' was a plain message with no
+        error_code, unlike every other refusal in this pipeline."""
+        from unittest.mock import patch
+
+        from pyrite_zettelkasten.cli import zettel_app
+        from typer.testing import CliRunner
+
+        from pyrite.config import PyriteConfig, Settings
+
+        empty_config = PyriteConfig(
+            knowledge_bases=[], settings=Settings(index_path=tmp_path / "test.db")
+        )
+        runner = CliRunner()
+        with patch("pyrite_zettelkasten.cli.load_config", return_value=empty_config):
+            result = runner.invoke(zettel_app, ["new", "Orphan Note"])
+
+        assert result.exit_code != 0, result.output
+        assert "KB_NOT_FOUND" in result.output, result.output
