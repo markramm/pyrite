@@ -492,11 +492,12 @@ current code rather than a moving target.
   rely on per-endpoint checks. This is the review's largest surface.
 - **#228** and the 56 open CodeQL alerts: triage them, and treat MCP tool
   arguments as untrusted.
-- Recorded by the 2026-09-23 cold reads, for the review: unguarded path joins
-  in `template_service`, `site_cache`, the export clone path and a
-  collection's `folder_path`; exports aborted by NUL or overlong names;
-  Windows drive-relative names; symlinks out of a KB; `POST /mcp/messages/`
-  trusting the SDK session id; REST ignoring `Bearer <valid key>`.
+- Recorded by the 2026-09-23 cold reads, as properties for the review: every
+  path built from request or KB input stays inside its root and survives
+  unusual names (NUL, overlong, drive-relative, symlinks); a message to an
+  MCP session acts only for the principal that opened it; each credential
+  scheme gets the same answer on every surface. Details are tracked
+  privately.
 
 ### Workstream S — Structure first (maintainer decision, 2026-09-25)
 

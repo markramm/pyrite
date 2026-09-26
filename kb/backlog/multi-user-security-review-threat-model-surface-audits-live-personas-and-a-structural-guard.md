@@ -282,15 +282,16 @@ The questions come from T1's brief. The starting footprint:
   and the 8 `INLINE_ACCESS_DECIDING_ROUTES`. Row-resolved writes, bulk and
   import bodies that name several KBs, the worktree resolver branch in
   `entries.py`, `daily.py`, `repos.py`, `settings_ep.py`, `admin.py`
-  grant/revoke. The roadmap's note that REST ignores `Bearer <valid key>`.
+  grant/revoke. Property: each credential scheme gets the same answer on every surface.
 - **A2 MCP.** All 112 tools. `_dispatch_tool`, `writable_kbs` on every
   write-tier tool, including the extension write tools (investigation,
-  social, zettelkasten, software-kb). `mcp_routes._authenticate`, and the
-  `POST /mcp/messages/` session-id trust the roadmap records. Tool
+  social, zettelkasten, software-kb). `mcp_routes._authenticate`, and the property
+  that a message to an SSE session acts only for the principal that
+  authenticated that session. Tool
   arguments treated as untrusted: the manual stand-in for #228 until
   CodeQL can see them.
-- **A3 CLI.** `Principal.local` by assumption. `pyrite-admin` run as root
-  in Docker (see #405). What a KB's own files make the CLI or server
+- **A3 CLI.** `Principal.local` by assumption. Admin tools and the server
+  run as the least-privileged user. What a KB's own files make the CLI or server
   execute, render or fetch when that KB comes from a subscribed or forked
   repo: `hook_runner.py`, templates, `kb.yaml`, `file_pattern`.
 - **A4 `/ws` and `/site`.** The two surfaces outside the `/api` dependency
@@ -324,8 +325,8 @@ The questions come from T1's brief. The starting footprint:
 - **A7 Outbound requests.** SSRF through `clipper.py` and `url_checker.py`
   (the open items are in
   `web-clipper-response-size-cap-and-dns-rebinding-toctou-defense-r1300-follow-ups`).
-  Clone and subscribe URLs and their schemes in `repo_service`. Any
-  settings-controlled base URL (LLM, GitHub) that a non-admin can set.
+  Clone and subscribe URLs and their schemes in `repo_service`. Property: only an
+  admin can set a settings-controlled base URL (LLM, GitHub).
 - **A8 CodeQL triage.** This is the spike
   `codeql-triage-and-close-the-56-open-code-scanning-alerts-on-dev`
   already defines; its output goes into that item. It runs after #509
