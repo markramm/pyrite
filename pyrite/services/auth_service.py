@@ -17,6 +17,7 @@ from ..config import AuthConfig, OAuthProviderConfig
 from ..exceptions import LastAdminError
 from ..services.oauth_providers import OAuthProfile
 from ..storage.database import PyriteDB
+from .access_policy import ROLES, kb_role, role_at_least, role_level
 from .credential_events import CredentialChange, publish
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 #: stay closed until one exists.
 BOOTSTRAP_HINT = "pyrite-admin user create <username> --role admin"
 
-VALID_ROLES = ("read", "write", "admin")
+VALID_ROLES = ROLES
 
 # A real bcrypt hash of a random password, checked against when a login names
 # no user, so an unknown username costs the same time as a wrong password.
@@ -431,12 +432,11 @@ class AuthService:
         role = provider_config.default_tier
         mapped_by_org = False
         if provider_config.org_tier_map:
-            role_priority = {"read": 0, "write": 1, "admin": 2}
             for org in profile.orgs:
                 mapped = provider_config.org_tier_map.get(org)
                 if mapped:
                     mapped_by_org = True
-                if mapped and role_priority.get(mapped, -1) > role_priority.get(role, -1):
+                if mapped and role_level(mapped) > role_level(role):
                     role = mapped
         # An operator vetted this sign-up when it had to come from an allowed
         # org or matched an org the operator mapped to a role; only then does
@@ -655,7 +655,7 @@ class AuthService:
                 are one statement, so two admins demoting each other at once
                 cannot both succeed.
         """
-        if role not in ("read", "write", "admin"):
+        if role not in ROLES:
             raise ValueError(f"Invalid role: {role}")
         # Atomic only because the auth tables live in SQLite: SQLite
         # serializes writers, so the COUNT(*) subquery and the UPDATE it
@@ -812,65 +812,35 @@ class AuthService:
     ) -> str | None:
         """Resolve effective role for a user on a KB.
 
-        Resolution chain:
-        1. Global admin always returns "admin"
-        2. Explicit kb_permission grant
-        3. KB default_role
-        4. User global role -- only for a user whose role covers every KB
-           (``global_access``); a self-registered user gets None here, so a
-           KB without a default_role stays closed to them until a grant
-        5. Anonymous visitor (user_id None): the lower of anonymous_tier and
-           the KB default_role; None for a `none` KB or no anonymous_tier
+        Fetches the user's row and (only if needed) their grant on the KB, and
+        asks the access policy's per-KB rule (`access_policy.kb_role`), which
+        documents the resolution chain: global admin, explicit grant, KB
+        default_role (a self-registered user capped at read), the user's
+        global role only with ``global_access``, and for the anonymous
+        visitor (user_id None) the lower of anonymous_tier and the KB
+        default_role. The read side, REST writes, /ws and MCP all resolve
+        here, so the rule holds on every surface.
         """
+        user = None
         if user_id is not None:
-            # Check if global admin
             rows = self.db.execute_sql(
                 "SELECT role, global_access FROM local_user WHERE id = :user_id",
                 {"user_id": user_id},
             )
-            if rows and rows[0]["role"] == "admin":
-                return "admin"
+            user = rows[0] if rows else None
 
-            # Check explicit KB grant
+        def grant() -> str | None:
             perm_rows = self.db.execute_sql(
                 "SELECT role FROM kb_permission WHERE user_id = :user_id AND kb_name = :kb_name",
                 {"user_id": user_id, "kb_name": kb_name},
             )
-            if perm_rows:
-                return perm_rows[0]["role"]
+            return perm_rows[0]["role"] if perm_rows else None
 
-            # KB default_role. A self-registered user (no global_access) gets
-            # read on a public KB and never more, whatever the KB allows.
-            if kb_default_role is not None and kb_default_role != "none":
-                if rows and not rows[0]["global_access"]:
-                    return "read"
-                return kb_default_role
-
-            # Fall back to user's global role
-            if rows:
-                # If KB is private (default_role="none"), deny unless explicit grant
-                if kb_default_role == "none":
-                    return None
-                if not rows[0]["global_access"]:
-                    return None
-                return rows[0]["role"]
-
-        # Anonymous visitor: `anonymous_tier` is a ceiling that a KB's
-        # default_role can lower but never raise. A `default_role: write` KB
-        # does not make a read-tier visitor a writer; `none` hides the KB.
-        # The read side (readable_kbs), REST writes, /ws and MCP all resolve
-        # the visitor here, so the ceiling holds on every surface.
-        ceiling = self.config.anonymous_tier
-        if ceiling is None or kb_default_role == "none":
-            return None
-        if kb_default_role is None:
-            return ceiling
-        levels = {"read": 0, "write": 1, "admin": 2}
-        return min(ceiling, kb_default_role, key=lambda r: levels.get(r, -1))
+        return kb_role(user_id, user, grant, kb_default_role, self.config.anonymous_tier)
 
     def grant_kb_permission(self, user_id: int, kb_name: str, role: str, granted_by: int) -> None:
         """Grant or update a per-KB permission."""
-        if role not in ("read", "write", "admin"):
+        if role not in ROLES:
             raise ValueError(f"Invalid role: {role}")
         now = datetime.now(UTC).isoformat()
         self.db.execute_write_sql(
@@ -1140,9 +1110,8 @@ class AuthService:
         user_role = rows[0]["role"]
         current_count = rows[0]["ephemeral_kb_count"] or 0
 
-        tier_levels = {"read": 0, "write": 1, "admin": 2}
         min_tier = self.config.ephemeral_min_tier
-        if tier_levels.get(user_role, -1) < tier_levels.get(min_tier, 99):
+        if not role_at_least(user_role, min_tier):
             raise ValueError(
                 f"Insufficient tier: requires '{min_tier}', your role is '{user_role}'"
             )
