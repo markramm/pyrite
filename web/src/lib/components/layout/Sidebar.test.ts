@@ -25,7 +25,10 @@ vi.mock('$lib/api/client', () => ({
 		logout: vi.fn(),
 		listKBs: vi.fn().mockResolvedValue({ kbs: [], total: 0 }),
 		getStarred: vi.fn().mockResolvedValue({ starred: [], count: 0 }),
-		getBranding: vi.fn().mockResolvedValue({})
+		getBranding: vi.fn().mockResolvedValue({}),
+		// auth.svelte.ts registers a handler on import (#420); a mock missing
+		// this throws as soon as the store module loads.
+		onUnauthorized: vi.fn()
 	}
 }));
 

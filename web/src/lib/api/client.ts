@@ -71,11 +71,49 @@ import type {
 	PublishResponse
 } from './types';
 
+// Paths that legitimately answer 401 without an expired session: signing in
+// with the wrong password, and the anonymous-visitor probe `getMe` makes on
+// every load to ask "is anyone signed in" (it always swallows the error
+// itself -- see getMe below). Neither means an authenticated session just
+// expired, so neither should fire the onUnauthorized handler (#420 groom:
+// "A 401 from login or getMe during init does not fire the handler").
+const UNAUTHORIZED_HOOK_EXEMPT_PATHS = new Set(['/auth/login', '/auth/me']);
+
 class ApiClient {
 	private baseUrl: string;
+	private unauthorizedHandler: () => void = () => {};
 
 	constructor(baseUrl = '') {
 		this.baseUrl = baseUrl;
+	}
+
+	/**
+	 * Registers the single handler called when an authenticated request comes
+	 * back 401 (#420). `auth.svelte.ts` is the only registrant: the client
+	 * cannot import the store directly (the store already imports `api`), so
+	 * this is the hook that lets the store learn its session expired without
+	 * every one of ~90 call sites checking `err.status === 401` by hand.
+	 * Registering again replaces the previous handler.
+	 */
+	onUnauthorized(handler: () => void): void {
+		this.unauthorizedHandler = handler;
+	}
+
+	private handleErrorResponse(res: Response, path: string, error: { detail?: unknown; message?: string }): never {
+		if (res.status === 401 && !UNAUTHORIZED_HOOK_EXEMPT_PATHS.has(path)) {
+			this.unauthorizedHandler();
+		}
+		// detail can be a string or structured {code, message, hint}
+		const detail = error.detail;
+		let message: string;
+		if (typeof detail === 'string') {
+			message = detail;
+		} else if (detail && typeof detail === 'object') {
+			message = (detail as { hint?: string; message?: string }).hint ?? (detail as { message?: string }).message ?? JSON.stringify(detail);
+		} else {
+			message = error.message ?? res.statusText;
+		}
+		throw new ApiError(res.status, message);
 	}
 
 	private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -91,17 +129,7 @@ class ApiClient {
 
 		if (!res.ok) {
 			const error = await res.json().catch(() => ({ message: res.statusText }));
-			// detail can be a string or structured {code, message, hint}
-			const detail = error.detail;
-			let message: string;
-			if (typeof detail === 'string') {
-				message = detail;
-			} else if (detail && typeof detail === 'object') {
-				message = detail.hint ?? detail.message ?? JSON.stringify(detail);
-			} else {
-				message = error.message ?? res.statusText;
-			}
-			throw new ApiError(res.status, message);
+			this.handleErrorResponse(res, path, error);
 		}
 
 		return res.json();
@@ -794,17 +822,7 @@ class ApiClient {
 		});
 		if (!res.ok) {
 			const error = await res.json().catch(() => ({ message: res.statusText }));
-			// detail can be a string or structured {code, message, hint}
-			const detail = error.detail;
-			let message: string;
-			if (typeof detail === 'string') {
-				message = detail;
-			} else if (detail && typeof detail === 'object') {
-				message = detail.hint ?? detail.message ?? JSON.stringify(detail);
-			} else {
-				message = error.message ?? res.statusText;
-			}
-			throw new ApiError(res.status, message);
+			this.handleErrorResponse(res, '/api/entries/import', error);
 		}
 		return res.json();
 	}
@@ -821,17 +839,7 @@ class ApiClient {
 		const res = await fetch(url, { credentials: 'include' });
 		if (!res.ok) {
 			const error = await res.json().catch(() => ({ message: res.statusText }));
-			// detail can be a string or structured {code, message, hint}
-			const detail = error.detail;
-			let message: string;
-			if (typeof detail === 'string') {
-				message = detail;
-			} else if (detail && typeof detail === 'object') {
-				message = detail.hint ?? detail.message ?? JSON.stringify(detail);
-			} else {
-				message = error.message ?? res.statusText;
-			}
-			throw new ApiError(res.status, message);
+			this.handleErrorResponse(res, '/api/entries/export', error);
 		}
 		return res.blob();
 	}

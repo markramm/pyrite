@@ -6,7 +6,8 @@ vi.mock('$lib/api/client', () => ({
 		getMe: vi.fn(),
 		login: vi.fn(),
 		register: vi.fn(),
-		logout: vi.fn()
+		logout: vi.fn(),
+		onUnauthorized: vi.fn()
 	}
 }));
 
@@ -18,6 +19,13 @@ const mockGetMe = vi.mocked(api.getMe);
 const mockLogin = vi.mocked(api.login);
 const mockRegister = vi.mocked(api.register);
 const mockLogout = vi.mocked(api.logout);
+const mockOnUnauthorized = vi.mocked(api.onUnauthorized);
+
+// auth.svelte.ts registers its handler exactly once, as a side effect of
+// module import (`api.onUnauthorized(() => authStore.handleUnauthorized())`).
+// Capture it here, before any test's `beforeEach` calls `vi.clearAllMocks()`
+// and wipes `mockOnUnauthorized.mock.calls`.
+const capturedUnauthorizedHandler = mockOnUnauthorized.mock.calls.at(0)?.[0];
 
 const sampleUser = {
 	id: 1,
@@ -240,4 +248,65 @@ describe('socketIdentity (#336): whom the live-update socket is opened for', () 
 		await authStore.logout();
 		expect(authStore.socketIdentity).toBeNull();
 	});
+});
+
+describe('onUnauthorized handler (#420): a 401 on an authenticated request clears the session', () => {
+	function registeredHandler(): () => void {
+		expect(capturedUnauthorizedHandler).toBeDefined();
+		return capturedUnauthorizedHandler as () => void;
+	}
+
+	it('clears authStore.user when a user is signed in', () => {
+		authStore.loading = false;
+		authStore.authConfig = enabled_('none');
+		authStore.user = sampleUser;
+
+		registeredHandler()();
+
+		expect(authStore.user).toBeNull();
+	});
+
+	it('moves socketIdentity to null when the server admits no anonymous reader', () => {
+		authStore.loading = false;
+		authStore.authConfig = enabled_('none');
+		authStore.user = sampleUser;
+		expect(authStore.socketIdentity).toBe('user:1');
+
+		registeredHandler()();
+
+		expect(authStore.socketIdentity).toBeNull();
+	});
+
+	it('moves socketIdentity to anonymous when the server admits anonymous readers', () => {
+		authStore.loading = false;
+		authStore.authConfig = enabled_('read');
+		authStore.user = sampleUser;
+		expect(authStore.socketIdentity).toBe('user:1');
+
+		registeredHandler()();
+
+		expect(authStore.socketIdentity).toBe('anonymous');
+	});
+
+	it('does nothing when user is already null (an anonymous visitor hitting a write)', () => {
+		authStore.loading = false;
+		authStore.authConfig = enabled_('read');
+		authStore.user = null;
+		const before = authStore.socketIdentity;
+
+		expect(() => registeredHandler()()).not.toThrow();
+
+		expect(authStore.user).toBeNull();
+		expect(authStore.socketIdentity).toBe(before);
+	});
+
+	function enabled_(anonymous_tier: string) {
+		return {
+			enabled: true,
+			allow_registration: false,
+			require_invite_code: false,
+			providers: [],
+			anonymous_tier
+		};
+	}
 });

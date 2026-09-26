@@ -91,6 +91,21 @@ class AuthStore {
 		}
 		this.user = null;
 	}
+
+	/**
+	 * Registered with `api.onUnauthorized` below: a 401 on an authenticated
+	 * request means the session expired server-side (#420). An anonymous
+	 * visitor's 401 on a write is ordinary, not an expired session -- but it
+	 * finds `user` already null, so clearing it unconditionally is a no-op
+	 * for that case rather than a check this store needs to make.
+	 * `socketIdentity` is a getter over `user` and `authConfig`, so clearing
+	 * `user` alone moves it (to `'anonymous'` or `null` depending on
+	 * `allowsAnonymous`) without any extra step here.
+	 */
+	handleUnauthorized() {
+		this.user = null;
+	}
 }
 
 export const authStore = new AuthStore();
+api.onUnauthorized(() => authStore.handleUnauthorized());

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { api, ApiError } from './client';
 
 // Mock global fetch
@@ -215,6 +215,99 @@ describe('ApiClient', () => {
 			const result = await api.getIndexJobs();
 			expect(result.jobs).toHaveLength(1);
 			expect(result.jobs[0].status).toBe('running');
+		});
+	});
+
+	describe('onUnauthorized (#420): a 401 on an authenticated request notifies the registered handler', () => {
+		afterEach(() => {
+			// Every test registers its own handler; never leave one behind for
+			// a later test's requests to trip.
+			api.onUnauthorized(() => {});
+		});
+
+		it('calls the handler on a 401 from a normal request()-backed call', async () => {
+			const handler = vi.fn();
+			api.onUnauthorized(handler);
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				statusText: 'Unauthorized',
+				json: () => Promise.resolve({ detail: 'Session expired' })
+			});
+
+			await expect(api.listKBs()).rejects.toThrow(ApiError);
+			expect(handler).toHaveBeenCalledTimes(1);
+		});
+
+		it('calls the handler on a 401 from the hand-rolled importEntries fetch', async () => {
+			const handler = vi.fn();
+			api.onUnauthorized(handler);
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				statusText: 'Unauthorized',
+				json: () => Promise.resolve({ detail: 'Session expired' })
+			});
+
+			await expect(api.importEntries(new File(['[]'], 'x.json'), 'kb')).rejects.toThrow(ApiError);
+			expect(handler).toHaveBeenCalledTimes(1);
+		});
+
+		it('calls the handler on a 401 from the hand-rolled exportEntries fetch', async () => {
+			const handler = vi.fn();
+			api.onUnauthorized(handler);
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				statusText: 'Unauthorized',
+				json: () => Promise.resolve({ detail: 'Session expired' })
+			});
+
+			await expect(api.exportEntries('kb')).rejects.toThrow(ApiError);
+			expect(handler).toHaveBeenCalledTimes(1);
+		});
+
+		it('does not call the handler for a 401 from login', async () => {
+			const handler = vi.fn();
+			api.onUnauthorized(handler);
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				statusText: 'Unauthorized',
+				json: () => Promise.resolve({ detail: 'Invalid credentials' })
+			});
+
+			await expect(api.login('alice', 'wrong')).rejects.toThrow(ApiError);
+			expect(handler).not.toHaveBeenCalled();
+		});
+
+		it('does not call the handler for a 401 from getMe', async () => {
+			const handler = vi.fn();
+			api.onUnauthorized(handler);
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				statusText: 'Unauthorized',
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			});
+
+			const result = await api.getMe();
+			expect(result).toBeNull();
+			expect(handler).not.toHaveBeenCalled();
+		});
+
+		it('does not call the handler on a 403', async () => {
+			const handler = vi.fn();
+			api.onUnauthorized(handler);
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 403,
+				statusText: 'Forbidden',
+				json: () => Promise.resolve({ detail: 'Not permitted' })
+			});
+
+			await expect(api.listKBs()).rejects.toThrow(ApiError);
+			expect(handler).not.toHaveBeenCalled();
 		});
 	});
 });
