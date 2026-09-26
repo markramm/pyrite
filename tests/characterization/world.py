@@ -20,8 +20,8 @@ ordinary noise, and normalisation had to blank most listings to survive
 `-n4`, which also blanked away the very leaks this harness exists to catch.
 The fix: `conftest.py` provides `world` (session-scoped, built ONCE via
 `build_world`, and used ONLY by read/list/search cases -- nothing that
-writes may touch it) and `write_world` (function-scoped, a FRESH
-`build_world` call per test, used ONLY by write-tool cases, whose content
+writes may touch it) and `write_world` (module-scoped, a FRESH
+`build_world` call per test module, used ONLY by write-tool cases, whose content
 mutations therefore never leak into a read case's golden). `build_world`
 itself is unchanged in shape; `label` just lets a caller give its own
 `tmp_path_factory` subdirectory a name, so two worlds built in the same
@@ -153,8 +153,9 @@ class World:
 
     def resolve_readable_writable(self, principal: Principal) -> tuple[set | None, set | None]:
         """The (readable_kbs, writable_kbs) the REAL server would resolve
-        for `principal` RIGHT NOW, calling the exact same functions
-        `mcp_routes._authenticate`/REST's `readable_kbs()` call (#476
+        for `principal` RIGHT NOW, calling the same resolution REST's
+        `readable_kbs()` uses (`kbs_for_user_at_tier`; MCP's transport path,
+        `mcp_routes._resolve_bearer_auth`, is NOT exercised here -- see #498) (#476
         round-2 blocker 4) -- not the `Principal.readable_kbs`/`writable_kbs`
         fields, which are a SNAPSHOT computed once when the world was built.
         For the main per-KB matrix the two never differ (nothing mutates
