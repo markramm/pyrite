@@ -4,6 +4,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "cascade_actors | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "cascade_actors | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -18,6 +23,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "cascade_capture_lanes | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "cascade_capture_lanes | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -29,6 +39,11 @@
   },
   "cascade_network | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "cascade_network | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -57,6 +72,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "cascade_timeline | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "cascade_timeline | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -68,6 +88,11 @@
   },
   "investigation_bulk_edges | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_bulk_edges | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -86,6 +111,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_claims | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_claims | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -98,6 +128,11 @@
   },
   "investigation_create_claim | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_create_claim | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -116,6 +151,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_create_entity | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_create_entity | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -128,6 +168,11 @@
   },
   "investigation_create_event | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_create_event | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -146,6 +191,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_entities | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_entities | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -161,6 +211,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_evidence_chain | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_evidence_chain | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -171,6 +226,11 @@
   },
   "investigation_export_pack | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_export_pack | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -188,6 +248,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_find_duplicates | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_find_duplicates | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -201,6 +266,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_ftm_export | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_ftm_export | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -211,6 +281,11 @@
   },
   "investigation_ftm_import | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_ftm_import | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -229,6 +304,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_log_source | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_log_source | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -241,6 +321,11 @@
   },
   "investigation_money_flow | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_money_flow | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -261,6 +346,11 @@
   },
   "investigation_network | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_network | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -289,6 +379,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_ownership_chain | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_ownership_chain | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -308,6 +403,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_promote_claim | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_promote_claim | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -320,6 +420,11 @@
   },
   "investigation_qa_report | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_qa_report | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -339,6 +444,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_search_all | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_search_all | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -351,6 +461,11 @@
   },
   "investigation_sources | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_sources | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -369,6 +484,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_start | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_start | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -381,6 +501,11 @@
   },
   "investigation_status | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_status | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -403,6 +528,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_timeline | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_timeline | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -418,6 +548,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_backlinks | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_backlinks | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -430,7 +565,7 @@
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_batch_read | local_user | missing-kb": {
-    "entries": "<CONTENT_STATE>",
+    "entries": [],
     "found": 0,
     "not_found": [
       {
@@ -439,8 +574,18 @@
       }
     ]
   },
+  "kb_batch_read | local_user | no-default-role-kb": {
+    "entries": [],
+    "found": 0,
+    "not_found": [
+      {
+        "entry_id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      }
+    ]
+  },
   "kb_batch_read | local_user | private-kb": {
-    "entries": "<CONTENT_STATE>",
+    "entries": [],
     "found": 0,
     "not_found": [
       {
@@ -450,12 +595,48 @@
     ]
   },
   "kb_batch_read | local_user | readable-kb": {
-    "entries": "<CONTENT_STATE>",
+    "entries": [
+      {
+        "assigned_at": null,
+        "assignee": null,
+        "body": "a zebra in the open",
+        "coordinates": null,
+        "created_at": "<TIMESTAMP>",
+        "created_by": null,
+        "date": null,
+        "due_date": null,
+        "end_date": null,
+        "entry_type": "note",
+        "file_path": "<TMPDIR>/readable-kb/notes/readable-note.md",
+        "id": "readable-note",
+        "importance": 5,
+        "indexed_at": "<TIMESTAMP>",
+        "kb_name": "readable-kb",
+        "lifecycle": "active",
+        "links": [],
+        "location": null,
+        "metadata": {},
+        "modified_by": null,
+        "priority": null,
+        "sources": [],
+        "start_date": null,
+        "status": null,
+        "summary": "",
+        "tags": [],
+        "title": "Readable note",
+        "updated_at": "<TIMESTAMP>"
+      }
+    ],
     "found": 1,
     "not_found": []
   },
   "kb_batch_suggest | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_batch_suggest | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -475,6 +656,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_bulk_create | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_bulk_create | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -487,6 +673,11 @@
   },
   "kb_commit | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_commit | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -505,6 +696,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_create | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_create | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -520,6 +716,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_delete | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_delete | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -532,6 +733,11 @@
   },
   "kb_discover_neighbors | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_discover_neighbors | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -551,6 +757,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_find_by_assignee | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_find_by_assignee | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -563,6 +774,11 @@
   },
   "kb_find_by_location | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_find_by_location | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -581,6 +797,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_find_by_status | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_find_by_status | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -596,6 +817,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_find_overdue | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_find_overdue | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -607,6 +833,11 @@
   },
   "kb_get | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_get | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -654,6 +885,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_index_sync | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_index_sync | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -669,6 +905,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_link | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_link | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -680,16 +921,36 @@
     "retryable": false
   },
   "kb_list | local_user | missing-kb": {
-    "knowledge_bases": "<ENUMERATION_CONTENT>"
+    "knowledge_bases": [
+      "read-only-kb",
+      "readable-kb"
+    ]
+  },
+  "kb_list | local_user | no-default-role-kb": {
+    "knowledge_bases": [
+      "read-only-kb",
+      "readable-kb"
+    ]
   },
   "kb_list | local_user | private-kb": {
-    "knowledge_bases": "<ENUMERATION_CONTENT>"
+    "knowledge_bases": [
+      "read-only-kb",
+      "readable-kb"
+    ]
   },
   "kb_list | local_user | readable-kb": {
-    "knowledge_bases": "<ENUMERATION_CONTENT>"
+    "knowledge_bases": [
+      "read-only-kb",
+      "readable-kb"
+    ]
   },
   "kb_list_entries | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_list_entries | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -710,6 +971,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_manage | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_manage | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -722,6 +988,11 @@
   },
   "kb_orient | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_orient | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1031,7 +1302,7 @@
           },
           "fields": {
             "relationship_type": "str",
-            "source": "<CONTENT_STATE>",
+            "source": "str",
             "target": "str"
           }
         },
@@ -1072,6 +1343,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_push | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_push | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1087,6 +1363,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_qa_assess | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_qa_assess | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1099,6 +1380,11 @@
   },
   "kb_qa_status | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_qa_status | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1119,6 +1405,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_qa_validate | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_qa_validate | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1131,6 +1422,11 @@
   },
   "kb_read_body | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_read_body | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1151,6 +1447,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_recent | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_recent | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1162,6 +1463,11 @@
   },
   "kb_schema | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_schema | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1452,7 +1758,7 @@
         },
         "fields": {
           "relationship_type": "str",
-          "source": "<CONTENT_STATE>",
+          "source": "str",
           "target": "str"
         }
       },
@@ -1489,6 +1795,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_search | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_search | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1501,6 +1812,13 @@
     "results": "<ENUMERATION_CONTENT>"
   },
   "kb_stats | local_user | missing-kb": {
+    "kbs": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_links": "<ENUMERATION_CONTENT>",
+    "total_tags": "<ENUMERATION_CONTENT>",
+    "type_counts": "<ENUMERATION_CONTENT>"
+  },
+  "kb_stats | local_user | no-default-role-kb": {
     "kbs": "<ENUMERATION_CONTENT>",
     "total_entries": "<ENUMERATION_CONTENT>",
     "total_links": "<ENUMERATION_CONTENT>",
@@ -1526,6 +1844,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_tags | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_tags | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1537,6 +1860,11 @@
     "tags": "<ENUMERATION_CONTENT>"
   },
   "kb_timeline | local_user | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_timeline | local_user | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "events": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>"
@@ -1556,6 +1884,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_update | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_update | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1568,6 +1901,11 @@
   },
   "list_edge_types | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "list_edge_types | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1585,6 +1923,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "social_newest | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "social_newest | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1596,6 +1939,11 @@
   },
   "social_post | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "social_post | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1614,6 +1962,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "social_top | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "social_top | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1625,6 +1978,11 @@
   },
   "social_vote | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "social_vote | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1643,6 +2001,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "solidarity_infrastructure_types | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "solidarity_infrastructure_types | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1657,6 +2020,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "solidarity_timeline | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "solidarity_timeline | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1668,6 +2036,11 @@
   },
   "sw_adrs | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_adrs | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1689,6 +2062,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_backlog | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_backlog | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1707,6 +2085,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_board | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_board | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1718,6 +2101,11 @@
   },
   "sw_check_ready | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_check_ready | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1734,6 +2122,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_claim | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_claim | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1746,6 +2139,11 @@
   },
   "sw_component | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_component | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1767,6 +2165,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_context_for_item | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_context_for_item | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1777,6 +2180,11 @@
   },
   "sw_conventions | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_conventions | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1791,6 +2199,11 @@
   },
   "sw_create_adr | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_create_adr | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1809,6 +2222,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_create_backlog_item | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_create_backlog_item | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1821,6 +2239,11 @@
   },
   "sw_epic_detail | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_epic_detail | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1837,6 +2260,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_epics | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_epics | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1848,6 +2276,11 @@
   },
   "sw_log | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_log | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1866,6 +2299,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_milestones | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_milestones | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1877,6 +2315,11 @@
   },
   "sw_prioritize | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_prioritize | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1895,6 +2338,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_pull_next | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_pull_next | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1910,6 +2358,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_refine | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_refine | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1921,6 +2374,11 @@
   },
   "sw_review | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_review | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1939,6 +2397,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_review_queue | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_review_queue | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1952,6 +2415,11 @@
   },
   "sw_standards | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_standards | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1973,6 +2441,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_submit | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_submit | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -1985,6 +2458,11 @@
   },
   "sw_transition | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_transition | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2003,6 +2481,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_validations | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_validations | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2014,6 +2497,11 @@
   },
   "task_ancestors | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_ancestors | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2032,6 +2520,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "task_blocked_by | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "task_blocked_by | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2044,6 +2537,11 @@
   },
   "task_checkpoint | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_checkpoint | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2062,6 +2560,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "task_claim | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "task_claim | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2074,6 +2577,11 @@
   },
   "task_create | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_create | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2092,6 +2600,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "task_critical_path | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "task_critical_path | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2104,6 +2617,11 @@
   },
   "task_decompose | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_decompose | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2122,6 +2640,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "task_list | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "task_list | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2133,6 +2656,11 @@
   },
   "task_status | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_status | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2151,6 +2679,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "task_subtree | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "task_subtree | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2163,6 +2696,11 @@
   },
   "task_update | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_update | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2181,6 +2719,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "wiki_assess_quality | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "wiki_assess_quality | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2196,6 +2739,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "wiki_protect | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "wiki_protect | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2208,6 +2756,11 @@
   },
   "wiki_quality_stats | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_quality_stats | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2227,6 +2780,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "wiki_review_queue | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "wiki_review_queue | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2241,6 +2799,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "wiki_stubs | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "wiki_stubs | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2252,6 +2815,11 @@
   },
   "wiki_submit_review | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_submit_review | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2270,6 +2838,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "zettel_graph | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "zettel_graph | local_user | private-kb": {
     "error": "KB 'private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2285,6 +2858,11 @@
   },
   "zettel_inbox | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "zettel_inbox | local_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },

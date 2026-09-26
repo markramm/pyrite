@@ -16,21 +16,22 @@ to run in CI** -- the regenerate path is opt-in per the environment
 variable, off by default, and nothing in `scripts/test-affected`, the
 pre-push hook or CI sets it.
 
-**`save` merges into the file on disk, under a lock.** `test_rest_matrix.py`
-and `test_mcp_matrix.py` parametrize one test per principal, and `-n4` (the
-regenerate command every module's docstring documents) runs those in
-separate worker processes -- each with its own in-memory `golden` dict from
-its own `load()` call at the start of ITS test. A blind overwrite (what this
-function used to do) is a lost-update race: worker B's `save()` replaces
-worker A's already-written keys with B's smaller, worker-local dict, so the
-regenerated file ends up holding only the last worker to finish -- confirmed
-while building this harness (`PYRITE_CHARACTERIZATION_REGENERATE=1 pytest
-... -n4` produced a `rest.json` missing 5 of 7 principals' keys, silently,
-no error, until the very next plain run failed every one of them with "no
-golden recorded"). `save` now re-reads the file immediately before writing
-and merges `data` on top of it, inside a cross-process advisory lock
-(`fcntl.flock`, POSIX-only -- matching this repo's dev platforms) so two
-workers' read-merge-write cannot interleave.
+**`save` replaces the file's keys in its scope, under a lock.**
+`test_rest_matrix.py` and `test_mcp_matrix.py` parametrize one test per
+principal, and `-n4` (the regenerate command every module's docstring
+documents) runs those in separate worker processes -- each with its own
+in-memory `golden` dict from its own `load()` call at the start of ITS test.
+A blind merge-only overwrite is a lost-update race across workers (worker
+B's save must not erase worker A's already-written keys for A's own
+principal) AND leaves a route/tool that dropped out of the LIVE run set
+(a renamed scoping dependency, say) sitting in the file forever, looking
+exactly like still-covered ground (#476 blocker 1). So `save` takes a
+`principal_scope` and, within that scope only, keeps exactly the keys this
+run reproduced -- a key nothing produced this run is deleted, not left
+behind -- while every OTHER principal's shard/keys are untouched. `save`
+re-reads the file immediately before writing, inside a cross-process
+advisory lock (`fcntl.flock`, POSIX-only -- matching this repo's dev
+platforms), so two workers' read-merge-write cannot interleave.
 """
 
 from __future__ import annotations
@@ -79,26 +80,48 @@ def load(name: str) -> dict[str, Any]:
     return json.loads(path.read_text())
 
 
-def save(name: str, data: dict[str, Any]) -> None:
-    """Merge `data`'s keys into `{name}.json` (or, for a sharded surface,
-    into each `{name}.{shard}.json`) on disk, under a lock.
+def save(name: str, data: dict[str, Any], *, principal_scope: str | None = None) -> None:
+    """Replace `{name}.json` (or, for a sharded surface, each
+    `{name}.{shard}.json`) with `data`'s keys, under a lock.
 
-    Not a blind overwrite -- see the module docstring. A `.lock` sidecar
-    file (not the `.json` itself) is what `flock` holds, so a reader that
-    never regenerates never needs to touch a lock at all.
+    A merge that only adds/updates (what this used to do) can never catch a
+    dropped route: a migration that renames the dependency `surfaces.py`
+    filters on makes the live run set shrink, so `data` simply never
+    contains that route's keys again -- and a pure `on_disk.update(data)`
+    leaves the OLD key sitting in the file forever, looking exactly like a
+    still-covered case (found in cold review, #476 blocker 1). So a
+    regenerate run now DELETES every on-disk key in its own scope that
+    `data` did not also produce.
+
+    `principal_scope`, when given, is a principal name: only keys whose
+    " | "-delimited middle segment equals it are eligible to be deleted (a
+    single principal's parametrized regenerate run must not delete another
+    principal's keys just because it did not touch them -- `test_rest_matrix
+    .py`/`test_mcp_matrix.py` each pass their own `principal_name` here).
+    Without it (the unsharded `error_bodies` surface, which regenerates in
+    one pass with every key in scope), every on-disk key is eligible.
     """
     GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
     if name in _SHARDED_SURFACES:
         by_shard: dict[str, dict[str, Any]] = {}
         for key, value in data.items():
             by_shard.setdefault(_shard_key(key), {})[key] = value
+        # A shard that produced no keys this run (e.g. a principal whose
+        # test didn't run in this invocation) is not visited at all -- only
+        # shards this run actually touched get their stale keys pruned.
         for shard, shard_data in by_shard.items():
-            _save_one(GOLDEN_DIR / f"{name}.{shard}.json", shard_data)
+            _save_one(GOLDEN_DIR / f"{name}.{shard}.json", shard_data, scope_key=principal_scope)
         return
-    _save_one(GOLDEN_DIR / f"{name}.json", data)
+    _save_one(GOLDEN_DIR / f"{name}.json", data, scope_key=principal_scope)
 
 
-def _save_one(path: Path, data: dict[str, Any]) -> None:
+def _in_scope(key: str, scope_key: str | None) -> bool:
+    if scope_key is None:
+        return True
+    return _shard_key(key) == scope_key
+
+
+def _save_one(path: Path, data: dict[str, Any], *, scope_key: str | None) -> None:
     lock_path = path.with_suffix(path.suffix + ".lock")
     with open(lock_path, "w") as lock_file:
         fcntl.flock(lock_file, fcntl.LOCK_EX)
@@ -106,8 +129,12 @@ def _save_one(path: Path, data: dict[str, Any]) -> None:
             on_disk: dict[str, Any] = {}
             if path.exists():
                 on_disk = json.loads(path.read_text())
-            on_disk.update(data)
-            path.write_text(json.dumps(on_disk, indent=2, sort_keys=True) + "\n")
+            # Drop every on-disk key in scope that this run did not
+            # reproduce -- a stale key (the route/tool this run no longer
+            # sees) must disappear, not linger looking covered.
+            kept = {k: v for k, v in on_disk.items() if not _in_scope(k, scope_key) or k in data}
+            kept.update(data)
+            path.write_text(json.dumps(kept, indent=2, sort_keys=True) + "\n")
         finally:
             fcntl.flock(lock_file, fcntl.LOCK_UN)
 
@@ -127,3 +154,34 @@ def assert_matches(name: str, key: str, actual: Any, golden: dict[str, Any]) -> 
     assert actual == golden[key], (
         f"golden mismatch for {key!r}:\n  golden:  {golden[key]}\n  actual:  {actual}"
     )
+
+
+class MismatchCollector:
+    """Collect every golden mismatch in a run instead of raising on the
+    first one (#476 blocker 7): a policy change that affects many routes
+    should show every key it changed in one failure, not just the
+    alphabetically-first one a bare `assert` would stop at."""
+
+    def __init__(self) -> None:
+        self.failures: list[str] = []
+
+    def check(self, name: str, key: str, actual: Any, golden: dict[str, Any]) -> None:
+        if regenerating():
+            golden[key] = actual
+            return
+        if key not in golden:
+            self.failures.append(
+                f"{key!r} has no golden recorded. Run with {REGENERATE_ENV}=1 to "
+                f"(re)generate tests/characterization/goldens/{name}.json."
+            )
+            return
+        if actual != golden[key]:
+            self.failures.append(
+                f"golden mismatch for {key!r}:\n  golden:  {golden[key]}\n  actual:  {actual}"
+            )
+
+    def assert_clean(self) -> None:
+        if self.failures:
+            raise AssertionError(
+                f"{len(self.failures)} golden mismatch(es):\n\n" + "\n\n".join(self.failures)
+            )

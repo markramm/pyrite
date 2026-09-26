@@ -8,6 +8,15 @@
     },
     "status": 404
   },
+  "DELETE /api/entries/{entry_id} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "DELETE /api/entries/{entry_id} | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions on KB 'private-kb': requires 'write' tier"
@@ -26,6 +35,12 @@
     },
     "status": 403
   },
+  "DELETE /api/repos/{name:path} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
   "DELETE /api/repos/{name:path} | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
@@ -39,6 +54,15 @@
     "status": 403
   },
   "DELETE /api/reviews/{review_id} | granted_user | missing-kb": {
+    "body": {
+      "detail": {
+        "code": "NOT_FOUND",
+        "message": "Review 999999 not found"
+      }
+    },
+    "status": 404
+  },
+  "DELETE /api/reviews/{review_id} | granted_user | no-default-role-kb": {
     "body": {
       "detail": {
         "code": "NOT_FOUND",
@@ -71,6 +95,12 @@
     },
     "status": 403
   },
+  "DELETE /api/starred/{entry_id} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
   "DELETE /api/starred/{entry_id} | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
@@ -88,6 +118,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/collections | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -111,6 +150,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/collections/{collection_id} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -142,6 +190,15 @@
     },
     "status": 404
   },
+  "GET /api/collections/{collection_id}/entries | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/collections/{collection_id}/entries | granted_user | private-kb": {
     "body": {
       "detail": {
@@ -169,6 +226,15 @@
     },
     "status": 404
   },
+  "GET /api/daily/dates | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/daily/dates | granted_user | private-kb": {
     "body": {
       "dates": "<ENUMERATION_CONTENT>"
@@ -186,6 +252,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/daily/{date_str} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -217,6 +292,15 @@
     },
     "status": 404
   },
+  "GET /api/entries | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/entries | granted_user | private-kb": {
     "body": {
       "entries": "<ENUMERATION_CONTENT>",
@@ -244,6 +328,15 @@
     },
     "status": 404
   },
+  "GET /api/entries/export | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/entries/export | granted_user | private-kb": {
     "body": {
       "entries": "<ENUMERATION_CONTENT>",
@@ -263,6 +356,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/entries/resolve | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -296,6 +398,15 @@
     },
     "status": 404
   },
+  "GET /api/entries/titles | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/entries/titles | granted_user | private-kb": {
     "body": {
       "entries": "<ENUMERATION_CONTENT>"
@@ -313,6 +424,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/entries/wanted | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -336,6 +456,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/entries/{entry_id} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -395,6 +524,15 @@
     },
     "status": 404
   },
+  "GET /api/entries/{entry_id}/blocks | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/entries/{entry_id}/blocks | granted_user | private-kb": {
     "body": {
       "blocks": "<ENUMERATION_CONTENT>",
@@ -418,6 +556,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/entries/{entry_id}/versions | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -449,6 +596,15 @@
     },
     "status": 404
   },
+  "GET /api/entries/{entry_id}/versions/{commit_hash} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/entries/{entry_id}/versions/{commit_hash} | granted_user | private-kb": {
     "body": {
       "detail": {
@@ -472,6 +628,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/graph | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -500,10 +665,9 @@
           "indexed": "<CONTENT_STATE>",
           "last_indexed": "<CONTENT_STATE>",
           "name": "private-kb",
-          "path": "<TMPDIR>/private-kb",
           "read_only": false,
           "shortname": null,
-          "source": "<CONTENT_STATE>",
+          "source": "user",
           "type": "generic"
         },
         {
@@ -513,10 +677,9 @@
           "indexed": "<CONTENT_STATE>",
           "last_indexed": "<CONTENT_STATE>",
           "name": "read-only-kb",
-          "path": "<TMPDIR>/read-only-kb",
           "read_only": true,
           "shortname": null,
-          "source": "<CONTENT_STATE>",
+          "source": "config",
           "type": "generic"
         },
         {
@@ -526,14 +689,57 @@
           "indexed": "<CONTENT_STATE>",
           "last_indexed": "<CONTENT_STATE>",
           "name": "readable-kb",
-          "path": "<TMPDIR>/readable-kb",
           "read_only": false,
           "shortname": null,
-          "source": "<CONTENT_STATE>",
+          "source": "user",
           "type": "generic"
         }
       ],
-      "total": "<ENUMERATION_CONTENT>"
+      "total": 3
+    },
+    "status": 200
+  },
+  "GET /api/kbs | granted_user | no-default-role-kb": {
+    "body": {
+      "kbs": [
+        {
+          "default_role": "none",
+          "description": "",
+          "entries": "<CONTENT_STATE>",
+          "indexed": "<CONTENT_STATE>",
+          "last_indexed": "<CONTENT_STATE>",
+          "name": "private-kb",
+          "read_only": false,
+          "shortname": null,
+          "source": "user",
+          "type": "generic"
+        },
+        {
+          "default_role": "read",
+          "description": "",
+          "entries": "<CONTENT_STATE>",
+          "indexed": "<CONTENT_STATE>",
+          "last_indexed": "<CONTENT_STATE>",
+          "name": "read-only-kb",
+          "read_only": true,
+          "shortname": null,
+          "source": "config",
+          "type": "generic"
+        },
+        {
+          "default_role": "read",
+          "description": "",
+          "entries": "<CONTENT_STATE>",
+          "indexed": "<CONTENT_STATE>",
+          "last_indexed": "<CONTENT_STATE>",
+          "name": "readable-kb",
+          "read_only": false,
+          "shortname": null,
+          "source": "user",
+          "type": "generic"
+        }
+      ],
+      "total": 3
     },
     "status": 200
   },
@@ -547,10 +753,9 @@
           "indexed": "<CONTENT_STATE>",
           "last_indexed": "<CONTENT_STATE>",
           "name": "private-kb",
-          "path": "<TMPDIR>/private-kb",
           "read_only": false,
           "shortname": null,
-          "source": "<CONTENT_STATE>",
+          "source": "user",
           "type": "generic"
         },
         {
@@ -560,10 +765,9 @@
           "indexed": "<CONTENT_STATE>",
           "last_indexed": "<CONTENT_STATE>",
           "name": "read-only-kb",
-          "path": "<TMPDIR>/read-only-kb",
           "read_only": true,
           "shortname": null,
-          "source": "<CONTENT_STATE>",
+          "source": "config",
           "type": "generic"
         },
         {
@@ -573,14 +777,13 @@
           "indexed": "<CONTENT_STATE>",
           "last_indexed": "<CONTENT_STATE>",
           "name": "readable-kb",
-          "path": "<TMPDIR>/readable-kb",
           "read_only": false,
           "shortname": null,
-          "source": "<CONTENT_STATE>",
+          "source": "user",
           "type": "generic"
         }
       ],
-      "total": "<ENUMERATION_CONTENT>"
+      "total": 3
     },
     "status": 200
   },
@@ -594,10 +797,9 @@
           "indexed": "<CONTENT_STATE>",
           "last_indexed": "<CONTENT_STATE>",
           "name": "private-kb",
-          "path": "<TMPDIR>/private-kb",
           "read_only": false,
           "shortname": null,
-          "source": "<CONTENT_STATE>",
+          "source": "user",
           "type": "generic"
         },
         {
@@ -607,10 +809,9 @@
           "indexed": "<CONTENT_STATE>",
           "last_indexed": "<CONTENT_STATE>",
           "name": "read-only-kb",
-          "path": "<TMPDIR>/read-only-kb",
           "read_only": true,
           "shortname": null,
-          "source": "<CONTENT_STATE>",
+          "source": "config",
           "type": "generic"
         },
         {
@@ -620,14 +821,13 @@
           "indexed": "<CONTENT_STATE>",
           "last_indexed": "<CONTENT_STATE>",
           "name": "readable-kb",
-          "path": "<TMPDIR>/readable-kb",
           "read_only": false,
           "shortname": null,
-          "source": "<CONTENT_STATE>",
+          "source": "user",
           "type": "generic"
         }
       ],
-      "total": "<ENUMERATION_CONTENT>"
+      "total": 3
     },
     "status": 200
   },
@@ -636,6 +836,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/kbs/{kb_name} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -651,7 +860,7 @@
       "path": "<TMPDIR>/private-kb",
       "read_only": false,
       "shortname": null,
-      "source": "<ENUMERATION_CONTENT>",
+      "source": "user",
       "type": "generic"
     },
     "status": 200
@@ -667,7 +876,7 @@
       "path": "<TMPDIR>/readable-kb",
       "read_only": false,
       "shortname": null,
-      "source": "<ENUMERATION_CONTENT>",
+      "source": "user",
       "type": "generic"
     },
     "status": 200
@@ -677,6 +886,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/kbs/{kb_name}/changes | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -704,6 +922,15 @@
     },
     "status": 404
   },
+  "GET /api/kbs/{kb_name}/health | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/kbs/{kb_name}/health | granted_user | private-kb": {
     "body": {
       "entry_count": "<ENUMERATION_CONTENT>",
@@ -713,7 +940,7 @@
       "name": "private-kb",
       "path": "<TMPDIR>/private-kb",
       "path_exists": true,
-      "source": "<CONTENT_STATE>"
+      "source": "user"
     },
     "status": 200
   },
@@ -726,7 +953,7 @@
       "name": "readable-kb",
       "path": "<TMPDIR>/readable-kb",
       "path_exists": true,
-      "source": "<CONTENT_STATE>"
+      "source": "user"
     },
     "status": 200
   },
@@ -735,6 +962,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/kbs/{kb_name}/orient | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -1041,7 +1277,7 @@
             },
             "fields": {
               "relationship_type": "str",
-              "source": "<CONTENT_STATE>",
+              "source": "str",
               "target": "str"
             }
           },
@@ -1381,7 +1617,7 @@
             },
             "fields": {
               "relationship_type": "str",
-              "source": "<CONTENT_STATE>",
+              "source": "str",
               "target": "str"
             }
           },
@@ -1424,6 +1660,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/kbs/{kb_name}/schema | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -1711,7 +1956,7 @@
           },
           "fields": {
             "relationship_type": "str",
-            "source": "<CONTENT_STATE>",
+            "source": "str",
             "target": "str"
           }
         },
@@ -2028,7 +2273,7 @@
           },
           "fields": {
             "relationship_type": "str",
-            "source": "<CONTENT_STATE>",
+            "source": "str",
             "target": "str"
           }
         },
@@ -2071,6 +2316,15 @@
     },
     "status": 404
   },
+  "GET /api/kbs/{kb_name}/templates | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/kbs/{kb_name}/templates | granted_user | private-kb": {
     "body": {
       "templates": "<ENUMERATION_CONTENT>",
@@ -2094,6 +2348,15 @@
     },
     "status": 404
   },
+  "GET /api/kbs/{kb_name}/templates/{template_name} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/kbs/{kb_name}/templates/{template_name} | granted_user | private-kb": {
     "body": {
       "detail": {
@@ -2112,11 +2375,44 @@
     },
     "status": 404
   },
+  "GET /api/kbs/{name}/permissions | granted_user | missing-kb": {
+    "body": {
+      "detail": "Admin access required for this KB"
+    },
+    "status": 403
+  },
+  "GET /api/kbs/{name}/permissions | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": "Admin access required for this KB"
+    },
+    "status": 403
+  },
+  "GET /api/kbs/{name}/permissions | granted_user | private-kb": {
+    "body": {
+      "detail": "Admin access required for this KB"
+    },
+    "status": 403
+  },
+  "GET /api/kbs/{name}/permissions | granted_user | readable-kb": {
+    "body": {
+      "detail": "Admin access required for this KB"
+    },
+    "status": 403
+  },
   "GET /api/links/batch-suggest | granted_user | missing-kb": {
     "body": {
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/links/batch-suggest | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -2148,6 +2444,15 @@
     },
     "status": 404
   },
+  "GET /api/links/discover-neighbors | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/links/discover-neighbors | granted_user | private-kb": {
     "body": {
       "count": "<ENUMERATION_CONTENT>",
@@ -2171,6 +2476,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/qa/coverage | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -2204,6 +2518,15 @@
     },
     "status": 404
   },
+  "GET /api/qa/status | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/qa/status | granted_user | private-kb": {
     "body": {
       "issues_by_rule": "<ENUMERATION_CONTENT>",
@@ -2227,6 +2550,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/qa/validate | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -2258,6 +2590,15 @@
     },
     "status": 404
   },
+  "GET /api/qa/validate/{entry_id} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/qa/validate/{entry_id} | granted_user | private-kb": {
     "body": {
       "entry_id": "private-note",
@@ -2275,6 +2616,12 @@
     "status": 200
   },
   "GET /api/repos | granted_user | missing-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "GET /api/repos | granted_user | no-default-role-kb": {
     "body": {
       "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
     },
@@ -2298,6 +2645,12 @@
     },
     "status": 403
   },
+  "GET /api/repos/{name:path} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
   "GET /api/repos/{name:path} | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
@@ -2315,6 +2668,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/reviews | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -2360,6 +2722,15 @@
     },
     "status": 404
   },
+  "GET /api/reviews/latest | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/reviews/latest | granted_user | private-kb": {
     "body": {
       "detail": [
@@ -2397,6 +2768,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/reviews/status | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -2442,6 +2822,15 @@
     },
     "status": 404
   },
+  "GET /api/search | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/search | granted_user | private-kb": {
     "body": {
       "count": "<ENUMERATION_CONTENT>",
@@ -2467,6 +2856,15 @@
     },
     "status": 404
   },
+  "GET /api/starred | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/starred | granted_user | private-kb": {
     "body": {
       "count": "<ENUMERATION_CONTENT>",
@@ -2482,6 +2880,16 @@
     "status": 200
   },
   "GET /api/stats | granted_user | missing-kb": {
+    "body": {
+      "kbs": "<ENUMERATION_CONTENT>",
+      "total_entries": "<ENUMERATION_CONTENT>",
+      "total_links": "<ENUMERATION_CONTENT>",
+      "total_tags": "<ENUMERATION_CONTENT>",
+      "type_counts": "<ENUMERATION_CONTENT>"
+    },
+    "status": 200
+  },
+  "GET /api/stats | granted_user | no-default-role-kb": {
     "body": {
       "kbs": "<ENUMERATION_CONTENT>",
       "total_entries": "<ENUMERATION_CONTENT>",
@@ -2520,6 +2928,15 @@
     },
     "status": 404
   },
+  "GET /api/tags | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/tags | granted_user | private-kb": {
     "body": {
       "count": "<ENUMERATION_CONTENT>",
@@ -2539,6 +2956,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/tags/tree | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -2564,6 +2990,15 @@
     },
     "status": 404
   },
+  "GET /api/tasks | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "GET /api/tasks | granted_user | private-kb": {
     "body": {
       "count": "<ENUMERATION_CONTENT>",
@@ -2583,6 +3018,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "GET /api/timeline | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -2614,6 +3058,15 @@
     },
     "status": 404
   },
+  "PATCH /api/entries/{entry_id} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "PATCH /api/entries/{entry_id} | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions on KB 'private-kb': requires 'write' tier"
@@ -2627,6 +3080,12 @@
     "status": 403
   },
   "POST /api/ai/auto-tag | granted_user | missing-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "POST /api/ai/auto-tag | granted_user | no-default-role-kb": {
     "body": {
       "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
     },
@@ -2650,6 +3109,12 @@
     },
     "status": 403
   },
+  "POST /api/ai/chat | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
   "POST /api/ai/chat | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
@@ -2668,6 +3133,12 @@
     },
     "status": 403
   },
+  "POST /api/ai/suggest-links | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
   "POST /api/ai/suggest-links | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
@@ -2681,6 +3152,12 @@
     "status": 403
   },
   "POST /api/ai/summarize | granted_user | missing-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "POST /api/ai/summarize | granted_user | no-default-role-kb": {
     "body": {
       "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
     },
@@ -2707,6 +3184,15 @@
     },
     "status": 404
   },
+  "POST /api/clip | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "POST /api/clip | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions on KB 'private-kb': requires 'write' tier"
@@ -2728,6 +3214,15 @@
     },
     "status": 404
   },
+  "POST /api/collections | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "POST /api/collections | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions on KB 'private-kb': requires 'write' tier"
@@ -2745,6 +3240,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "POST /api/collections/query-preview | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -2796,6 +3300,15 @@
     },
     "status": 404
   },
+  "POST /api/daily/{date_str} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "POST /api/daily/{date_str} | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions on KB 'private-kb': requires 'write' tier"
@@ -2817,6 +3330,15 @@
     },
     "status": 404
   },
+  "POST /api/entries | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "POST /api/entries | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions on KB 'private-kb': requires 'write' tier"
@@ -2830,6 +3352,14 @@
     "status": 403
   },
   "POST /api/entries/batch | granted_user | missing-kb": {
+    "body": {
+      "entries": "<ENUMERATION_CONTENT>",
+      "found": "<ENUMERATION_CONTENT>",
+      "not_found": "<ENUMERATION_CONTENT>"
+    },
+    "status": 200
+  },
+  "POST /api/entries/batch | granted_user | no-default-role-kb": {
     "body": {
       "entries": "<ENUMERATION_CONTENT>",
       "found": "<ENUMERATION_CONTENT>",
@@ -2862,6 +3392,15 @@
     },
     "status": 404
   },
+  "POST /api/entries/import | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "POST /api/entries/import | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions on KB 'private-kb': requires 'write' tier"
@@ -2879,6 +3418,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "POST /api/entries/resolve-batch | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -2905,6 +3453,12 @@
     },
     "status": 403
   },
+  "POST /api/kbs/{kb_name}/export | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
   "POST /api/kbs/{kb_name}/export | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
@@ -2922,6 +3476,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "POST /api/kbs/{kb_name}/templates/{template_name}/render | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404
@@ -2944,7 +3507,37 @@
     },
     "status": 404
   },
+  "POST /api/kbs/{name}/permissions | granted_user | missing-kb": {
+    "body": {
+      "detail": "Admin access required for this KB"
+    },
+    "status": 403
+  },
+  "POST /api/kbs/{name}/permissions | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": "Admin access required for this KB"
+    },
+    "status": 403
+  },
+  "POST /api/kbs/{name}/permissions | granted_user | private-kb": {
+    "body": {
+      "detail": "Admin access required for this KB"
+    },
+    "status": 403
+  },
+  "POST /api/kbs/{name}/permissions | granted_user | readable-kb": {
+    "body": {
+      "detail": "Admin access required for this KB"
+    },
+    "status": 403
+  },
   "POST /api/repos/{name:path}/pr | granted_user | missing-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "POST /api/repos/{name:path}/pr | granted_user | no-default-role-kb": {
     "body": {
       "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
     },
@@ -2963,6 +3556,12 @@
     "status": 403
   },
   "POST /api/repos/{name:path}/sync | granted_user | missing-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "POST /api/repos/{name:path}/sync | granted_user | no-default-role-kb": {
     "body": {
       "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
     },
@@ -2989,6 +3588,15 @@
     },
     "status": 404
   },
+  "POST /api/reviews | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "POST /api/reviews | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions on KB 'private-kb': requires 'write' tier"
@@ -3002,6 +3610,12 @@
     "status": 403
   },
   "POST /api/starred | granted_user | missing-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "POST /api/starred | granted_user | no-default-role-kb": {
     "body": {
       "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
     },
@@ -3028,6 +3642,15 @@
     },
     "status": 404
   },
+  "POST /api/tasks/{task_id}/claim | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
+      }
+    },
+    "status": 404
+  },
   "POST /api/tasks/{task_id}/claim | granted_user | private-kb": {
     "body": {
       "detail": "Insufficient permissions on KB 'private-kb': requires 'write' tier"
@@ -3045,6 +3668,15 @@
       "detail": {
         "code": "KB_NOT_FOUND",
         "message": "KB 'missing-kb' not found"
+      }
+    },
+    "status": 404
+  },
+  "PUT /api/entries/{entry_id} | granted_user | no-default-role-kb": {
+    "body": {
+      "detail": {
+        "code": "KB_NOT_FOUND",
+        "message": "KB 'no-default-role-kb' not found"
       }
     },
     "status": 404

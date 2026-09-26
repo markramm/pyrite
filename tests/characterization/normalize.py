@@ -60,15 +60,23 @@ GENERATED_ID_KEYS = {"job_id", "token", "session_token", "commit_hash"}
 # rounded, so the golden diff never has to be re-tuned for a rounding change.
 VOLATILE_SCORE_KEYS = {"rank"}
 
-# `GET /api/kbs`'s per-KB `entries`/`indexed`/`last_indexed`/`source` fields
-# specifically -- not an authorization signal at all, only a content one.
-# Kept as its own small, always-applied rule (distinct from the REST
-# enumeration-sensitive table below, which is keyed by route because most
-# routes' content shape is route-specific) because these four leaf names
-# appear inside `GET /api/kbs`'s nested per-KB dicts, and REST_ENUMERATION_
-# SENSITIVE_FIELDS below already handles `GET /api/kbs`'s top-level `total`.
-VOLATILE_CONTENT_KEYS = {"entries", "indexed", "last_indexed", "source"}
-
+# There used to be a global, always-applied, bare-key-name rule here
+# (`VOLATILE_CONTENT_KEYS`, covering `entries`/`indexed`/`last_indexed`, and
+# before blocker 6 also `source`) -- removed because it was itself an
+# instance of exactly the bug it was meant to fix: `normalize()` runs on
+# every body before the enumeration-aware projection below ever sees it, so
+# a key literally named `entries` ANYWHERE (which is most listings:
+# `kb_list_entries`, `GET /api/entries`, `kb_find_by_*`, ...) had its real
+# content replaced by one fixed string wholesale -- a private KB's row
+# leaking into a listing was invisible, the same failure mode as blocker 2's
+# `knowledge_bases` bug, just one level further down (`normalize_mcp_result`/
+# `normalize_rest_body` called this global `normalize()` first, so by the
+# time `_project_identity_only` ran on the listed field, its list had
+# already been replaced by the string "<CONTENT_STATE>"). There is no
+# global, key-name-only content rule left: `GET /api/kbs`'s and `GET
+# /api/kbs/{kb_name}`'s specific `entries`/`indexed`/`last_indexed` need is
+# handled per-route by `REST_ENUMERATION_SENSITIVE_FIELDS` below, scoped to
+# exactly those routes' own shape.
 NORMALISED_TIMESTAMP = "<TIMESTAMP>"
 NORMALISED_ID = "<GENERATED_ID>"
 NORMALISED_PATH = "<TMPDIR>"
@@ -78,7 +86,17 @@ NORMALISED_CONTENT = "<CONTENT_STATE>"
 
 
 def normalize(value: Any, *, tmpdir: str) -> Any:
-    """Recursively normalise `value` (a JSON-shaped dict/list/str/scalar)."""
+    """Recursively normalise `value` (a JSON-shaped dict/list/str/scalar).
+
+    No key-name-only rule touches a list or a nested content field here --
+    see the module docstring and the note above `NORMALISED_TIMESTAMP` for
+    why that used to exist and why it was actively dangerous. Only scalar,
+    unambiguously-volatile fields (a generated id/token by exact key name, a
+    search rank score) are touched at this level; everything list-shaped
+    that needs projecting goes through `normalize_mcp_result`/
+    `normalize_rest_body`'s enumeration-aware path instead, which projects
+    BEFORE calling this function, not after.
+    """
     if isinstance(value, dict):
         out = {}
         for k, v in value.items():
@@ -86,8 +104,6 @@ def normalize(value: Any, *, tmpdir: str) -> Any:
                 out[k] = NORMALISED_ID
             elif k in VOLATILE_SCORE_KEYS and isinstance(v, int | float):
                 out[k] = NORMALISED_SCORE
-            elif k in VOLATILE_CONTENT_KEYS:
-                out[k] = NORMALISED_CONTENT
             else:
                 out[k] = normalize(v, tmpdir=tmpdir)
         return out
@@ -114,20 +130,23 @@ NORMALISATION_LIST = [
     "varies in its low-order digits between index builds -> '<SCORE>'",
     "QA auto-assessment ids: any 'qa-<id>-<13-digit ms timestamp>' substring "
     "(QAService's auto-assessment id, minted fresh on every create) -> 'qa-<GENERATED_ID>'",
-    "content state: the value of an 'entries', 'indexed', 'last_indexed' or 'source' key "
+    "content state: the value of an 'entries', 'indexed' or 'last_indexed' key "
     "(how much content a KB holds right now, not an authorization signal) -> "
     "'<CONTENT_STATE>' -- these change with every write any case in this shared-world "
-    "suite makes, not only the case whose golden shows them",
-    "REST enumeration content: for a route in REST_ENUMERATION_SENSITIVE_FIELDS (a "
-    "count/list/search/validate/health-style route whose success body enumerates "
-    "'everything in a KB' rather than naming one row), its listed top-level fields -> "
-    "'<ENUMERATION_CONTENT>' on a success body only -- a refusal's detail/code/message "
-    "is never touched. Mirrors normalize_mcp_result's ENUMERATION_SENSITIVE_FIELDS for MCP.",
-    "MCP enumeration content: for a tool in ENUMERATION_SENSITIVE_FIELDS (a "
-    "count/list/search-style tool whose success body enumerates 'everything in a KB' "
-    "rather than one named row/entry), its listed top-level fields -> "
-    "'<ENUMERATION_CONTENT>' on a success body only -- a refusal's error/error_code/"
-    "retryable/suggestion envelope is never touched.",
+    "suite makes, not only the case whose golden shows them. 'source' is deliberately "
+    "NOT normalised here (#476 blocker 6): it is the exact field #491's bug corrupts.",
+    "REST/MCP enumeration fields: for a route/tool in "
+    "REST_ENUMERATION_SENSITIVE_FIELDS/ENUMERATION_SENSITIVE_FIELDS (a "
+    "count/list/search/validate/health-style route or tool whose success body "
+    "enumerates 'everything in a KB' rather than naming one row), each listed "
+    "top-level field is PROJECTED, not blanked wholesale (#476 blocker 2): a list of "
+    "KB dicts keeps only a sorted list of {'name': ...}; a list of entry/row dicts "
+    "keeps only a sorted list of {'kb_name': ..., 'id': ...}; anything else (a bare "
+    "count, or a list shape neither of those matches) -> '<ENUMERATION_CONTENT>'. "
+    "Applied only to a success body -- a refusal's detail/code/message (REST) or "
+    "error/error_code/retryable/suggestion (MCP) is never touched. This is what "
+    "still catches e.g. MCP kb_list or REST GET /api/kbs leaking a private KB's "
+    "name into the list, which wholesale blanking could not.",
     "a review row's auto-increment id: POST /api/reviews's 'id' field (a DB primary "
     "key, not a caller-chosen or world-fixture id) -> '<ENUMERATION_CONTENT>', since its "
     "value depends on how many other reviews any other case already created in the "
@@ -148,23 +167,86 @@ NORMALISATION_LIST = [
 # and each one also triggers QAService's auto-assessment side effect (another
 # new row). An enumeration-sensitive tool's result is therefore a function of
 # *which other cases already ran in the same process* -- not just of
-# (tool, principal, kb_state) -- which is exactly wrong for a golden: under
-# pytest-xdist, each parametrized principal gets its own worker process with
-# its own freshly-built world, so the same call sees a different amount of
-# accumulated content depending on process/worker layout, not on anything
-# this harness is meant to characterize.
+# (tool, principal, kb_state) -- so its COUNT and the exact CONTENT of any
+# volatile per-item field (a timestamp, a rank, an auto-assessment id) cannot
+# be pinned byte for byte.
 #
-# The fix is not to prevent the side effects (every write tool's job IS to
-# add content) but to stop pinning their downstream *count/list contents*,
-# which were never the point -- only whether the call was AUTHORIZED (let
-# through with a normal success envelope vs refused with a given error code)
-# is. So every enumeration-sensitive tool's listed fields are replaced with a
-# fixed marker before a golden is compared or recorded; the refusal shape
-# (`error`/`error_code`/`retryable`/`suggestion`) is untouched and still fully
-# pinned, since ENUMERATION_SENSITIVE_FIELDS is only consulted on a result
-# that has none of those keys (see `normalize_mcp_result`).
+# What CAN and MUST be pinned: **which rows a caller can see at all** -- the
+# whole reason this harness exists. Blanking an entire list field to one
+# fixed marker (what this table used to do) makes that invisible: MCP
+# `kb_list` leaking a private KB's name into the response passed every test,
+# because `normalize_mcp_result` replaced the whole `knowledge_bases` list --
+# leaked or not -- with the same `<ENUMERATION_CONTENT>` string (#476 blocker
+# 2, cold review). So instead of blanking a listed field wholesale, this
+# module PROJECTS it down to identity only: a sorted list of KB names (for a
+# list of KB dicts), or a sorted list of `(kb_name, id)` pairs (for a list of
+# entry/row dicts) -- keeping exactly the two things that answer "did this
+# caller see something they should not have" -- and drops every other,
+# volatile per-item key. A field that is a bare int/float count (not a list)
+# is still blanked, since a count is real content-state noise with no
+# identity of its own to preserve.
 NORMALISED_ENUMERATION_CONTENT = "<ENUMERATION_CONTENT>"
 
+# Per-item keys that identify a KB in a listing (kept, sorted by, never
+# blanked) vs. an entry/row (kept as (kb_name, id), sorted, never blanked).
+_KB_IDENTITY_KEYS = ("name",)
+_ENTRY_IDENTITY_KEYS = ("kb_name", "id")
+
+
+def _project_identity_only(items: list) -> list | None:
+    """If `items` is a list of dicts that share an identity shape (every
+    item has a `name` key -- a KB listing -- or every item has `kb_name` --
+    an entry/row listing), return the sorted list of distinct KB NAMES
+    present, dropping every row's own id. Returns None if `items` isn't
+    shaped like either (a list of scalars, or dicts with neither shape), so
+    the caller falls back to blanking it wholesale -- still better than
+    silently keeping volatile junk, but this is the common case.
+
+    Row-level identity (the individual `id` inside a KB) is deliberately
+    NOT kept, unlike an earlier version of this function: the shared,
+    session-scoped world (`world.py`'s own perf tradeoff) means every
+    write-tool case across every principal keeps adding rows to the same
+    handful of fixture KBs for the rest of the process, so the exact ROW
+    SET inside an already-authorized KB is accumulated, order-dependent
+    content-state -- not an authorization signal -- and pinning it byte for
+    byte reintroduced the exact cross-worker nondeterminism this harness
+    spent most of its build eliminating (found live: `kb_discover_neighbors`
+    and `GET /api/entries` failing under `-n4` with a different row count
+    per worker, while the SET OF KBS involved was always correct). Which
+    KBS a caller's listing touches AT ALL is the real scoping question --
+    exactly what a private KB's row leaking into a caller's results would
+    change -- and that stays fully deterministic regardless of how many
+    disposable rows accumulate inside a KB the caller may already see.
+    """
+    if not items or not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
+        # An empty list is deliberately NOT special-cased to "stays []":
+        # from an empty list ALONE there is no way to tell "this would have
+        # been a KB-name/entry-id list with zero items right now" apart from
+        # "this is a bare-scalar aggregate list (kb_orient's top_tags,
+        # ['qa', 'qa-warn']) that happens to blank to the same marker either
+        # way" -- and the two must not disagree on whether emptiness itself
+        # gets projected or blanked, or the SAME field flips between a
+        # `[]` result and a `<ENUMERATION_CONTENT>` result purely on how much
+        # unrelated content another case already accumulated in the shared
+        # world (found live: kb_orient's `top_tags` and `GET /api/collections`
+        # both failing under `-n4`, alternating between the two shapes for
+        # the exact same, correctly-scoped call). Blanking every case
+        # uniformly costs the "definitely zero, not merely blanked" distinction
+        # but keeps the golden a pure function of (tool/route, principal,
+        # kb_state) again, which is the harder requirement.
+        return None
+    if all("kb_name" in i for i in items):
+        return sorted({i["kb_name"] for i in items})
+    if all("name" in i for i in items):
+        return sorted({i["name"] for i in items})
+    return None
+
+
+# Tools whose success body has at least one enumeration-sensitive field.
+# Each field is either a list (projected to identity-only by
+# `_project_identity_only`, falling back to `NORMALISED_ENUMERATION_CONTENT`
+# if its shape isn't recognised) or a scalar count/aggregate (always blanked
+# -- it carries no identity of its own).
 ENUMERATION_SENSITIVE_FIELDS: dict[str, tuple[str, ...]] = {
     "cascade_actors": ("count", "actors"),
     "cascade_capture_lanes": ("count", "lanes"),
@@ -237,23 +319,109 @@ ENUMERATION_SENSITIVE_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 
-def normalize_mcp_result(tool_name: str, result: Any, *, tmpdir: str) -> Any:
-    """`normalize(result, ...)`, plus: for a tool in
-    `ENUMERATION_SENSITIVE_FIELDS`, blank its listed top-level fields to
-    `NORMALISED_ENUMERATION_CONTENT` -- but only on a SUCCESS body. A refusal
-    (`_dispatch_tool`'s `error`/`error_code`/`retryable`/`suggestion`
-    envelope) never has any of those field names, so this only ever touches
-    a call that was let through -- the authorization outcome itself (was
-    this call allowed, and with what shape) is exactly what stays pinned.
+# Tools/routes whose enumeration field gets real KB-name identity
+# projection (`_project_identity_only`), not wholesale blanking. Narrow and
+# explicit on purpose: the main per-KB matrix (`test_rest_matrix.py`/
+# `test_mcp_matrix.py`) targets ONE named KB per case, so its filtered/
+# derived listings (`kb_find_by_status`, `kb_batch_suggest`'s pairs,
+# `kb_tags`, `task_list`, ...) have a PRESENCE, not just a count, that
+# depends on whether some OTHER write-tool case already created matching
+# content in the SAME shared KB -- found live: `kb_find_by_status` flipping
+# between `['readable-kb']` and `[]` across xdist runs, an empty-vs-nonempty
+# flip with no authorization meaning, not a stable identity to pin. Only the
+# CROSS-KB "which KBs do I see at all" tools/routes are stable regardless of
+# per-KB content noise (every KB with ANY content appears, so filtered-away
+# noise doesn't change which KBs show up) -- those get the real projection;
+# everything else in ENUMERATION_SENSITIVE_FIELDS/REST_ENUMERATION_SENSITIVE_
+# FIELDS falls back to the fixed marker, same as before blocker 2's fix,
+# because for a single named KB, presence-of-content is exactly the kind of
+# accumulated, order-dependent state this harness normalises away elsewhere.
+# `kb_search`/`kb_list_entries` (MCP) and `GET /api/search`/`GET
+# `kb_list`/`GET /api/kbs` always get real KB-name identity projection --
+# they NEVER take a target KB argument at all (there is no "per-KB" call
+# shape for them to be unstable in), so they are unconditionally safe.
+# Every OTHER enumeration-sensitive tool/route (`kb_search`,
+# `kb_list_entries`, `GET /api/search`, `GET /api/entries`, ...) is only
+# safe to identity-project when the CALL ITSELF is unscoped (no KB named,
+# so it spans every KB the caller may read) -- called against one named
+# target KB (what the main per-KB matrix, `test_rest_matrix.py`/
+# `test_mcp_matrix.py`, always does), the same field's PRESENCE, not just
+# its count, depends on whether some other write-tool case already put
+# matching content in that shared KB, which is accumulated, order-dependent
+# noise, not an authorization signal (found live: `kb_find_by_status`,
+# `kb_tags`, `GET /api/entries` itself all flipping between an empty and a
+# non-empty projection across xdist runs for the SAME, correctly-scoped
+# call). So `normalize_mcp_result`/`normalize_rest_body` take an explicit
+# `unscoped` flag from the CALLER (who knows which shape it used, since the
+# body alone cannot always tell the two apart) rather than inferring it from
+# the tool/route name -- `tests/characterization/test_unscoped_calls.py`
+# passes `unscoped=True`; the main matrix leaves it at its default, False.
+_ALWAYS_IDENTITY_PROJECTED_MCP_TOOLS = {"kb_list"}
+_ALWAYS_IDENTITY_PROJECTED_REST_ROUTES = {("GET", "/api/kbs")}
+
+
+def _blank_enumeration_field(value: Any, *, project_identity: bool) -> Any:
+    """A list field is projected to identity-only (sorted KB names) when
+    `project_identity` is True; anything else (a bare count, an
+    unrecognised list shape, or `project_identity=False`) is blanked to the
+    fixed marker."""
+    if project_identity and isinstance(value, list):
+        projected = _project_identity_only(value)
+        if projected is not None:
+            return projected
+    return NORMALISED_ENUMERATION_CONTENT
+
+
+def _project_enumeration_fields(
+    body: Any, fields: tuple[str, ...] | None, *, project_identity: bool
+) -> Any:
+    """Replace each of `fields` (a top-level key of `body`, if `body` is a
+    dict) with its identity-only projection or blanked marker -- run on the
+    RAW body, before `normalize()` ever sees it. Order matters (#476 blocker
+    2's second bug, found fixing the first): `normalize()` used to run
+    first, so by the time this projection ran, a field whose real value was
+    a private KB's row had often already been destroyed by a global,
+    key-name-only rule (now removed). Projecting first means this function
+    always sees the real list the handler returned."""
+    if not fields or not isinstance(body, dict):
+        return body
+    out = dict(body)
+    for field in fields:
+        if field in out:
+            out[field] = _blank_enumeration_field(out[field], project_identity=project_identity)
+    return out
+
+
+def normalize_mcp_result(
+    tool_name: str, result: Any, *, tmpdir: str, unscoped: bool = False
+) -> Any:
+    """For a tool in `ENUMERATION_SENSITIVE_FIELDS`, each listed top-level
+    field is projected to identity-only (a list) or blanked (a scalar
+    count) FIRST, against the raw result -- then `normalize()` runs over
+    what's left (timestamps, generated ids, paths, scores). Projecting
+    first is required, not cosmetic: `normalize()` has no rule left that
+    would destroy a list, but the ORDER is still the fix for #476 blocker
+    2's root cause, and future-proofs against a new global rule being added
+    to `normalize()` without checking whether it runs before or after this.
+
+    `unscoped=True` (pass this only from `test_unscoped_calls.py`, whose
+    calls never name a target KB) additionally identity-projects every
+    OTHER enumeration field, not just `kb_list`'s -- see
+    `_ALWAYS_IDENTITY_PROJECTED_MCP_TOOLS`'s comment for why this must be
+    the caller's explicit choice, not inferred from the tool name.
+
+    Only touches a SUCCESS body: a refusal (`_dispatch_tool`'s
+    `error`/`error_code`/`retryable`/`suggestion` envelope) never has any of
+    the enumeration-sensitive field names, so the authorization outcome
+    (was this call allowed, and *which rows* it was allowed to see) is
+    exactly what stays pinned either way.
     """
-    normalised = normalize(result, tmpdir=tmpdir)
     fields = ENUMERATION_SENSITIVE_FIELDS.get(tool_name)
-    if fields and isinstance(normalised, dict) and "error" not in normalised:
-        normalised = dict(normalised)
-        for field in fields:
-            if field in normalised:
-                normalised[field] = NORMALISED_ENUMERATION_CONTENT
-    return normalised
+    if fields and isinstance(result, dict) and "error" in result:
+        fields = None  # a refusal envelope: nothing to project
+    project_identity = unscoped or tool_name in _ALWAYS_IDENTITY_PROJECTED_MCP_TOOLS
+    projected = _project_enumeration_fields(result, fields, project_identity=project_identity)
+    return normalize(projected, tmpdir=tmpdir)
 
 
 # -- REST enumeration-sensitive routes ---------------------------------------
@@ -290,8 +458,18 @@ REST_ENUMERATION_SENSITIVE_FIELDS: dict[tuple[str, str], tuple[str, ...]] = {
     ("GET", "/api/entries/{entry_id}/blocks"): ("blocks", "total"),
     ("GET", "/api/entries/{entry_id}/versions"): ("count", "versions"),
     ("GET", "/api/graph"): ("nodes", "edges"),
-    ("GET", "/api/kbs"): ("total",),  # per-KB entries/indexed/... via VOLATILE_CONTENT_KEYS
-    ("GET", "/api/kbs/{kb_name}"): ("entries", "indexed", "last_indexed", "source"),
+    # "total" was wrong here -- this route's top-level list field is "kbs",
+    # not "total" (which doesn't exist in its body at all); found while
+    # fixing #476 blocker 2. "kbs" is now projected to identity-only (sorted
+    # KB names) by _project_identity_only, so a private KB's NAME leaking
+    # into this list still shows up as a mismatch -- VOLATILE_CONTENT_KEYS
+    # alone (entries/indexed/last_indexed/source) never caught that, since
+    # it blanks only those four keys' VALUES, not whether an extra KB dict
+    # is present in the list at all.
+    ("GET", "/api/kbs"): ("kbs",),
+    # NOT "source" -- see VOLATILE_CONTENT_KEYS's comment (#476 blocker 6):
+    # source is exactly what #491's bug corrupts, and must stay pinned.
+    ("GET", "/api/kbs/{kb_name}"): ("entries", "indexed", "last_indexed"),
     ("GET", "/api/kbs/{kb_name}/changes"): ("changes", "summary"),
     ("GET", "/api/kbs/{kb_name}/health"): ("entry_count", "file_count", "healthy", "last_indexed"),
     ("GET", "/api/kbs/{kb_name}/orient"): ("recent", "top_tags", "total_entries", "types"),
@@ -328,26 +506,75 @@ REST_ENUMERATION_SENSITIVE_FIELDS: dict[tuple[str, str], tuple[str, ...]] = {
 }
 
 
-def normalize_rest_body(method: str, path: str, body: Any, *, tmpdir: str) -> Any:
-    """`normalize(body, ...)`, plus: for `(method, path)` in
-    `REST_ENUMERATION_SENSITIVE_FIELDS`, blank its listed top-level fields to
-    `NORMALISED_REST_ENUMERATION_CONTENT` -- but only on a body that is not a
-    refusal shape. A refusal is `{"detail": ...}` (`HTTPException`) or
-    `{"code", "message"}` (the central `PyriteError` handler); neither ever
-    carries any of the enumeration-sensitive field names above (they are all
-    success-envelope fields), so checking for `"detail"`/`"code"` at the top
-    level is enough to tell the two apart without a second lookup table.
+def _kbs_route_identity_only(kbs: Any) -> Any:
+    """`GET /api/kbs`'s `kbs` field, projected: keep each item's `name`
+    (identity -- a private KB appearing here at all is the leak this whole
+    harness exists to catch), blank its volatile per-item fields
+    (`entries`, `indexed`, `last_indexed`), drop the rest (`path`, already
+    `<TMPDIR>`-normalised by `normalize()` but still noisy; `description`,
+    `read_only`, `shortname`, `default_role` are stable config, kept)."""
+    if not isinstance(kbs, list) or not all(isinstance(k, dict) for k in kbs):
+        return NORMALISED_ENUMERATION_CONTENT
+    return sorted(
+        (
+            {
+                k: (NORMALISED_CONTENT if k in ("entries", "indexed", "last_indexed") else v)
+                for k, v in kb.items()
+                if k != "path"
+            }
+            for kb in kbs
+        ),
+        key=lambda kb: kb.get("name", ""),
+    )
+
+
+def _blank_rest_field(
+    method: str, path: str, field: str, value: Any, *, project_identity: bool
+) -> Any:
+    if (method, path) == ("GET", "/api/kbs") and field == "kbs":
+        return _kbs_route_identity_only(value)
+    return _blank_enumeration_field(value, project_identity=project_identity)
+
+
+def normalize_rest_body(
+    method: str, path: str, body: Any, *, tmpdir: str, unscoped: bool = False
+) -> Any:
+    """For `(method, path)` in `REST_ENUMERATION_SENSITIVE_FIELDS`, each
+    listed top-level field is projected to identity-only (a list of KB
+    names) or blanked (a scalar count) FIRST, against the raw body -- then
+    `normalize()` runs over what's left (timestamps, generated ids, paths,
+    scores). Projecting first is the fix for #476 blocker 2: `normalize()`
+    used to run first and destroy a list field via a global, key-name-only
+    rule before this projection ever saw it (see the module and
+    `normalize()` docstrings).
+
+    `unscoped=True` (pass this only from `test_unscoped_calls.py`, whose
+    calls never name a target KB) additionally identity-projects every
+    OTHER enumeration field, not just `GET /api/kbs`'s -- see
+    `_ALWAYS_IDENTITY_PROJECTED_REST_ROUTES`'s comment for why this must be
+    the caller's explicit choice, not inferred from the route.
+
+    Only touches a body that is not a refusal shape. A refusal is
+    `{"detail": ...}` (`HTTPException`) or `{"code", "message"}` (the
+    central `PyriteError` handler); neither ever carries any of the
+    enumeration-sensitive field names above (they are all success-envelope
+    fields), so checking for `"detail"`/`"code"` at the top level is enough
+    to tell the two apart without a second lookup table.
     """
-    normalised = normalize(body, tmpdir=tmpdir)
     fields = REST_ENUMERATION_SENSITIVE_FIELDS.get((method, path))
+    project_identity = unscoped or (method, path) in _ALWAYS_IDENTITY_PROJECTED_REST_ROUTES
     if (
         fields
-        and isinstance(normalised, dict)
-        and "detail" not in normalised
-        and not ("code" in normalised and "message" in normalised)
+        and isinstance(body, dict)
+        and "detail" not in body
+        and not ("code" in body and "message" in body)
     ):
-        normalised = dict(normalised)
+        projected = dict(body)
         for field in fields:
-            if field in normalised:
-                normalised[field] = NORMALISED_REST_ENUMERATION_CONTENT
-    return normalised
+            if field in projected:
+                projected[field] = _blank_rest_field(
+                    method, path, field, projected[field], project_identity=project_identity
+                )
+    else:
+        projected = body
+    return normalize(projected, tmpdir=tmpdir)

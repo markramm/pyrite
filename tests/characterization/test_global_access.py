@@ -1,19 +1,20 @@
 """The one behaviour the backlog item's "self-registered user with and
 without global access" principal pair actually distinguishes (ADR-0037
-theme 0).
+theme 0, #476 blocker 5).
 
-Not a golden: `PRIVATE` (`default_role="none"`) is closed to global and
-local alike (`AuthService.get_kb_role`'s docstring: "If KB is private
+`NO_DEFAULT_ROLE` is now one of the four states in `test_rest_matrix.py`/
+`test_mcp_matrix.py`'s main KB axis (`KB_STATES = (READABLE, PRIVATE,
+MISSING, NO_DEFAULT_ROLE)`), so `global_access=1` vs `0` IS pinned on every
+route and tool there, for every principal, not only here. What THIS file
+adds on top: a short, human-readable, always-run assertion of the exact
+mechanism -- `PRIVATE` (`default_role="none"`) is closed to global and local
+alike (`AuthService.get_kb_role`'s docstring: "If KB is private
 (default_role='none'), deny unless explicit grant" -- unconditional, no
-`global_access` check at all), so the seven-principal x three-KB-state
-matrix in `test_rest_matrix.py`/`test_mcp_matrix.py` cannot exercise the
-one place `global_access` actually changes the answer: a KB with **no**
-`default_role` at all, where a global user's role falls back to covering it
-and a local (self-registered, `global_access=False`) user's does not
-(`world.NO_DEFAULT_ROLE`, outside the main {readable, private, missing}
-axis for exactly this reason -- see `world.py`'s module docstring). This is
-a small, direct, always-run behavioural assertion instead of a golden,
-because there is exactly one fact to pin, not a matrix.
+`global_access` check at all), so it is specifically `NO_DEFAULT_ROLE`
+(`default_role` unset entirely) where a global user's role falls back to
+covering a KB and a local (self-registered, `global_access=False`) user's
+does not. A small, direct pair of cases instead of relying on a reviewer to
+notice this fact inside the much larger matrix's goldens.
 """
 
 from __future__ import annotations

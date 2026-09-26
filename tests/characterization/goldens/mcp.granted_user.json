@@ -4,6 +4,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "cascade_actors | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "cascade_actors | granted_user | private-kb": {
     "actors": "<ENUMERATION_CONTENT>",
     "count": "<ENUMERATION_CONTENT>"
@@ -17,6 +22,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "cascade_capture_lanes | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "cascade_capture_lanes | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "lanes": "<ENUMERATION_CONTENT>"
@@ -27,6 +37,11 @@
   },
   "cascade_network | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "cascade_network | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -65,6 +80,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "cascade_timeline | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "cascade_timeline | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "events": "<ENUMERATION_CONTENT>"
@@ -75,6 +95,11 @@
   },
   "investigation_bulk_edges | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_bulk_edges | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -93,6 +118,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_claims | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_claims | granted_user | private-kb": {
     "claims": "<ENUMERATION_CONTENT>",
     "count": "<ENUMERATION_CONTENT>",
@@ -105,6 +135,11 @@
   },
   "investigation_create_claim | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_create_claim | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -123,6 +158,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_create_entity | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_create_entity | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -135,6 +175,11 @@
   },
   "investigation_create_event | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_create_event | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -153,6 +198,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_entities | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_entities | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "entities": "<ENUMERATION_CONTENT>",
@@ -168,6 +218,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_evidence_chain | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_evidence_chain | granted_user | private-kb": {
     "error": "Claim 'characterization-placeholder-id-investigation_evidence_chain-granted_user-private-kb' not found"
   },
@@ -176,6 +231,11 @@
   },
   "investigation_export_pack | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_export_pack | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -192,6 +252,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_find_duplicates | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_find_duplicates | granted_user | private-kb": {
     "duplicates": "<ENUMERATION_CONTENT>"
   },
@@ -203,6 +268,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_ftm_export | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_ftm_export | granted_user | private-kb": {
     "entities": "<ENUMERATION_CONTENT>"
   },
@@ -211,6 +281,11 @@
   },
   "investigation_ftm_import | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_ftm_import | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -229,6 +304,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_log_source | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_log_source | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -241,6 +321,11 @@
   },
   "investigation_money_flow | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_money_flow | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -266,6 +351,11 @@
   },
   "investigation_network | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_network | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -304,6 +394,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_ownership_chain | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_ownership_chain | granted_user | private-kb": {
     "beneficial_owners": [],
     "chains": [],
@@ -327,6 +422,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_promote_claim | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_promote_claim | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -339,6 +439,11 @@
   },
   "investigation_qa_report | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_qa_report | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -359,6 +464,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_search_all | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_search_all | granted_user | private-kb": {
     "groups": "<ENUMERATION_CONTENT>",
     "query": "zebra",
@@ -371,6 +481,11 @@
   },
   "investigation_sources | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_sources | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -389,6 +504,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_start | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_start | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -401,6 +521,11 @@
   },
   "investigation_status | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_status | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -427,6 +552,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "investigation_timeline | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "investigation_timeline | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "events": "<ENUMERATION_CONTENT>",
@@ -439,6 +569,11 @@
   },
   "kb_backlinks | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_backlinks | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -455,7 +590,7 @@
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_batch_read | granted_user | missing-kb": {
-    "entries": "<CONTENT_STATE>",
+    "entries": [],
     "found": 0,
     "not_found": [
       {
@@ -464,18 +599,95 @@
       }
     ]
   },
+  "kb_batch_read | granted_user | no-default-role-kb": {
+    "entries": [],
+    "found": 0,
+    "not_found": [
+      {
+        "entry_id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      }
+    ]
+  },
   "kb_batch_read | granted_user | private-kb": {
-    "entries": "<CONTENT_STATE>",
+    "entries": [
+      {
+        "assigned_at": null,
+        "assignee": null,
+        "body": "a zebra behind the wall",
+        "coordinates": null,
+        "created_at": "<TIMESTAMP>",
+        "created_by": null,
+        "date": null,
+        "due_date": null,
+        "end_date": null,
+        "entry_type": "note",
+        "file_path": "<TMPDIR>/private-kb/notes/private-note.md",
+        "id": "private-note",
+        "importance": 5,
+        "indexed_at": "<TIMESTAMP>",
+        "kb_name": "private-kb",
+        "lifecycle": "active",
+        "links": [],
+        "location": null,
+        "metadata": {},
+        "modified_by": null,
+        "priority": null,
+        "sources": [],
+        "start_date": null,
+        "status": null,
+        "summary": "",
+        "tags": [],
+        "title": "Private note",
+        "updated_at": "<TIMESTAMP>"
+      }
+    ],
     "found": 1,
     "not_found": []
   },
   "kb_batch_read | granted_user | readable-kb": {
-    "entries": "<CONTENT_STATE>",
+    "entries": [
+      {
+        "assigned_at": null,
+        "assignee": null,
+        "body": "a zebra in the open",
+        "coordinates": null,
+        "created_at": "<TIMESTAMP>",
+        "created_by": null,
+        "date": null,
+        "due_date": null,
+        "end_date": null,
+        "entry_type": "note",
+        "file_path": "<TMPDIR>/readable-kb/notes/readable-note.md",
+        "id": "readable-note",
+        "importance": 5,
+        "indexed_at": "<TIMESTAMP>",
+        "kb_name": "readable-kb",
+        "lifecycle": "active",
+        "links": [],
+        "location": null,
+        "metadata": {},
+        "modified_by": null,
+        "priority": null,
+        "sources": [],
+        "start_date": null,
+        "status": null,
+        "summary": "",
+        "tags": [],
+        "title": "Readable note",
+        "updated_at": "<TIMESTAMP>"
+      }
+    ],
     "found": 1,
     "not_found": []
   },
   "kb_batch_suggest | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_batch_suggest | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -496,6 +708,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_bulk_create | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_bulk_create | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -508,6 +725,11 @@
   },
   "kb_commit | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_commit | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -526,6 +748,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_create | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_create | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -541,6 +768,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_delete | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_delete | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -553,6 +785,11 @@
   },
   "kb_discover_neighbors | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_discover_neighbors | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -573,6 +810,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_find_by_assignee | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_find_by_assignee | granted_user | private-kb": {
     "assignee": "characterization-assignee",
     "count": "<ENUMERATION_CONTENT>",
@@ -585,6 +827,11 @@
   },
   "kb_find_by_location | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_find_by_location | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -603,6 +850,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_find_by_status | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_find_by_status | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "entries": "<ENUMERATION_CONTENT>",
@@ -618,6 +870,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_find_overdue | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_find_overdue | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "entries": "<ENUMERATION_CONTENT>"
@@ -628,6 +885,11 @@
   },
   "kb_get | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_get | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -704,6 +966,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_index_sync | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_index_sync | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -719,6 +986,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_link | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_link | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -730,16 +1002,40 @@
     "retryable": false
   },
   "kb_list | granted_user | missing-kb": {
-    "knowledge_bases": "<ENUMERATION_CONTENT>"
+    "knowledge_bases": [
+      "private-kb",
+      "read-only-kb",
+      "readable-kb"
+    ]
+  },
+  "kb_list | granted_user | no-default-role-kb": {
+    "knowledge_bases": [
+      "private-kb",
+      "read-only-kb",
+      "readable-kb"
+    ]
   },
   "kb_list | granted_user | private-kb": {
-    "knowledge_bases": "<ENUMERATION_CONTENT>"
+    "knowledge_bases": [
+      "private-kb",
+      "read-only-kb",
+      "readable-kb"
+    ]
   },
   "kb_list | granted_user | readable-kb": {
-    "knowledge_bases": "<ENUMERATION_CONTENT>"
+    "knowledge_bases": [
+      "private-kb",
+      "read-only-kb",
+      "readable-kb"
+    ]
   },
   "kb_list_entries | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_list_entries | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -762,6 +1058,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_manage | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_manage | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -774,6 +1075,11 @@
   },
   "kb_orient | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_orient | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1078,7 +1384,7 @@
           },
           "fields": {
             "relationship_type": "str",
-            "source": "<CONTENT_STATE>",
+            "source": "str",
             "target": "str"
           }
         },
@@ -1415,7 +1721,7 @@
           },
           "fields": {
             "relationship_type": "str",
-            "source": "<CONTENT_STATE>",
+            "source": "str",
             "target": "str"
           }
         },
@@ -1456,6 +1762,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_push | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_push | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -1471,6 +1782,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_qa_assess | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_qa_assess | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -1483,6 +1799,11 @@
   },
   "kb_qa_status | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_qa_status | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1505,6 +1826,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_qa_validate | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_qa_validate | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "issues": "<ENUMERATION_CONTENT>",
@@ -1517,6 +1843,11 @@
   },
   "kb_read_body | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_read_body | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1539,6 +1870,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_recent | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_recent | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "entries": "<ENUMERATION_CONTENT>"
@@ -1549,6 +1885,11 @@
   },
   "kb_schema | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_schema | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -1834,7 +2175,7 @@
         },
         "fields": {
           "relationship_type": "str",
-          "source": "<CONTENT_STATE>",
+          "source": "str",
           "target": "str"
         }
       },
@@ -2148,7 +2489,7 @@
         },
         "fields": {
           "relationship_type": "str",
-          "source": "<CONTENT_STATE>",
+          "source": "str",
           "target": "str"
         }
       },
@@ -2185,6 +2526,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_search | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_search | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
@@ -2198,6 +2544,13 @@
     "results": "<ENUMERATION_CONTENT>"
   },
   "kb_stats | granted_user | missing-kb": {
+    "kbs": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_links": "<ENUMERATION_CONTENT>",
+    "total_tags": "<ENUMERATION_CONTENT>",
+    "type_counts": "<ENUMERATION_CONTENT>"
+  },
+  "kb_stats | granted_user | no-default-role-kb": {
     "kbs": "<ENUMERATION_CONTENT>",
     "total_entries": "<ENUMERATION_CONTENT>",
     "total_links": "<ENUMERATION_CONTENT>",
@@ -2223,6 +2576,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_tags | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_tags | granted_user | private-kb": {
     "has_more": "<ENUMERATION_CONTENT>",
     "tag_count": "<ENUMERATION_CONTENT>",
@@ -2234,6 +2592,11 @@
     "tags": "<ENUMERATION_CONTENT>"
   },
   "kb_timeline | granted_user | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_timeline | granted_user | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "events": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>"
@@ -2253,6 +2616,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "kb_update | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "kb_update | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -2265,6 +2633,11 @@
   },
   "list_edge_types | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "list_edge_types | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2281,6 +2654,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "social_newest | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "social_newest | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "newest": "<ENUMERATION_CONTENT>"
@@ -2291,6 +2669,11 @@
   },
   "social_post | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "social_post | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2309,6 +2692,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "social_top | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "social_top | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "top": "<ENUMERATION_CONTENT>"
@@ -2319,6 +2707,11 @@
   },
   "social_vote | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "social_vote | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2337,6 +2730,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "solidarity_infrastructure_types | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "solidarity_infrastructure_types | granted_user | private-kb": {
     "count": 0,
     "infrastructure_types": []
@@ -2350,6 +2748,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "solidarity_timeline | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "solidarity_timeline | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "events": "<ENUMERATION_CONTENT>"
@@ -2360,6 +2763,11 @@
   },
   "sw_adrs | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_adrs | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2384,6 +2792,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_backlog | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_backlog | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
@@ -2405,6 +2818,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_board | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_board | granted_user | private-kb": {
     "lanes": "<ENUMERATION_CONTENT>",
     "wip_policy": "warn"
@@ -2418,6 +2836,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_check_ready | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_check_ready | granted_user | private-kb": {
     "error": "Backlog item 'characterization-placeholder-id-sw_check_ready-granted_user-private-kb' not found in KB 'private-kb'"
   },
@@ -2426,6 +2849,11 @@
   },
   "sw_claim | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_claim | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2441,6 +2869,11 @@
   },
   "sw_component | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_component | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2465,6 +2898,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_context_for_item | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_context_for_item | granted_user | private-kb": {
     "error": "Entry 'characterization-placeholder-id-sw_context_for_item-granted_user-private-kb' not found in KB 'private-kb'"
   },
@@ -2473,6 +2911,11 @@
   },
   "sw_conventions | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_conventions | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2486,6 +2929,11 @@
   },
   "sw_create_adr | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_create_adr | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2504,6 +2952,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_create_backlog_item | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_create_backlog_item | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -2519,6 +2972,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_epic_detail | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_epic_detail | granted_user | private-kb": {
     "error": "Epic 'characterization-placeholder-id-sw_epic_detail-granted_user-private-kb' not found in KB 'private-kb'"
   },
@@ -2527,6 +2985,11 @@
   },
   "sw_epics | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_epics | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2540,6 +3003,11 @@
   },
   "sw_log | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_log | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2558,6 +3026,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_milestones | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_milestones | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "milestones": "<ENUMERATION_CONTENT>"
@@ -2568,6 +3041,11 @@
   },
   "sw_prioritize | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_prioritize | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2586,6 +3064,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_pull_next | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_pull_next | granted_user | private-kb": {
     "reason": "<ENUMERATION_CONTENT>",
     "recommendation": "<ENUMERATION_CONTENT>",
@@ -2601,6 +3084,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_refine | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_refine | granted_user | private-kb": {
     "items": "<ENUMERATION_CONTENT>",
     "summary": "<ENUMERATION_CONTENT>"
@@ -2611,6 +3099,11 @@
   },
   "sw_review | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_review | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2629,6 +3122,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_review_queue | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_review_queue | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "items": "<ENUMERATION_CONTENT>",
@@ -2643,6 +3141,11 @@
   },
   "sw_standards | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_standards | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2667,6 +3170,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_submit | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_submit | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -2679,6 +3187,11 @@
   },
   "sw_transition | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_transition | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2697,6 +3210,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "sw_validations | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "sw_validations | granted_user | private-kb": {
     "count": 0,
     "validations": []
@@ -2707,6 +3225,11 @@
   },
   "task_ancestors | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_ancestors | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2725,6 +3248,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "task_blocked_by | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "task_blocked_by | granted_user | private-kb": {
     "error": "Task 'characterization-placeholder-id-task_blocked_by-granted_user-private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2737,6 +3265,11 @@
   },
   "task_checkpoint | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_checkpoint | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2755,6 +3288,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "task_claim | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "task_claim | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -2767,6 +3305,11 @@
   },
   "task_create | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_create | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2785,6 +3328,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "task_critical_path | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "task_critical_path | granted_user | private-kb": {
     "error": "Task 'characterization-placeholder-id-task_critical_path-granted_user-private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2797,6 +3345,11 @@
   },
   "task_decompose | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_decompose | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2815,6 +3368,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "task_list | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "task_list | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "tasks": "<ENUMERATION_CONTENT>"
@@ -2825,6 +3383,11 @@
   },
   "task_status | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_status | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2843,6 +3406,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "task_subtree | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "task_subtree | granted_user | private-kb": {
     "error": "Task 'characterization-placeholder-id-task_subtree-granted_user-private-kb' not found",
     "error_code": "NOT_FOUND",
@@ -2855,6 +3423,11 @@
   },
   "task_update | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_update | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2873,6 +3446,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "wiki_assess_quality | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "wiki_assess_quality | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -2888,6 +3466,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "wiki_protect | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "wiki_protect | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -2900,6 +3483,11 @@
   },
   "wiki_quality_stats | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_quality_stats | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2920,6 +3508,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "wiki_review_queue | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "wiki_review_queue | granted_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "queue": "<ENUMERATION_CONTENT>"
@@ -2930,6 +3523,11 @@
   },
   "wiki_stubs | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_stubs | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2946,6 +3544,11 @@
     "error_code": "NOT_FOUND",
     "retryable": false
   },
+  "wiki_submit_review | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
   "wiki_submit_review | granted_user | private-kb": {
     "error": "Insufficient permissions on KB 'private-kb': requires 'write' tier",
     "error_code": "FORBIDDEN",
@@ -2958,6 +3561,11 @@
   },
   "zettel_graph | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "zettel_graph | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },
@@ -2979,6 +3587,11 @@
   },
   "zettel_inbox | granted_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "zettel_inbox | granted_user | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' not found",
     "error_code": "NOT_FOUND",
     "retryable": false
   },

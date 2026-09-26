@@ -70,19 +70,54 @@ def _unique_date(call_key: str) -> str:
 
 def _entry_for(kb: str) -> str:
     """The entry id this world actually put in `kb`, or a fixed placeholder
-    for a KB (MISSING, READ_ONLY-adjacent, or otherwise) with none seeded
-    under that name -- a lookup for it is still a real, meaningful call
-    (it characterizes "this id is not in this KB")."""
-    from tests.characterization.world import PRIVATE, READABLE, READ_ONLY
+    for a KB (MISSING, or otherwise) with none seeded under that name -- a
+    lookup for it is still a real, meaningful call (it characterizes "this
+    id is not in this KB")."""
+    from tests.characterization.world import (
+        NO_DEFAULT_ROLE,
+        NO_DEFAULT_ROLE_ENTRY,
+        PRIVATE,
+        READABLE,
+        READ_ONLY,
+    )
 
     return {
         READABLE: READABLE_ENTRY,
         PRIVATE: PRIVATE_ENTRY,
         READ_ONLY: READ_ONLY_ENTRY,
+        NO_DEFAULT_ROLE: NO_DEFAULT_ROLE_ENTRY,
     }.get(kb, FAKE_ENTRY_ID)
 
 
 _disposable_cache: dict[tuple[str, str], str] = {}
+_disposable_grantee_id: int | None = None
+
+
+def _disposable_grantee(world: World) -> int:
+    """A local user id that exists ONLY to be the target of a permission
+    grant/revoke call -- never one of `world.py`'s own principals (see
+    `POST /api/kbs/{name}/permissions`'s spec for why). Created once,
+    idempotently, and cached at module scope for the life of the process."""
+    global _disposable_grantee_id
+    if _disposable_grantee_id is not None:
+        return _disposable_grantee_id
+    from pyrite.services.auth_service import AuthService
+
+    auth_service = AuthService(world.db, world.config.settings.auth)
+    try:
+        row = auth_service.create_user(
+            "characterization-disposable-grantee", "password123", role="read"
+        )
+        _disposable_grantee_id = row["id"]
+    except ValueError:
+        # Already exists (a re-run within the same process, or a
+        # concurrent xdist worker created it first) -- look it up instead.
+        rows = world.db.execute_sql(
+            "SELECT id FROM local_user WHERE username = :u",
+            {"u": "characterization-disposable-grantee"},
+        )
+        _disposable_grantee_id = rows[0]["id"]
+    return _disposable_grantee_id
 
 
 def _writable_target(world: World, kb: str, call_key: str) -> str:
@@ -177,6 +212,30 @@ _register(
     "GET",
     "/api/kbs/{kb_name}/templates",
     lambda w, kb, ck: {"url": _url("/api/kbs/{kb_name}/templates", kb_name=kb)},
+)
+_register(
+    # {name}, not {kb_name}: admin.py's own path param spelling for this
+    # route. Decides access INLINE (surfaces.INLINE_ACCESS_DECIDING_ROUTES),
+    # not through a FastAPI dependency -- #476 blocker 4.
+    "GET",
+    "/api/kbs/{name}/permissions",
+    lambda w, kb, ck: {"url": _url("/api/kbs/{name}/permissions", name=kb)},
+)
+_register(
+    "POST",
+    "/api/kbs/{name}/permissions",
+    # user_id must be a REAL row (kb_permission.user_id is a foreign key to
+    # local_user) -- a dedicated disposable grantee, NEVER one of world.py's
+    # own principals: a call that succeeds would grant that principal real
+    # access, corrupting every OTHER case's assumption about what that
+    # principal can see (`local_user` is deliberately grant-less; using it
+    # here would give it a real PRIVATE-KB grant the moment any
+    # write-capable principal's case runs). Idempotent (an UPSERT), so it
+    # needs no call_key-uniqueness the way a content-creating write does.
+    lambda w, kb, ck: {
+        "url": _url("/api/kbs/{name}/permissions", name=kb),
+        "json": {"user_id": _disposable_grantee(w), "role": "read"},
+    },
 )
 _register(
     "GET",
@@ -324,13 +383,60 @@ _register(
         "params": {"kb": kb},
     },
 )
+
+
+def _delete_starred_kwargs(world: World, kb: str, call_key: str) -> dict[str, Any]:
+    """Guarantee `entry_id` is already starred by the CALLING principal's
+    own owner id, directly via the service (not through POST /api/starred,
+    whose own authorization this DELETE case is not testing), before
+    building the DELETE call. Without this, the call depends on whether
+    some OTHER case -- this principal's own `POST /api/starred`
+    (alphabetically AFTER `DELETE` in `_run`'s sorted route order) or
+    another principal's, in the same worker -- already starred it first:
+    found live under pytest-xdist -n4, `admin_key`'s DELETE flipping between
+    200 (unstarred) and 404 (nothing to unstar) depending on worker
+    composition. `call_key` (`"{principal_name}-{kb_state}"`, see
+    test_rest_matrix.py) is parsed back to find which principal is calling,
+    since REST_CALL_SPECS's build functions are not otherwise given one.
+    """
+    from pyrite.services.kb_service import KBService
+    from pyrite.services.starred_service import INSTANCE_USER, StarredService
+
+    entry_id = _entry_for(kb)
+    # NOT a bare rsplit("-", 1): call_key is "{principal_name}-{kb_state}",
+    # but every kb_state value itself contains a hyphen (readable-kb,
+    # private-kb, missing-kb, no-default-role-kb), so a naive rsplit finds
+    # the WRONG boundary every time (e.g. "admin_key-readable-kb".rsplit("-",
+    # 1) -> "admin_key-readable", which matches no real principal -- found
+    # live: this silently skipped pre-starring for every call, and the
+    # xdist flakiness this function exists to fix was still reproducing).
+    # Matching against the known, fixed set of principal names instead is
+    # unambiguous regardless of how many hyphens the kb_state suffix has.
+    principal_name = next(
+        (name for name in world.principals if call_key.startswith(f"{name}-")), None
+    )
+    principal = world.principals.get(principal_name) if principal_name else None
+    # anonymous (and an unrecognised call_key, e.g. the skip-list probe
+    # which passes call_key="shared") has no star list at all (_star_owner
+    # returns None for anonymous -- 401 LOGIN_REQUIRED); nothing to pre-star,
+    # and the call still characterizes that refusal correctly without one.
+    if principal is not None and principal.kind != "anonymous":
+        owner = principal.user_id if principal.user_id is not None else INSTANCE_USER
+        svc = StarredService(world.db, KBService(world.config, world.db))
+        try:
+            svc.star_entry(owner, entry_id, kb)
+        except Exception:
+            pass  # already starred (a re-run within the same process) -- fine
+    return {
+        "url": _url("/api/starred/{entry_id}", entry_id=entry_id),
+        "params": {"kb": kb},
+    }
+
+
 _register(
     "DELETE",
     "/api/starred/{entry_id}",
-    lambda w, kb, ck: {
-        "url": _url("/api/starred/{entry_id}", entry_id=_entry_for(kb)),
-        "params": {"kb": kb},
-    },
+    lambda w, kb, ck: _delete_starred_kwargs(w, kb, ck),
 )
 _register(
     "GET",

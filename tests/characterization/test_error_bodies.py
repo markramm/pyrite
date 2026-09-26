@@ -18,8 +18,10 @@ harness's only line of evidence for at least some classes.
 
 from __future__ import annotations
 
+import pytest
+
 from tests.characterization.error_bodies import all_error_body_cases
-from tests.characterization.golden_io import assert_matches, load, save, regenerating
+from tests.characterization.golden_io import MismatchCollector, load, save, regenerating
 from tests.characterization.normalize import normalize
 from tests.characterization.world import PRIVATE, READABLE
 
@@ -34,6 +36,12 @@ GOLDEN_NAME = "error_bodies"
 
 def test_every_pyrite_error_class_has_a_golden_per_transport(world):
     golden = load(GOLDEN_NAME)
+    # A collector, not a bare assert (#476 blocker 7): a change to the
+    # shared REST classification table or a shared MCP/CLI mapping function
+    # can affect several PyriteError classes in one policy change, and the
+    # report should show every class it moved, not just the
+    # alphabetically-first one a bare assert would stop at.
+    collector = MismatchCollector()
     for case in all_error_body_cases():
         key = case.class_name
         actual = {
@@ -41,9 +49,10 @@ def test_every_pyrite_error_class_has_a_golden_per_transport(world):
             "mcp": normalize(case.mcp, tmpdir=str(world.tmpdir)),
             "cli": normalize(case.cli, tmpdir=str(world.tmpdir)),
         }
-        assert_matches(GOLDEN_NAME, key, actual, golden)
+        collector.check(GOLDEN_NAME, key, actual, golden)
     if regenerating():
         save(GOLDEN_NAME, golden)
+    collector.assert_clean()
 
 
 # -- live cross-checks: a handful of classes REST/MCP naturally raise ------
@@ -107,35 +116,53 @@ def test_kb_read_only_live_over_rest(world):
     assert resp.json()["detail"]["code"] == "READ_ONLY"
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="#491: kb_index_sync silently flips a config KB's registry `source` to "
+    "'user', so a config KB is no longer protected once it has been synced. Pins "
+    "TODAY's real behaviour rather than routing around it by re-seeding source="
+    "'config' first (#476 blocker 6). xfail(strict=True): this must always fail "
+    "for as long as #491 stands -- an unexpected PASS means #491 was fixed (or "
+    "this test regressed), and CI, not silent order-dependence, is what would "
+    "say so.",
+)
 def test_kb_protected_live_over_rest(world):
-    # READABLE is declared in config.yaml (KBConfig, source="config" by
-    # construction), so removing it via the registry route hits
-    # KBRegistryService.remove_kb's KBProtectedError -- without touching the
-    # world's actual state (admin key; DELETE really would remove a
-    # user-added KB, but a config KB's removal is refused before that runs).
-    #
-    # Oddity (reported): this route's own catch answers {"code":
-    # "PROTECTED", ...} -- a THIRD spelling, neither the central table's
-    # KB_PROTECTED nor MCP/CLI's KB_PROTECTED (which agree with each other).
-    #
-    # Re-seeds READABLE's registry `source` back to "config" first: a real
-    # bug this harness found and filed rather than fixed (#491) lets
-    # `kb_index_sync` (a KB-bearing write tool this same session's MCP
-    # matrix calls against every KB, including READABLE) silently flip a
-    # config KB's `source` to "user" -- which would make THIS test's own
-    # assertion depend on whether some other test in the same worker
-    # happened to run `kb_index_sync` against READABLE first. That
-    # ordering dependency is #491's bug leaking into this test, not
-    # something this test is meant to characterize; restoring the
-    # precondition keeps this test about the protected-removal refusal.
-    world.db.register_kb(
-        name=READABLE,
-        kb_type="generic",
-        path=str(world.tmpdir / READABLE),
-        source="config",
+    # Deterministically triggers #491's precondition ITSELF (rather than
+    # depending on whether some earlier, unrelated test in the same worker
+    # happened to sync READABLE first -- that was the actual bug in the
+    # ORIGINAL version of this test: its outcome depended on execution
+    # order, which is exactly the class of nondeterminism this harness
+    # exists to eliminate elsewhere). A dedicated KB, synced once by this
+    # test alone, makes the precondition -- and so the xfail -- a pure
+    # function of this test, not of what ran before it.
+    from pyrite.config import KBConfig
+
+    kb_name = "characterization-491-repro"
+    kb_path = world.tmpdir / kb_name
+    kb_path.mkdir(exist_ok=True)
+    # `add_kb`, not a raw `.append()` to `knowledge_bases`: `PyriteConfig`
+    # caches `_kb_by_name` at construction, and `get_kb()` (which
+    # `sync_incremental` calls to find this KB at all) reads only that
+    # cache -- a bare append leaves the cache stale and `get_kb` returns
+    # None, so `sync_incremental` silently skips the KB entirely (found
+    # while writing this repro: the sync appeared to succeed but touched
+    # nothing, and the bug never triggered). `add_kb` updates both.
+    world.config.add_kb(
+        KBConfig(name=kb_name, path=kb_path, kb_type="generic", default_role="read")
     )
+    world.mcp_server.registry.seed_from_config()  # source="config" for kb_name, as at real startup
+
     p = world.principals["admin_key"]
-    resp = world.client.delete(f"/api/kbs/{READABLE}", headers=p.rest_headers)
+    sync_result = world.mcp_server._dispatch_tool(
+        "kb_index_sync",
+        {"kb_name": kb_name},
+        client_id="characterization-491-repro",
+        readable_kbs=None,
+        writable_kbs=None,
+    )
+    assert "error" not in sync_result, sync_result  # the sync itself must succeed
+
+    resp = world.client.delete(f"/api/kbs/{kb_name}", headers=p.rest_headers)
     assert resp.status_code == 403
     assert resp.json()["detail"]["code"] == "PROTECTED"
 

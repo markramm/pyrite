@@ -1,14 +1,16 @@
 """The one shared world every characterization case runs against (ADR-0037 theme 0).
 
-One `PyriteConfig`, one `create_app()`, the three ADR §5 KB states (readable,
-private, and a missing one that is simply never registered) plus two extra
-KBs the main matrix does not use (`READ_ONLY`, `NO_DEFAULT_ROLE` -- see
-below), and every principal the ADR §5.4 matrix names (narrowed to the
-backlog item's concrete list), built once and shared by every test in this
-package via a session-scoped fixture (`world`, in `conftest.py`). Building it
-once keeps the ~66-operation x ~106-tool x 7-principal x 3-KB-state matrix
-inside the pre-push budget: this module does the one-time setup, the test
-modules only read from it.
+One `PyriteConfig`, one `create_app()`, the ADR §5 KB axis -- readable,
+private, a missing one that is simply never registered, and `NO_DEFAULT_ROLE`
+(added to the axis per #476 blocker 5: the one state where a global user's
+access and a local user's genuinely diverge, see below) -- plus one extra KB
+the main matrix does not target (`READ_ONLY`, used by `test_error_bodies.py`'s
+live cross-check only), and every principal the ADR §5.4 matrix names
+(narrowed to the backlog item's concrete list), built once and shared by
+every test in this package via a session-scoped fixture (`world`, in
+`conftest.py`). Building it once keeps the ~68-operation x ~106-tool x
+7-principal x 4-KB-state matrix inside the pre-push budget: this module does
+the one-time setup, the test modules only read from it.
 
 Principals (ADR-0037 §5, narrowed to the backlog item's concrete list):
 
@@ -43,8 +45,10 @@ KBs:
   `test_error_bodies.py`'s live cross-check, not the main matrix.
 - ``NO_DEFAULT_ROLE`` -- `default_role` left unset (``None``): the one KB
   state where a global user's role (falls back to it) and a local user's
-  (does not) actually diverge; see `test_global_access.py`. Outside the
-  {readable, private, missing} axis for that reason.
+  (does not) actually diverge -- part of the main `KB_STATES` axis in
+  `test_rest_matrix.py`/`test_mcp_matrix.py` (#476 blocker 5); see also
+  `test_global_access.py`'s small, direct pair of cases pinning the
+  mechanism by name.
 
 Every principal is also given a matching MCP `readable_kbs`/`writable_kbs`
 pair and API-key role, computed the same way REST resolves it
