@@ -453,7 +453,6 @@ def _run(inv: str, steps: list[tuple[str, dict]], *, check_lookup: bool = False)
 NO_ID_BETA_AT_ALPHA = ("ext_write", {"name": "alpha.md", "id": None, "t": "Beta"})
 
 
-@_violates("I1", "#484", "create writes a second file for a derived id")
 def test_i1_create_duplicates_a_derived_id():
     _run("I1", [NO_ID_BETA_AT_ALPHA, ("create_note", {"title": "Beta", "id": None})])
 
@@ -486,7 +485,6 @@ def test_i3_duplicate_id_flips_on_every_sync():
     _run("I3", [*steps, ("sync_incremental", {})])
 
 
-@_violates("I4", "#483", "delete by a filename removes another id's content")
 def test_i4_delete_by_filename_removes_another_entry():
     _run("I4", [NO_ID_BETA_AT_ALPHA, ("delete", {"id": "alpha"})])
 
@@ -503,18 +501,15 @@ def test_i6_rename_moves_an_id_named_file():
     _run("I6", [*steps, ("rename", {"old": "alpha", "new": "renamed-1"})])
 
 
-@_violates("I7", "#483", "delete removes a file holding another id")
 def test_i7_delete_removes_a_file_holding_another_id():
     steps = [("ext_write", {"name": "alpha.md", "id": "beta", "t": "Alpha"})]
     _run("I7", [*steps, ("delete", {"id": "alpha"})])
 
 
-@_violates("I8", "#483", "find_file returns a filename hit holding another id")
 def test_i8_find_file_trusts_the_filename():
     _run("I8", [NO_ID_BETA_AT_ALPHA], check_lookup=True)
 
 
-@_violates("I8", "#484", "a derived id is indexed but not findable")
 def test_i8_derived_id_is_not_findable():
     _run("I8", [("ext_write", {"name": "beta.md", "id": None, "t": "Alpha"})], check_lookup=True)
 
@@ -525,7 +520,6 @@ def test_i9_rename_to_same_id_leaves_no_row():
     _run("I9", [*steps, ("rename", {"old": "alpha", "new": "alpha"})])
 
 
-@_violates("I9", "#494", "delete of a duplicated id orphans the other file")
 def test_i9_delete_of_a_duplicated_id_orphans_a_file():
     steps = [
         ("create_note", {"title": "Gamma", "id": None}),
