@@ -29,6 +29,18 @@ from typing import Any
 
 _ISO_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?")
 
+# `ClipperBlockedHostError`'s DNS-failure message (pyrite/services/clipper.py:
+# f"Could not resolve host {host!r}: {exc}") embeds `socket.gaierror`'s str(),
+# which is the OS RESOLVER'S own text -- different on every platform for the
+# identical failure (macOS: "[Errno 8] nodename nor servname provided, or not
+# known"; Linux/CI: "[Errno -2] Name or service not known"). Found when CI
+# (Linux) failed on a golden recorded on macOS with only this text differing
+# -- the code (CLIPPER_BLOCKED_HOST) and status (400) matched. Matched by the
+# stable prefix every platform shares (`Could not resolve host '<host>': `),
+# normalising only what follows it, so a real change to the host named or the
+# surrounding message is still caught.
+_RESOLVER_ERROR = re.compile(r"(Could not resolve host '[^']*': ).*")
+
 # `QAService._maybe_validate` (pyrite/services/qa_service.py) mints an
 # auto-assessment id of the shape `qa-{entry_id}-{ms epoch timestamp}` on
 # every create -- e.g. `qa-private-note-1790384135890` -- a real product
@@ -83,6 +95,7 @@ NORMALISED_PATH = "<TMPDIR>"
 NORMALISED_SCORE = "<SCORE>"
 NORMALISED_QA_ID = "qa-<GENERATED_ID>"
 NORMALISED_CONTENT = "<CONTENT_STATE>"
+NORMALISED_RESOLVER_DETAIL = "<OS_RESOLVER_DETAIL>"
 
 
 def normalize(value: Any, *, tmpdir: str) -> Any:
@@ -113,6 +126,7 @@ def normalize(value: Any, *, tmpdir: str) -> Any:
         text = value.replace(tmpdir, NORMALISED_PATH)
         text = _ISO_TIMESTAMP.sub(NORMALISED_TIMESTAMP, text)
         text = _QA_ASSESSMENT_ID.sub(NORMALISED_QA_ID, text)
+        text = _RESOLVER_ERROR.sub(lambda m: m.group(1) + NORMALISED_RESOLVER_DETAIL, text)
         return text
     return value
 
@@ -151,6 +165,13 @@ NORMALISATION_LIST = [
     "key, not a caller-chosen or world-fixture id) -> '<ENUMERATION_CONTENT>', since its "
     "value depends on how many other reviews any other case already created in the "
     "same process, not on this case's own authorization outcome.",
+    "OS resolver detail: the text after \"Could not resolve host '<host>': \" in a "
+    "ClipperBlockedHostError message (socket.gaierror's own str(), platform-specific -- "
+    "macOS: '[Errno 8] nodename nor servname provided, or not known'; Linux/CI: "
+    "'[Errno -2] Name or service not known') -> '<OS_RESOLVER_DETAIL>'. The stable "
+    "prefix (the host named, and the fact that resolution failed) is left untouched, so "
+    "a real change to which host is refused or why is still caught; only the OS's own "
+    "wording for 'DNS lookup failed' is normalised.",
 ]
 
 # -- MCP enumeration-sensitive tools -----------------------------------------

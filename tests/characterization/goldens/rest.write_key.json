@@ -7389,7 +7389,7 @@
     "body": {
       "detail": {
         "code": "CLIPPER_BLOCKED_HOST",
-        "message": "Could not resolve host 'example.invalid': [Errno 8] nodename nor servname provided, or not known"
+        "message": "Could not resolve host 'example.invalid': <OS_RESOLVER_DETAIL>"
       }
     },
     "status": 400
@@ -7398,7 +7398,7 @@
     "body": {
       "detail": {
         "code": "CLIPPER_BLOCKED_HOST",
-        "message": "Could not resolve host 'example.invalid': [Errno 8] nodename nor servname provided, or not known"
+        "message": "Could not resolve host 'example.invalid': <OS_RESOLVER_DETAIL>"
       }
     },
     "status": 400
@@ -7407,7 +7407,7 @@
     "body": {
       "detail": {
         "code": "CLIPPER_BLOCKED_HOST",
-        "message": "Could not resolve host 'example.invalid': [Errno 8] nodename nor servname provided, or not known"
+        "message": "Could not resolve host 'example.invalid': <OS_RESOLVER_DETAIL>"
       }
     },
     "status": 400
