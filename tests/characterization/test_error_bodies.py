@@ -135,6 +135,17 @@ def test_kb_protected_live_over_rest(world):
     # exists to eliminate elsewhere). A dedicated KB, synced once by this
     # test alone, makes the precondition -- and so the xfail -- a pure
     # function of this test, not of what ran before it.
+    #
+    # This test adds `kb_name` to the shared, session-scoped `world` (its
+    # config AND, via the sync below, the registry/DB) -- the one exception
+    # to every other case in this module, which only ever reads `world`.
+    # try/finally below undoes exactly that, on pass, fail OR xfail, so
+    # `world` is exactly as this test found it once it's done (guarded by
+    # `conftest.py`'s `_world_is_immutable`, proven against this very test
+    # while writing it: with the cleanup removed, the guard fails the FOLLOWING
+    # world-using test by this test's name -- see the fixture's own docstring
+    # for why the failure lands one test later rather than on this one's own
+    # teardown).
     from pyrite.config import KBConfig
 
     kb_name = "characterization-491-repro"
@@ -150,21 +161,40 @@ def test_kb_protected_live_over_rest(world):
     world.config.add_kb(
         KBConfig(name=kb_name, path=kb_path, kb_type="generic", default_role="read")
     )
-    world.mcp_server.registry.seed_from_config()  # source="config" for kb_name, as at real startup
+    try:
+        world.mcp_server.registry.seed_from_config()  # source="config", as at real startup
 
-    p = world.principals["admin_key"]
-    sync_result = world.dispatch_tool(
-        "kb_index_sync",
-        {"kb_name": kb_name},
-        client_id="characterization-491-repro",
-        readable_kbs=None,
-        writable_kbs=None,
-    )
-    assert "error" not in sync_result, sync_result  # the sync itself must succeed
+        p = world.principals["admin_key"]
+        sync_result = world.dispatch_tool(
+            "kb_index_sync",
+            {"kb_name": kb_name},
+            client_id="characterization-491-repro",
+            readable_kbs=None,
+            writable_kbs=None,
+        )
+        assert "error" not in sync_result, sync_result  # the sync itself must succeed
 
-    resp = world.client.delete(f"/api/kbs/{kb_name}", headers=p.rest_headers)
-    assert resp.status_code == 403
-    assert resp.json()["detail"]["code"] == "PROTECTED"
+        resp = world.client.delete(f"/api/kbs/{kb_name}", headers=p.rest_headers)
+        assert resp.status_code == 403
+        assert resp.json()["detail"]["code"] == "PROTECTED"
+    finally:
+        # DB first: #491 itself (the sync above) may already have flipped
+        # this row's `source` to "user", in which case the DELETE call just
+        # above actually succeeded and the row -- and its kb_permission rows,
+        # none expected here -- are already gone; `unregister_kb` going
+        # straight to the DB (not `KBRegistryService.remove_kb`, which
+        # refuses a `source="config"` row) removes it either way, without
+        # depending on which branch of #491 ran.
+        world.db.unregister_kb(kb_name)
+        # Config next: `remove_kb` clears both `knowledge_bases` and the
+        # `_kb_by_name` cache `get_kb()`/`sync_incremental` read -- a bare
+        # `.remove()` would leave the cache stale, mirroring the `add_kb`
+        # note above.
+        world.config.remove_kb(kb_name)
+        # Directory last: nothing above needs it to still exist.
+        import shutil
+
+        shutil.rmtree(kb_path, ignore_errors=True)
 
 
 def test_clipper_blocked_host_live_over_rest(world):
