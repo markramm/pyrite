@@ -398,15 +398,22 @@ TRANSPORT_ROUTE_EXCLUSIONS_COUNT = len(TRANSPORT_ROUTE_EXCLUSIONS)
 # REST walk misses these too). Each read, not assumed, the same discipline
 # REST_ACCESS_EXCLUSIONS uses.
 #
-# NOT listed here: mount_static's `app.mount("/_app", StaticFiles(...))`
-# (pyrite/server/static.py) -- it only runs when `web/dist/_app` exists
-# (a built SvelteKit output directory), which this test suite's `create_app()`
-# never has (no `web/dist` in a backend-only checkout or CI job), so it is
-# never live in `world.app` for `test_every_transport_route_is_covered`'s
-# "stale" half to find. Read directly: a raw ASGI `StaticFiles` mount, no
-# auth dependency, serving static build output rather than KB content --
-# excluded on the same reasoning as the routes below, just never exercised
-# by this harness's `world`.
+# NOT listed here: mount_static's `app.mount("/_app", StaticFiles(...))`,
+# `GET /favicon.ico` and the `GET /{path:path}` SPA fallback
+# (pyrite/server/static.py) -- all three mount only when `web/dist/index.html`
+# exists on disk, which it does on the main checkout and on any contributor's
+# tree after `npm run build`. #504 round 2: a first version of this fix
+# listed `/_app` here on the reasoning "this harness's create_app() never has
+# a built web/dist" -- true only by accident of which tree happened to run
+# the tests, and false the moment someone ran the frontend build first
+# (three completeness tests went red with no code change at all: the two
+# static APIRoutes were newly uncovered REST routes, and `/_app` was a newly
+# uncovered transport-completeness Mount). The real fix is in `world.py`:
+# `_create_app_with_empty_static` points `PYRITE_STATIC_DIR` at an
+# always-empty directory this harness itself creates, so `mount_static`'s own
+# `if not index_html.exists(): return` guard makes it -- and the two static
+# APIRoutes -- a no-op in `world.app` regardless of whether the real repo's
+# `web/dist` exists. Nothing to exclude here because nothing is ever mounted.
 NON_TRANSPORT_ROUTE_EXCLUSIONS: dict[str, str] = {
     "GET /openapi.json": (
         "FastAPI's own schema route, a plain Starlette Route (not an "
