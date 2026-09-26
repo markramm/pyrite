@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from pyrite.exceptions import StorageError
+from pyrite.exceptions import StorageError, ValidationError
 from pyrite.services.kb_service import KBService
 from pyrite.storage.repository import KBRepository
 
@@ -21,6 +21,25 @@ def _kb_service(indexed_test_env):
 
 
 class TestRenameIndexVerification:
+    def test_same_id_rename_is_rejected_before_index_sync(self, indexed_test_env, sample_events):
+        kb_service = _kb_service(indexed_test_env)
+        old_id = sample_events[0].id
+        kb_name = indexed_test_env["events_kb"].name
+        db = indexed_test_env["db"]
+        repo = KBRepository(indexed_test_env["events_kb"])
+        entry = repo.load(old_id)
+        assert entry is not None
+        source_path = entry.file_path
+        original = source_path.read_bytes()
+
+        with patch.object(kb_service._index_mgr, "sync_incremental") as sync_incremental:
+            with pytest.raises(ValidationError, match="new id equals old id"):
+                kb_service.rename_entry(old_id, old_id, kb_name)
+
+        sync_incremental.assert_not_called()
+        assert source_path.read_bytes() == original
+        assert db.get_entry(old_id, kb_name) is not None
+
     def test_successful_rename_reports_index_verified(self, indexed_test_env, sample_events):
         """The common case: rename + sync succeed, and the result records
         that the new id was confirmed resolvable in the index — not just

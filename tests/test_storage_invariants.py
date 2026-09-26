@@ -15,8 +15,8 @@ Two layers:
   fail with an ``AssertionError`` starting ``I<n>:``; fixing the issue flips
   exactly that test (plus, for #483, the other tests of the same bug).
 - **An exploratory run** of the machine with a pinned ``@seed``, checking only
-  the invariants with no known violation (I5, I9, minus the two I9 shapes that
-  have their own tests). It is what catches a new regression.
+  the invariants with no known violation (I5, I9, minus the ambiguous-id shape
+  that has its own test). It is what catches a new regression.
 
 I10 (history) needs git and a handful of commits, so it is three plain tests at
 the end rather than a rule of the machine.
