@@ -588,8 +588,9 @@ class TestThisRepository:
         "tests/test_entry_lifecycle.py",
         # the KB service
         "tests/test_services.py::TestKBService",
-        # auth / read scoping
+        # auth / read scoping, and every entry point passing the policy (ADR-0037 §5)
         "tests/test_read_scoping_is_structural.py",
+        "tests/test_every_entry_point_passes_the_policy.py",
         # the REST app factory
         "tests/test_api_state_isolation.py",
         "tests/test_rest_api.py::TestKBEndpoints",
