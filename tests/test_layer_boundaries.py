@@ -124,6 +124,14 @@ COMPOSITION_ROOTS: dict[tuple[str, str], tuple[int, str]] = {
     (f"{_CTX}::cli_registry_context", "storage"): (1, _CLI_ROOT),
     (f"{_CTX}::get_config_and_db", "PyriteDB"): (1, _CLI_ROOT),
     (f"{_CTX}::get_config_and_db", "db."): (1, _CLI_ROOT + " (merges DB-registered KBs)"),
+    (
+        f"{_CTX}::open_index_for_validation",
+        "storage",
+    ): (1, _CLI_ROOT + " (validates index health at the CLI boundary)"),
+    (f"{_CTX}::open_index_for_validation", "sqlite3"): (
+        2,
+        _CLI_ROOT + " (database errors fall back to YAML)",
+    ),
     (f"{_CTX}::get_config_with_registered_kbs", "PyriteDB"): (1, _CLI_ROOT),
     (f"{_CTX}::get_config_with_registered_kbs", "db."): (1, _CLI_ROOT),
     (f"{_CTX}::get_config_with_registered_kbs", "sqlite3"): (1, _CLI_ROOT + " (sqlite3.Error)"),
@@ -138,7 +146,7 @@ COMPOSITION_ROOTS: dict[tuple[str, str], tuple[int, str]] = {
         "the UI's cached DB; _get_kb_service is built on it",
     ),
 }
-COMPOSITION_ROOTS_SIZE = 36  # a new root is a design decision: raise it only with one
+COMPOSITION_ROOTS_SIZE = 38  # a new root is a design decision: raise it only with one
 
 # -- Not yet moved: (function, rule) -> (count, why and where it moves) --------
 
@@ -200,7 +208,6 @@ ALLOWLIST: dict[tuple[str, str], tuple[int, str]] = {
         "IndexManager, DocumentManager, KBRepository; " + _FOLLOW,
     ),
     ("pyrite/cli/init_command.py::init_kb", "storage"): (2, _INDEX),
-    ("pyrite/cli/kb_commands.py::kb_validate", "storage"): (2, _INDEX),
     ("pyrite/cli/schema_commands.py::schema_migrate", "storage"): (2, "KBRepository; " + _FOLLOW),
     ("pyrite/cli/search_commands.py::<module>", "storage"): (1, "KBRepository; " + _FOLLOW),
     ("pyrite/cli/search_commands.py::_search_files", "storage"): (1, "KBRepository; " + _FOLLOW),
@@ -228,7 +235,7 @@ ALLOWLIST: dict[tuple[str, str], tuple[int, str]] = {
         "sqlite3 integrity check; " + _FOLLOW,
     ),
 }
-ALLOWLIST_SIZE = 39  # lower it with every entry removed; never raise it
+ALLOWLIST_SIZE = 38  # lower it with every entry removed; never raise it
 
 SURFACES = (
     "pyrite/server/",

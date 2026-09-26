@@ -4,15 +4,12 @@ KB management commands for pyrite CLI.
 Commands: list, add, remove, discover, validate, create, reindex, health, commit, push, gc
 """
 
-import logging
-import sqlite3
 from pathlib import Path
 from typing import Any
 
 import typer
 from rich.console import Console
 from rich.table import Table
-from sqlalchemy.exc import SQLAlchemyError
 
 from ..config import (
     KBConfig,
@@ -23,13 +20,12 @@ from ..exceptions import PyriteError
 from .context import (
     cli_context,
     cli_registry_context,
-    get_config_and_db,
     get_config_with_registered_kbs,
+    open_index_for_validation,
 )
 
 kb_app = typer.Typer(help="Knowledge base management")
 console = Console()
-logger = logging.getLogger(__name__)
 
 
 def _format_output(data: dict, fmt: str) -> str | None:
@@ -263,8 +259,6 @@ def kb_validate(
     drift too can check for exit code 2.
     """
     config = load_config()
-    db = None
-    health = {}
 
     def _select_kbs(current_config) -> list[KBConfig]:
         if name:
@@ -281,38 +275,12 @@ def kb_validate(
             return [kb]
         return current_config.all_kbs()
 
-    def _use_yaml_config(exc: Exception) -> tuple[list[KBConfig], dict[str, Any]]:
-        logger.warning(
-            "Could not read index database %s while validating KBs; "
-            "using YAML config without content-drift checks: %s",
-            config.settings.index_path,
-            exc,
-        )
-        # A failed merge may have partially added DB-only KBs. Reload to make
-        # the fallback strictly YAML-backed, matching other CLI commands.
-        yaml_config = load_config()
-        return _select_kbs(yaml_config), {}
-
+    config, db, health = open_index_for_validation(config)
     try:
-        config, db = get_config_and_db(config)
-    except (OSError, sqlite3.Error, SQLAlchemyError) as exc:
-        kbs, health = _use_yaml_config(exc)
-    else:
-        try:
-            kbs = _select_kbs(config)
-
-            # Run content-drift checks once (check_health walks all KBs
-            # internally), then bucket results by kb name.
-            from ..storage import IndexManager
-
-            index_mgr = IndexManager(db, config)
-            try:
-                health = index_mgr.check_health()
-            except (sqlite3.Error, SQLAlchemyError) as exc:
-                kbs, health = _use_yaml_config(exc)
-        finally:
-            if db is not None:
-                db.close()
+        kbs = _select_kbs(config)
+    finally:
+        if db is not None:
+            db.close()
 
     def _for_kb(kb_name: str, field: str) -> list:
         return [row for row in health.get(field, []) if row.get("kb") == kb_name]

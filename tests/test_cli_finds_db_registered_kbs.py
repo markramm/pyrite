@@ -9,6 +9,7 @@ import json
 import shutil
 
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 from typer.testing import CliRunner
 
 from pyrite.cli import app
@@ -100,7 +101,7 @@ def test_kb_validate_uses_yaml_config_when_index_database_is_unreadable(register
     corrupt_bytes = b"not a sqlite database"
     index_db.write_bytes(corrupt_bytes)
 
-    with caplog.at_level("WARNING", logger="pyrite.cli.kb_commands"):
+    with caplog.at_level("WARNING", logger="pyrite.cli.context"):
         result = runner.invoke(app, ["kb", "validate", "--format", "json"])
 
     assert result.exit_code == 0, result.output
@@ -121,12 +122,42 @@ def test_kb_validate_does_not_report_file_read_errors_as_database_errors(
 
     monkeypatch.setattr(IndexManager, "check_health", fail_check_health)
 
-    with caplog.at_level("WARNING", logger="pyrite.cli.kb_commands"):
+    with caplog.at_level("WARNING", logger="pyrite.cli.context"):
         result = runner.invoke(app, ["kb", "validate", "--format", "json"])
 
     assert isinstance(result.exception, OSError)
     assert "could not read a KB entry" in str(result.exception)
     assert "Could not read index database" not in caplog.text
+
+
+def test_kb_validate_uses_yaml_config_when_health_check_has_database_error(
+    registered_kb, monkeypatch, caplog
+):
+    from pyrite.storage.index import IndexManager
+
+    _write_yaml_kb_config(registered_kb)
+    closed = []
+    original_close = PyriteDB.close
+
+    def fail_check_health(self, kb_name=None):
+        raise SQLAlchemyError("could not query the index")
+
+    def record_close(db):
+        closed.append(True)
+        original_close(db)
+
+    monkeypatch.setattr(IndexManager, "check_health", fail_check_health)
+    monkeypatch.setattr(PyriteDB, "close", record_close)
+
+    with caplog.at_level("WARNING", logger="pyrite.cli.context"):
+        result = runner.invoke(app, ["kb", "validate", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert [kb["name"] for kb in payload["kbs"]] == ["yaml-only"]
+    assert "using YAML config" in caplog.text
+    assert "without content-drift checks" in caplog.text
+    assert closed == [True]
 
 
 def test_kb_schema_show_finds_db_registered_kb(registered_kb):
