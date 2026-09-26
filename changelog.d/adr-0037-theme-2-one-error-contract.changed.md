@@ -79,11 +79,4 @@
     message; the raw text still reaches the terminal through the log on
     stderr.
 
-  Known limits in this release (follow-up issue): `kb_registry_add` over
-  MCP answers a duplicate KB name with the generic "configuration is
-  invalid" message where REST still names the conflict; a few recovery
-  hints ("run `pyrite index sync`", a plugin's `pip install` hint) now
-  reach only the log; and the three CLI sites above mask text on the
-  operator's own terminal for no security gain.
-
   (ADR-0037 theme 2)
