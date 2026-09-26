@@ -7,6 +7,9 @@ checked against behaviour rather than against the diff.
 
 import contextlib
 import json
+import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -42,6 +45,23 @@ def _config(tmp_path, *, indexed=True):
 
 @contextlib.contextmanager
 def _patched(config):
+    # Import every module that owns one of the patch targets below *before*
+    # any patch is entered (#510). `patch("a.b.c", ...)` imports `a.b` to
+    # resolve its target if it isn't already in sys.modules. If that import
+    # happens while an earlier patch in this same stack has already replaced
+    # `pyrite.config.load_config` with a Mock, a module that does
+    # `from .config import load_config` binds the Mock at import time, and
+    # `patch` then "restores" its attribute to that Mock on exit -- leaking
+    # it into every later test in the same worker. Importing up front means
+    # every module's `load_config` is already bound to the real function
+    # before any Mock exists, so each patch's own restore is the real thing.
+    import pyrite.admin_cli  # noqa: F401
+    import pyrite.cli  # noqa: F401
+    import pyrite.cli.context  # noqa: F401
+    import pyrite.cli.repo_commands  # noqa: F401
+    import pyrite.cli.search_commands  # noqa: F401
+    import pyrite.config  # noqa: F401
+
     with contextlib.ExitStack() as stack:
         for target in (
             "pyrite.config.load_config",
@@ -204,3 +224,57 @@ class TestAdminCli:
         with _patched(config):
             result = runner.invoke(app, ["repo", "sync", "org/none"])
         assert "org/none" in result.output or "not found" in result.output.lower()
+
+
+def test_patched_restores_the_real_load_config_even_when_admin_cli_is_unimported():
+    """#510: _patched() must leave every patched name as the real function.
+
+    ``patch("pyrite.admin_cli.load_config", ...)`` resolves its target by
+    importing ``pyrite.admin_cli`` if it is not already in ``sys.modules``.
+    If that import happens after ``pyrite.config.load_config`` has already
+    been replaced by a Mock (as ``_patched`` does, patching
+    ``pyrite.config.load_config`` first), ``admin_cli``'s
+    ``from .config import load_config`` binds that Mock. ``patch`` then
+    records the Mock as the attribute to restore, so exiting the context
+    leaves ``pyrite.admin_cli.load_config`` a Mock forever -- for every test
+    that runs afterward in the same worker.
+
+    This must run in a fresh subprocess rather than by evicting
+    ``pyrite.admin_cli`` from this process's ``sys.modules``: eviction plus
+    re-import leaves a *second* module object in ``sys.modules`` while every
+    other already-imported module (and the Typer ``app`` under test) still
+    holds a reference to the *original* ``pyrite.admin_cli`` module object
+    through its own globals. Asserting against the freshly re-imported
+    object would prove nothing about the object the code under test
+    actually reads -- the same class of import-identity bug this test
+    exists to catch, one layer up (we've been bitten before by
+    ``importlib.reload`` breaking ``isinstance`` checks elsewhere). A
+    subprocess that imports nothing first sidesteps module-identity
+    questions entirely: there is only ever one ``pyrite.admin_cli`` object.
+    """
+    script = (
+        "from tests.test_cli_surfaces_through_services import _config, _patched\n"
+        "import tempfile, pathlib\n"
+        "with tempfile.TemporaryDirectory() as tmpdir:\n"
+        "    config = _config(pathlib.Path(tmpdir))\n"
+        "    with _patched(config):\n"
+        "        pass\n"
+        # Import admin_cli only *after* _patched() has exited -- importing
+        # it earlier would make it already-present in sys.modules, which
+        # is the safe case _patched()'s own pre-import guard also relies
+        # on, and this check would then pass for the wrong reason.
+        "import pyrite.admin_cli as admin_cli_module\n"
+        "import pyrite.config as config_module\n"
+        "assert admin_cli_module.load_config is config_module.load_config, (\n"
+        "    admin_cli_module.load_config\n"
+        ")\n"
+        "assert 'return_value' not in repr(admin_cli_module.load_config)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parent.parent,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

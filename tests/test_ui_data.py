@@ -51,9 +51,14 @@ def ui(tmp_path, monkeypatch):
     IndexManager(db, config).index_all()
     db.close()
 
-    with patch("pyrite.config.load_config", return_value=config):
-        import pyrite.ui.data as data
+    # Import (freshly, with the streamlit stub in place) before
+    # pyrite.config.load_config is patched (#510): this module does
+    # `from pyrite.config import load_config` at import time, so importing
+    # it while that name is already a Mock would bind the Mock, and the
+    # patch.object below would then "restore" it to that Mock on exit.
+    import pyrite.ui.data as data
 
+    with patch("pyrite.config.load_config", return_value=config):
         with patch.object(data, "load_config", return_value=config):
             yield data, event.id
 
