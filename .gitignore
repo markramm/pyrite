@@ -103,3 +103,7 @@ pyrite_deployments/
 # The maintainer's desk: a per-repo, local Pyrite KB (conductor queue, tick logs, retros).
 # See docs/conductor-desk.md. Never committed.
 desk/
+
+# ADR-0037 theme-0 characterization goldens' regeneration lock sidecars
+# (golden_io.py's fcntl.flock target) -- runtime state, not source.
+tests/characterization/goldens/*.lock

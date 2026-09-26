@@ -1,0 +1,428 @@
+{
+  "BrandingInvalidError": {
+    "cli": {
+      "error": "The server's branding configuration is invalid and could not be loaded. An administrator needs to fix branding.yaml; the server log names the file and the problem.",
+      "error_code": "BRANDING_INVALID",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "The server's branding configuration is invalid and could not be loaded. An administrator needs to fix branding.yaml; the server log names the file and the problem.",
+      "error_code": "BRANDING_INVALID",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "BRANDING_INVALID",
+        "message": "The server's branding configuration is invalid and could not be loaded. An administrator needs to fix branding.yaml; the server log names the file and the problem."
+      },
+      "status": 500
+    }
+  },
+  "ClipperBlockedHostError": {
+    "cli": {
+      "error": "characterization message for ClipperBlockedHostError",
+      "error_code": "CLIPPER_BLOCKED_HOST",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for ClipperBlockedHostError",
+      "error_code": "CLIPPER_BLOCKED_HOST",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "INTERNAL_ERROR",
+        "message": "characterization message for ClipperBlockedHostError"
+      },
+      "status": 500
+    }
+  },
+  "ConfigError": {
+    "cli": {
+      "error": "characterization message for ConfigError",
+      "error_code": "CONFIG_ERROR",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for ConfigError",
+      "error_code": "CONFIG_ERROR",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "CONFIG_CONFLICT",
+        "message": "characterization message for ConfigError"
+      },
+      "status": 409
+    }
+  },
+  "ConfigFileUnreadableError": {
+    "cli": {
+      "error": "The configuration was not saved: the config file on the server could not be read. An administrator needs to fix or move config.yaml; the server log names the file and the problem.",
+      "error_code": "CONFIG_ERROR",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "The configuration was not saved: the config file on the server could not be read. An administrator needs to fix or move config.yaml; the server log names the file and the problem.",
+      "error_code": "CONFIG_ERROR",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "CONFIG_SAVE_REFUSED",
+        "message": "The configuration was not saved: the config file on the server could not be read. An administrator needs to fix or move config.yaml; the server log names the file and the problem."
+      },
+      "status": 409
+    }
+  },
+  "ConfigSaveRefusedError": {
+    "cli": {
+      "error": "The configuration was not saved: the config file changed since the server loaded it. Restart the server so it reads the current file, then re-run the request; the server log names the file and the knowledge bases.",
+      "error_code": "CONFIG_ERROR",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "The configuration was not saved: the config file changed since the server loaded it. Restart the server so it reads the current file, then re-run the request; the server log names the file and the knowledge bases.",
+      "error_code": "CONFIG_ERROR",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "CONFIG_SAVE_REFUSED",
+        "message": "The configuration was not saved: the config file changed since the server loaded it. Restart the server so it reads the current file, then re-run the request; the server log names the file and the knowledge bases."
+      },
+      "status": 409
+    }
+  },
+  "EntryExistsError": {
+    "cli": {
+      "error": "characterization message for EntryExistsError",
+      "error_code": "ENTRY_EXISTS",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for EntryExistsError",
+      "error_code": "ENTRY_EXISTS",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "VALIDATION_ERROR",
+        "message": "characterization message for EntryExistsError"
+      },
+      "status": 422
+    }
+  },
+  "EntryNotFoundError": {
+    "cli": {
+      "error": "characterization message for EntryNotFoundError",
+      "error_code": "NOT_FOUND",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for EntryNotFoundError",
+      "error_code": "NOT_FOUND",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "ENTRY_NOT_FOUND",
+        "message": "characterization message for EntryNotFoundError"
+      },
+      "status": 404
+    }
+  },
+  "FrontmatterError": {
+    "cli": {
+      "error": "characterization message for FrontmatterError",
+      "error_code": "VALIDATION_FAILED",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for FrontmatterError",
+      "error_code": "VALIDATION_FAILED",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "INVALID_FRONTMATTER",
+        "message": "characterization message for FrontmatterError"
+      },
+      "status": 422
+    }
+  },
+  "InvalidGitRefError": {
+    "cli": {
+      "error": "characterization message for InvalidGitRefError",
+      "error_code": "INVALID_REF",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for InvalidGitRefError",
+      "error_code": "INVALID_REF",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "VALIDATION_ERROR",
+        "message": "characterization message for InvalidGitRefError"
+      },
+      "status": 422
+    }
+  },
+  "KBNotFoundError": {
+    "cli": {
+      "error": "characterization message for KBNotFoundError",
+      "error_code": "NOT_FOUND",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for KBNotFoundError",
+      "error_code": "NOT_FOUND",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "KB_NOT_FOUND",
+        "message": "characterization message for KBNotFoundError"
+      },
+      "status": 404
+    }
+  },
+  "KBProtectedError": {
+    "cli": {
+      "error": "characterization message for KBProtectedError",
+      "error_code": "KB_PROTECTED",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for KBProtectedError",
+      "error_code": "KB_PROTECTED",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "KB_PROTECTED",
+        "message": "characterization message for KBProtectedError"
+      },
+      "status": 403
+    }
+  },
+  "KBReadOnlyError": {
+    "cli": {
+      "error": "characterization message for KBReadOnlyError",
+      "error_code": "READ_ONLY",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for KBReadOnlyError",
+      "error_code": "READ_ONLY",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "KB_READ_ONLY",
+        "message": "characterization message for KBReadOnlyError"
+      },
+      "status": 403
+    }
+  },
+  "LastAdminError": {
+    "cli": {
+      "error": "characterization message for LastAdminError",
+      "error_code": "LAST_ADMIN",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for LastAdminError",
+      "error_code": "LAST_ADMIN",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "LAST_ADMIN",
+        "message": "characterization message for LastAdminError"
+      },
+      "status": 409
+    }
+  },
+  "PluginError": {
+    "cli": {
+      "error": "characterization message for PluginError",
+      "error_code": "REQUEST_REFUSED",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for PluginError",
+      "error_code": "REQUEST_REFUSED",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "PLUGIN_ERROR",
+        "message": "characterization message for PluginError"
+      },
+      "status": 502
+    }
+  },
+  "QuerySyntaxError": {
+    "cli": {
+      "error": "characterization message for QuerySyntaxError",
+      "error_code": "QUERY_SYNTAX",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for QuerySyntaxError",
+      "error_code": "QUERY_SYNTAX",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "QUERY_SYNTAX",
+        "message": "characterization message for QuerySyntaxError"
+      },
+      "status": 400
+    }
+  },
+  "QueryTooLongError": {
+    "cli": {
+      "error": "characterization message for QueryTooLongError",
+      "error_code": "QUERY_TOO_LONG",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for QueryTooLongError",
+      "error_code": "QUERY_TOO_LONG",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "QUERY_TOO_LONG",
+        "message": "characterization message for QueryTooLongError"
+      },
+      "status": 422
+    }
+  },
+  "SchemaViolationError": {
+    "cli": {
+      "error": "schema violation",
+      "error_code": "SCHEMA_VIOLATION",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "schema violation",
+      "error_code": "SCHEMA_VIOLATION",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "VALIDATION_ERROR",
+        "message": "schema violation"
+      },
+      "status": 422
+    }
+  },
+  "StorageBusyError": {
+    "cli": {
+      "error": "characterization message for StorageBusyError",
+      "error_code": "REQUEST_REFUSED",
+      "retryable": true
+    },
+    "mcp": {
+      "error": "characterization message for StorageBusyError",
+      "error_code": "REQUEST_REFUSED",
+      "retryable": true
+    },
+    "rest": {
+      "body": {
+        "code": "STORAGE_ERROR",
+        "message": "characterization message for StorageBusyError"
+      },
+      "status": 500
+    }
+  },
+  "StorageError": {
+    "cli": {
+      "error": "characterization message for StorageError",
+      "error_code": "REQUEST_REFUSED",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for StorageError",
+      "error_code": "REQUEST_REFUSED",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "STORAGE_ERROR",
+        "message": "characterization message for StorageError"
+      },
+      "status": 500
+    }
+  },
+  "TruncatedBodyError": {
+    "cli": {
+      "error": "body was truncated",
+      "error_code": "VALIDATION_FAILED",
+      "retryable": false,
+      "suggestion": "fetch the full body and retry"
+    },
+    "mcp": {
+      "error": "body was truncated",
+      "error_code": "VALIDATION_FAILED",
+      "retryable": false,
+      "suggestion": "fetch the full body and retry"
+    },
+    "rest": {
+      "body": {
+        "code": "VALIDATION_ERROR",
+        "message": "body was truncated"
+      },
+      "status": 422
+    }
+  },
+  "UndeclaredTypeError": {
+    "cli": {
+      "error": "type 'x' is not declared",
+      "error_code": "UNDECLARED_TYPE",
+      "retryable": false,
+      "suggestion": "Re-call with entry_type in [note, event] (see kb_schema), or pass allow_undeclared=true to override."
+    },
+    "mcp": {
+      "declared_types": [
+        "note",
+        "event"
+      ],
+      "error": "type 'x' is not declared",
+      "error_code": "UNDECLARED_TYPE",
+      "retryable": false,
+      "suggestion": "Re-call with entry_type in [note, event] (see kb_schema), or pass allow_undeclared=true to override."
+    },
+    "rest": {
+      "body": {
+        "code": "VALIDATION_ERROR",
+        "message": "type 'x' is not declared"
+      },
+      "status": 422
+    }
+  },
+  "ValidationError": {
+    "cli": {
+      "error": "characterization message for ValidationError",
+      "error_code": "VALIDATION_FAILED",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for ValidationError",
+      "error_code": "VALIDATION_FAILED",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "code": "VALIDATION_ERROR",
+        "message": "characterization message for ValidationError"
+      },
+      "status": 422
+    }
+  }
+}
