@@ -6,6 +6,7 @@ from collections.abc import Callable
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
 from ...exceptions import ConfigError, KBNotFoundError, KBProtectedError
+from ...services.access_policy import ROLES
 from ...services.auth_service import AuthService
 from ...services.embedding_worker import EmbeddingWorker
 from ...services.ephemeral_service import EphemeralKBService, InvalidEphemeralKBNameError
@@ -547,7 +548,7 @@ def list_plugins(request: Request):
         except Exception:
             logger.warning("Failed to get hooks for plugin %s", name, exc_info=True)
         try:
-            for tier in ("read", "write", "admin"):
+            for tier in ROLES:
                 if hasattr(plugin, "get_mcp_tools"):
                     tools = plugin.get_mcp_tools(tier)
                     if tools:
@@ -598,7 +599,7 @@ def get_plugin_detail(request: Request, name: str):
 
     tools_all: dict = {}
     try:
-        for tier in ("read", "write", "admin"):
+        for tier in ROLES:
             if hasattr(plugin, "get_mcp_tools"):
                 tools = plugin.get_mcp_tools(tier)
                 if tools:

@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from ..config import PyriteConfig
 from ..exceptions import LastAdminError
+from ..services.access_policy import ROLES
 from ..services.auth_service import AuthService, RegistrationClosedError
 from ..services.oauth_providers import GitHubOAuthProvider
 from .api import _anonymized_key_func, get_auth_service, get_config, requires_tier, verify_api_key
@@ -141,7 +142,7 @@ async def set_user_role(
     """Update a user's global role. Requires the global admin tier."""
     body = await request.json()
     role = body.get("role", "")
-    if role not in ("read", "write", "admin"):
+    if role not in ROLES:
         raise HTTPException(status_code=400, detail=f"Invalid role: {role}")
 
     global_access = body.get("global_access")

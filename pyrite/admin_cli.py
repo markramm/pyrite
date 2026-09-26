@@ -595,8 +595,10 @@ def mcp_setup(
     if "mcpServers" not in claude_config:
         claude_config["mcpServers"] = {}
 
+    from .services.access_policy import ROLES
+
     # Register one server per tier
-    for t in ["read", "write", "admin"]:
+    for t in ROLES:
         server_name = f"pyrite-{t}"
         if "python" in str(pyrite_exe):
             claude_config["mcpServers"][server_name] = {

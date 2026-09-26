@@ -21,6 +21,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Mount, Route
 
 from ..config import PyriteConfig
+from ..services.access_policy import ROLES, AccessPolicy, Principal, resolve_api_key_role
 from ..storage.database import PyriteDB
 
 logger = logging.getLogger(__name__)
@@ -38,10 +39,11 @@ def _resolve_bearer_auth(
     the KBs a write-tier tool may target; each None when the caller is not
     scoped.
 
-    The readable set comes from `api.readable_kbs_for_user`, the same helper
-    the REST routes resolve through, so a grant honoured over REST is
-    honoured over MCP and vice versa. There is deliberately no second
-    implementation of the rule (#201).
+    The readable and writable sets come from the access policy
+    (`AccessPolicy.read_scope` / `write_scope`), the rule the REST routes
+    resolve through too, so a grant honoured over REST is honoured over MCP
+    and vice versa. There is deliberately no second implementation of the
+    rule (#201).
 
     `user_id` is the discriminator, matching REST: non-None for a session
     user (scoped), None for an API key -- the operator's credential, not a
@@ -51,18 +53,17 @@ def _resolve_bearer_auth(
     `/mcp` 401s a caller with no credential where REST would admit them at
     `anonymous_tier`.
     """
-    ctx = _resolve_credential(request, config, db)
-    from .api import kbs_for_user_at_tier, readable_kbs_for_user
-
-    scoped = ctx.get("user_id") is not None
-    ctx["readable_kbs"] = readable_kbs_for_user(
-        config, db, ctx.get("user_id"), ctx["role"], scoped=scoped
+    policy = AccessPolicy(config, db)
+    ctx = _resolve_credential(request, config, db, policy)
+    principal = (
+        Principal.user(ctx["user_id"], ctx["role"])
+        if ctx.get("user_id") is not None
+        else Principal.from_api_key(ctx["role"])
     )
+    ctx["readable_kbs"] = policy.read_scope(principal).as_set()
     # The KBs a write-tier tool may target: the same per-KB rule REST's
     # `requires_kb_tier("write")` applies, resolved once per connection.
-    ctx["writable_kbs"] = kbs_for_user_at_tier(
-        config, db, ctx.get("user_id"), ctx["role"], "write", scoped=scoped
-    )
+    ctx["writable_kbs"] = policy.write_scope(principal).as_set()
     return ctx
 
 
@@ -82,6 +83,7 @@ def _resolve_credential(
     request: HTTPConnection,
     config: PyriteConfig,
     db: PyriteDB,
+    policy: AccessPolicy | None = None,
 ) -> dict[str, Any]:
     """The credential half of `_resolve_bearer_auth`: role, username, user_id
     (and, for a session, ``session_hash`` and ``session_expires_at``).
@@ -91,8 +93,11 @@ def _resolve_credential(
     (#218). One credential resolver for both transports, not two.
 
     Synchronous and may query the DB (session lookup): callers on the event
-    loop run it in a threadpool.
+    loop run it in a threadpool. Sessions are verified through the access
+    policy's identity store (`policy`, built on `db` when not given).
     """
+    if policy is None:
+        policy = AccessPolicy(config, db)
     # 1. Bearer token in Authorization header
     auth_header = request.headers.get("authorization", "")
     if auth_header.lower().startswith("bearer "):
@@ -105,9 +110,7 @@ def _resolve_credential(
 
             # Check against session tokens (for web-authenticated users)
             if config.settings.auth.enabled:
-                from ..services.auth_service import AuthService
-
-                found = AuthService(db, config.settings.auth).verify_session_detail(token)
+                found = policy.auth_service.verify_session_detail(token)
                 if found:
                     return _session_ctx(*found)
 
@@ -123,9 +126,7 @@ def _resolve_credential(
     if config.settings.auth.enabled:
         session_token = request.cookies.get("pyrite_session")
         if session_token:
-            from ..services.auth_service import AuthService
-
-            found = AuthService(db, config.settings.auth).verify_session_detail(session_token)
+            found = policy.auth_service.verify_session_detail(session_token)
             if found:
                 return _session_ctx(*found)
 
@@ -144,14 +145,12 @@ def _resolve_credential(
 
 
 def _resolve_api_key_role(key: str, config: PyriteConfig) -> str | None:
-    """Resolve an API key to its role -- the REST rule, not a copy of it.
+    """Resolve an API key to its role -- the access policy's rule, not a copy.
 
     There were two copies of this rule, and a bug in the "no keys configured"
     branch (any key answered "admin" with auth enabled) had to be fixed in
-    both. Delegating keeps one implementation, as `readable_kbs_for_user` does.
+    both. Delegating keeps one implementation.
     """
-    from .api import resolve_api_key_role
-
     return resolve_api_key_role(key, config)
 
 
@@ -225,7 +224,7 @@ def mount_mcp_routes(
 
         role = user_ctx["role"]
         client_id = user_ctx["username"]
-        tier = role if role in ("read", "write", "admin") else "read"
+        tier = role if role in ROLES else "read"
         readable = user_ctx["readable_kbs"]
         writable = user_ctx["writable_kbs"]
 
@@ -279,7 +278,7 @@ def mount_mcp_routes(
         # Try to resolve user context for tier-specific info
         try:
             user_ctx = await _authenticate(request, config, app_get_db())
-            tier = user_ctx["role"] if user_ctx["role"] in ("read", "write", "admin") else "read"
+            tier = user_ctx["role"] if user_ctx["role"] in ROLES else "read"
             mcp_server = _get_mcp_server(tier)
             info["tools_count"] = len(mcp_server.tools)
             info["tier"] = tier

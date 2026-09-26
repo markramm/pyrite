@@ -143,7 +143,10 @@ COMPOSITION_ROOTS_SIZE = 36  # a new root is a design decision: raise it only wi
 # -- Not yet moved: (function, rule) -> (count, why and where it moves) --------
 
 _T382 = "the AI-settings precedence, deferred by #380; moves to SettingsService with #382"
-_T383 = "authorization; moves to services/access_policy.py (#383, ADR-0037 theme 1)"
+_T383 = (
+    "the DB handle an AccessPolicy is built on (#383 moved the rule out); goes when the "
+    "transport receives a Principal (ADR-0037 theme 4 for MCP, theme 5 for /ws)"
+)
 _T384 = "the plugin API's context holds the DB for plugins; the plugin contract is #384's"
 _FOLLOW = (
     "predates #380; moves behind a service in backlog item "
@@ -153,12 +156,7 @@ _INDEX = "IndexManager driven from a surface; " + _FOLLOW
 
 ALLOWLIST: dict[tuple[str, str], tuple[int, str]] = {
     (f"{_API}::get_llm_service", "db."): (4, _T382),
-    (f"{_API}::resolve_kb_default_role", "_raw_conn"): (1, _T383),
-    (f"{_API}::resolve_kb_default_role", "db."): (1, _T383),
-    (f"{_API}::kb_exists", "_raw_conn"): (1, _T383 + " (the concealment check)"),
-    (f"{_API}::kb_exists", "db."): (1, _T383),
     ("pyrite/server/mcp_routes.py::<module>", "PyriteDB"): (1, _T383 + "; #433 rewrote it"),
-    ("pyrite/server/mcp_routes.py::_resolve_credential", "AuthService("): (2, _T383),
     ("pyrite/server/websocket.py::<module>", "PyriteDB"): (1, _T383 + " (resolve_socket_scope)"),
     ("pyrite/plugins/context.py::PluginContext.search_semantic", ".db"): (3, _T384),
     ("pyrite/server/endpoints/admin.py::<module>", "storage"): (1, _INDEX),
@@ -230,7 +228,7 @@ ALLOWLIST: dict[tuple[str, str], tuple[int, str]] = {
         "sqlite3 integrity check; " + _FOLLOW,
     ),
 }
-ALLOWLIST_SIZE = 44  # lower it with every entry removed; never raise it
+ALLOWLIST_SIZE = 39  # lower it with every entry removed; never raise it
 
 SURFACES = (
     "pyrite/server/",
