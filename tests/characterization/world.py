@@ -74,6 +74,7 @@ world through the same identities.
 from __future__ import annotations
 
 import hashlib
+import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -275,6 +276,53 @@ class World:
                 pass
 
 
+def _create_app_with_empty_static(config, tmpdir: Path):
+    """`create_app(config=config)`, with static/SPA mounting pointed at an
+    always-empty directory (#504 round 2).
+
+    `create_app` mounts `/_app` (a StaticFiles Mount), `GET /favicon.ico`
+    and the `GET /{path:path}` SPA fallback (both real APIRoutes) whenever
+    `web/dist/index.html` exists on disk -- which it does on the main
+    checkout, and on any contributor's tree after `npm run build`. Building
+    this harness's world with a bare `create_app(config=config)` made the
+    completeness tests' pass/fail depend on that build artifact rather than
+    on the route table this harness actually characterizes: with a built
+    `web/dist` present, `test_every_rest_route_is_covered` and
+    `test_rest_total_route_count_is_pinned` failed on the two new APIRoutes,
+    and `test_every_transport_route_is_covered` failed on the new `/_app`
+    Mount -- three false reds with no code change, on the exact tree a
+    contributor who just ran the frontend build would have.
+
+    `create_app` already supports pointing static mounting elsewhere via the
+    `PYRITE_STATIC_DIR` env var (for containerised deploys where the
+    package is installed as a site-package and the relative `web/dist` path
+    would not resolve) -- reused here rather than adding a second lever, so
+    there is exactly one way `create_app` decides where static assets live.
+    Pointed at a `tmpdir` subdirectory this harness itself created and never
+    populates with an `index.html`, so `mount_static`'s own `if not
+    index_html.exists(): return` guard makes it a no-op regardless of
+    whether the real repo's `web/dist` exists, was just built, or was
+    deleted -- `test_every_transport_route_is_covered` and
+    `test_every_rest_route_is_covered` now see the identical route table
+    either way.
+    """
+    empty_dist = tmpdir / "empty-static-dir"
+    empty_dist.mkdir(exist_ok=True)
+    prior = os.environ.get("PYRITE_STATIC_DIR")
+    os.environ["PYRITE_STATIC_DIR"] = str(empty_dist)
+    try:
+        return create_app(config=config)
+    finally:
+        # create_app reads the env var once, synchronously, during this
+        # call -- restore it immediately so no other code in this process
+        # (a differently-configured create_app() call, a parallel test)
+        # ever observes this world's override.
+        if prior is None:
+            os.environ.pop("PYRITE_STATIC_DIR", None)
+        else:
+            os.environ["PYRITE_STATIC_DIR"] = prior
+
+
 def build_world(tmp_path_factory, *, label: str = "adr0037-characterization") -> World:
     tmpdir = Path(tmp_path_factory.mktemp(label))
     for name in (READABLE, PRIVATE, READ_ONLY, NO_DEFAULT_ROLE):
@@ -305,7 +353,7 @@ def build_world(tmp_path_factory, *, label: str = "adr0037-characterization") ->
         ),
     )
 
-    app = create_app(config=config)
+    app = _create_app_with_empty_static(config, tmpdir)
     db = PyriteDB(config.settings.index_path)
     app.dependency_overrides[get_config] = lambda: config
     app.dependency_overrides[get_db] = lambda: db

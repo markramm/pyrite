@@ -336,6 +336,168 @@ MCP_ACCESS_EXCLUSIONS: dict[str, str] = {
 }
 MCP_ACCESS_EXCLUSIONS_COUNT = len(MCP_ACCESS_EXCLUSIONS)
 
+# Every route `create_app()` mounts that is NOT an `APIRoute` -- a Starlette
+# `Route`/`Mount` (the `/mcp` transport) or an `APIWebSocketRoute` (`/ws`) --
+# so `test_every_rest_route_is_covered`'s `APIRoute`-only walk cannot see it
+# at all, and it was silently absent from both `kb_bearing_rest_operations`
+# and `REST_ACCESS_EXCLUSIONS` (#498). Each is COVERED, not excluded: its
+# connection-level auth is pinned directly by
+# `tests/characterization/test_mcp_transport_auth.py` (`_resolve_bearer_auth`
+# / `_authenticate` for `/mcp/sse` and `/mcp/info`; `/mcp/messages/` shares
+# the SAME per-connection ctx the SSE handshake already resolved -- the SDK
+# transport relays JSON-RPC over an established session, it does not
+# authenticate a second time) and by `tests/test_websocket_scoping.py`
+# (`/ws`'s own `resolve_socket_scope`, built on the identical
+# `mcp_routes._resolve_credential` + `AccessPolicy`). Named here, with a
+# reason, so `test_every_rest_route_is_covered`'s walk (extended to include
+# these) can report them "covered by name" the same way an `APIRoute` is
+# covered by appearing in `kb_bearing_rest_operations`.
+#
+# #498 round-2 cold read: the original walk only looked INSIDE the `/mcp`
+# Mount and for `APIWebSocketRoute`s -- a `Route`/`Mount` appended anywhere
+# else at the TOP LEVEL of `app.routes` (a scratch top-level `Route` added
+# during review passed every test in this file) was invisible to it. The
+# walk below now looks at every top-level route, recursing into every
+# `Mount` wherever it appears (not just one named `/mcp`), so nothing new
+# mounted at the top level -- transport or not -- can land uncovered again.
+TRANSPORT_ROUTE_EXCLUSIONS: dict[str, str] = {
+    "GET /mcp/sse": (
+        "Starlette Route, not an APIRoute -- negotiates the long-lived SSE "
+        "transport. Its connection-level auth (_resolve_bearer_auth via "
+        "_authenticate) is pinned directly by test_mcp_transport_auth.py."
+    ),
+    "GET /mcp/info": (
+        "Starlette Route, not an APIRoute -- connection metadata for "
+        "frontends. Calls the identical _authenticate as /mcp/sse; pinned "
+        "by test_mcp_transport_auth.py's TestClient case."
+    ),
+    "POST /mcp/messages/": (
+        "A Starlette Mount (sse_transport.handle_post_message), not an "
+        "APIRoute. Today's behaviour, pinned: the session id in the "
+        "`?session_id=` query param IS the whole credential for this "
+        "relay -- the POST's own Authorization/X-API-Key/cookie header, if "
+        "any, is never read or checked by handle_post_message; the tier "
+        "and the readable/writable KB sets were fixed once, at /mcp/sse "
+        "connect time (_resolve_bearer_auth via _authenticate), and closed "
+        "over by that session's sdk.build_sdk_server(...) call. Pinned by "
+        "test_mcp_transport_auth.py's TestMCPMessagesSessionCredential "
+        "(unknown/missing/malformed session id) and "
+        "TestMCPMessagesScopeFixedAtConnect (the resolved scope is the "
+        "connect-time one, not re-derived per POST)."
+    ),
+    "WS /ws": (
+        "APIWebSocketRoute, not an APIRoute -- its handshake auth "
+        "(resolve_socket_scope, built on the same mcp_routes._resolve_credential "
+        "+ AccessPolicy) is pinned by tests/test_websocket_scoping.py."
+    ),
+}
+TRANSPORT_ROUTE_EXCLUSIONS_COUNT = len(TRANSPORT_ROUTE_EXCLUSIONS)
+
+# Non-APIRoute top-level constructs that are NOT transport at all -- FastAPI's
+# own docs/schema routes (plain Starlette `Route`s, not `APIRoute`s, so the
+# REST walk misses these too). Each read, not assumed, the same discipline
+# REST_ACCESS_EXCLUSIONS uses.
+#
+# NOT listed here: mount_static's `app.mount("/_app", StaticFiles(...))`,
+# `GET /favicon.ico` and the `GET /{path:path}` SPA fallback
+# (pyrite/server/static.py) -- all three mount only when `web/dist/index.html`
+# exists on disk, which it does on the main checkout and on any contributor's
+# tree after `npm run build`. #504 round 2: a first version of this fix
+# listed `/_app` here on the reasoning "this harness's create_app() never has
+# a built web/dist" -- true only by accident of which tree happened to run
+# the tests, and false the moment someone ran the frontend build first
+# (three completeness tests went red with no code change at all: the two
+# static APIRoutes were newly uncovered REST routes, and `/_app` was a newly
+# uncovered transport-completeness Mount). The real fix is in `world.py`:
+# `_create_app_with_empty_static` points `PYRITE_STATIC_DIR` at an
+# always-empty directory this harness itself creates, so `mount_static`'s own
+# `if not index_html.exists(): return` guard makes it -- and the two static
+# APIRoutes -- a no-op in `world.app` regardless of whether the real repo's
+# `web/dist` exists. Nothing to exclude here because nothing is ever mounted.
+NON_TRANSPORT_ROUTE_EXCLUSIONS: dict[str, str] = {
+    "GET /openapi.json": (
+        "FastAPI's own schema route, a plain Starlette Route (not an "
+        "APIRoute) auto-added by FastAPI(...) -- no auth dependency, no KB "
+        "param; serves the generated OpenAPI schema."
+    ),
+    "GET /docs": (
+        "FastAPI's own Swagger UI route, a plain Starlette Route -- no auth "
+        "dependency, no KB param."
+    ),
+    "GET /docs/oauth2-redirect": (
+        "FastAPI's own Swagger OAuth2 redirect route, a plain Starlette "
+        "Route -- no auth dependency, no KB param."
+    ),
+    "GET /redoc": (
+        "FastAPI's own ReDoc route, a plain Starlette Route -- no auth dependency, no KB param."
+    ),
+}
+NON_TRANSPORT_ROUTE_EXCLUSIONS_COUNT = len(NON_TRANSPORT_ROUTE_EXCLUSIONS)
+
+
+def _walk_non_apiroutes(routes, prefix: str = "") -> set[str]:
+    """Every non-`APIRoute` entry anywhere in `routes`, recursing into every
+    `Mount` (not just one named `/mcp`) and into FastAPI's `_IncludedRouter`
+    wrapper (which can itself hold a `Mount`, even though today it only ever
+    holds `APIRoute`s). Named ``"{METHOD} {full_path}"`` for a `Route`,
+    ``"WS {full_path}"`` for an `APIWebSocketRoute`, and ``"MOUNT {full_path}"``
+    for a `Mount` whose own sub-app is not itself walked further (a raw ASGI
+    app, e.g. `StaticFiles`, has no `.routes` to recurse into) -- the same
+    shape `TRANSPORT_ROUTE_EXCLUSIONS`/`NON_TRANSPORT_ROUTE_EXCLUSIONS` use.
+    """
+    from fastapi.routing import APIRoute, APIWebSocketRoute
+    from starlette.routing import Mount, Route
+
+    out: set[str] = set()
+    for route in routes:
+        full_path = prefix + getattr(route, "path", "")
+        if isinstance(route, APIRoute):
+            continue
+        if type(route).__name__ == "_IncludedRouter":
+            sub = route.original_router
+            out |= _walk_non_apiroutes(sub.routes, prefix + (sub.prefix or ""))
+        elif isinstance(route, APIWebSocketRoute):
+            out.add(f"WS {full_path}")
+        elif isinstance(route, Mount):
+            sub_routes = getattr(route.app, "routes", None)
+            if sub_routes is not None:
+                # A Mount with real sub-routes (e.g. /mcp): recurse, naming
+                # each sub-route's own method(s), same as before. A nested
+                # Mount with no `.methods` of its own (sse_transport's raw
+                # ASGI /messages/ app) is POST-only per mcp_routes.py's own
+                # docstring -- there is nothing else to introspect on it.
+                for sub in sub_routes:
+                    sub_full = full_path + getattr(sub, "path", "")
+                    if isinstance(sub, Mount):
+                        out.add(f"POST {sub_full}/")
+                    else:
+                        for method in sorted(getattr(sub, "methods", None) or ()):
+                            if method in ("HEAD", "OPTIONS"):
+                                continue
+                            out.add(f"{method} {sub_full}")
+            else:
+                # A raw ASGI app with no route list to walk (StaticFiles and
+                # similar) -- named as the Mount itself, not a method+path.
+                out.add(f"MOUNT {full_path}")
+        elif isinstance(route, Route):
+            for method in sorted(getattr(route, "methods", None) or ()):
+                if method in ("HEAD", "OPTIONS"):
+                    continue
+                out.add(f"{method} {full_path}")
+    return out
+
+
+def non_apiroute_transport_routes(app) -> set[str]:
+    """Every non-`APIRoute` top-level construct of `app`, wherever it is
+    mounted -- not just inside `/mcp` or a bare `APIWebSocketRoute` (#498
+    round-2: a top-level `Route` added anywhere else in `app.routes` was
+    invisible to the original, `/mcp`-only walk). Covers both the real
+    transport routes (`TRANSPORT_ROUTE_EXCLUSIONS`) and anything that is not
+    transport at all (`NON_TRANSPORT_ROUTE_EXCLUSIONS`) -- the completeness
+    test diffs this single set against the union of both.
+    """
+    return _walk_non_apiroutes(app.routes)
+
 
 def _dependency_names(dependant) -> set[str]:
     names: set[str] = set()
