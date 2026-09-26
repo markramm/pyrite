@@ -63,10 +63,27 @@
   raise sites; the real detail still reaches the server log. Their
   subclasses that already had their own `public_message`
   (`ConfigSaveRefusedError`/`ConfigFileUnreadableError`, #377) are
-  unaffected. The CLI's generic error path does not read `public_message`
-  at all (see above), so this is a REST/MCP-only visible change for now.
-  The per-item bulk `"error"` field (`kb_bulk_create`,
-  `POST /api/entries/import`, and the social plugin's create tool) now
-  uses `public_message` the same way for these three classes.
+  unaffected. The fixed message replaces the raw text wherever these
+  classes reach a caller:
+  - MCP: the `error` of `kb_orient`, `kb_create`, `kb_bulk_create` (whole
+    call and each item), `kb_update`, `kb_delete`, `kb_link`,
+    `task_decompose`, `task_checkpoint`, schema set, `kb_commit`,
+    `kb_push` and `kb_registry_add`; the social create tool, the
+    journalism-investigation create/log-source/promote tools, and the
+    software-kb reorder and backlog-create tools.
+  - REST: each item of `POST /api/entries/import`, publish's
+    `push_error`, the batch link write-back's per-position error, and the
+    index job `error` field (admin `GET /index/jobs`, MCP
+    `kb_index_job_status`).
+  - CLI: `zettel new`, `sw new-adr` and bulk create print the fixed
+    message; the raw text still reaches the terminal through the log on
+    stderr.
+
+  Known limits in this release (follow-up issue): `kb_registry_add` over
+  MCP answers a duplicate KB name with the generic "configuration is
+  invalid" message where REST still names the conflict; a few recovery
+  hints ("run `pyrite index sync`", a plugin's `pip install` hint) now
+  reach only the log; and the three CLI sites above mask text on the
+  operator's own terminal for no security gain.
 
   (ADR-0037 theme 2)

@@ -102,14 +102,16 @@ _STATUS_BY_CODE: dict[str, int] = {
 
 
 #: A code this dict does not know falls back to its exception's *base*
-#: class's status, walked most-specific-first, rather than a blind 500.
+#: class's status, taking the first match in this tuple's order (not the
+#: MRO) rather than a blind 500; the eight bases are siblings today, so the
+#: order only matters for a future class inheriting from two of them.
 #: Guards against exactly the bug this list fixed once already: a
 #: ValidationError/ConfigError/StorageError subclass that narrows its own
 #: error_code (#378's family, and any future one) but whose code nobody
 #: added to _STATUS_BY_CODE above -- a silent 500 for a request the caller
 #: got right, instead of the 4xx (or 502) its base answers for the same
 #: condition. Item 2 (conductor cold read of 5d65caa7) widened this from
-#: three bases to every base with more than one concrete code today.
+#: three bases to eight.
 _BASE_CLASS_FALLBACK: tuple[tuple[type[PyriteError], int], ...] = (
     (ValidationError, 422),
     (ConfigError, 409),
