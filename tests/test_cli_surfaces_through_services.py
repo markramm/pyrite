@@ -42,6 +42,23 @@ def _config(tmp_path, *, indexed=True):
 
 @contextlib.contextmanager
 def _patched(config):
+    # Import every module that owns one of the patch targets below *before*
+    # any patch is entered (#510). `patch("a.b.c", ...)` imports `a.b` to
+    # resolve its target if it isn't already in sys.modules. If that import
+    # happens while an earlier patch in this same stack has already replaced
+    # `pyrite.config.load_config` with a Mock, a module that does
+    # `from .config import load_config` binds the Mock at import time, and
+    # `patch` then "restores" its attribute to that Mock on exit -- leaking
+    # it into every later test in the same worker. Importing up front means
+    # every module's `load_config` is already bound to the real function
+    # before any Mock exists, so each patch's own restore is the real thing.
+    import pyrite.admin_cli  # noqa: F401
+    import pyrite.cli  # noqa: F401
+    import pyrite.cli.context  # noqa: F401
+    import pyrite.cli.repo_commands  # noqa: F401
+    import pyrite.cli.search_commands  # noqa: F401
+    import pyrite.config  # noqa: F401
+
     with contextlib.ExitStack() as stack:
         for target in (
             "pyrite.config.load_config",
@@ -204,3 +221,38 @@ class TestAdminCli:
         with _patched(config):
             result = runner.invoke(app, ["repo", "sync", "org/none"])
         assert "org/none" in result.output or "not found" in result.output.lower()
+
+
+def test_patched_restores_the_real_load_config_even_when_admin_cli_is_unimported(config):
+    """#510: _patched() must leave every patched name as the real function.
+
+    ``patch("pyrite.admin_cli.load_config", ...)`` resolves its target by
+    importing ``pyrite.admin_cli`` if it is not already in ``sys.modules``.
+    If that import happens after ``pyrite.config.load_config`` has already
+    been replaced by a Mock (as ``_patched`` does, patching
+    ``pyrite.config.load_config`` first), ``admin_cli``'s
+    ``from .config import load_config`` binds that Mock. ``patch`` then
+    records the Mock as the attribute to restore, so exiting the context
+    leaves ``pyrite.admin_cli.load_config`` a Mock forever -- for every test
+    that runs afterward in the same worker.
+
+    This forces the failure mode deterministically by evicting admin_cli
+    (and its submodules) from sys.modules first, so this test fails on dev
+    regardless of xdist's distribution or import order.
+    """
+    import sys
+
+    import pyrite.admin_cli as admin_cli_module
+    import pyrite.config as config_module
+
+    for name in list(sys.modules):
+        if name == "pyrite.admin_cli" or name.startswith("pyrite.admin_cli."):
+            del sys.modules[name]
+
+    with _patched(config):
+        pass
+
+    import pyrite.admin_cli as admin_cli_module  # noqa: F811 (re-import after eviction)
+
+    assert admin_cli_module.load_config is config_module.load_config
+    assert "return_value" not in repr(admin_cli_module.load_config)
