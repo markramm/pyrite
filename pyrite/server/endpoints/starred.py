@@ -3,14 +3,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ...exceptions import EntryNotFoundError
+from ...services.access_policy import KB, Action, ReadScope
 from ...services.starred_service import INSTANCE_USER, StarredService
 from ..api import (
-    get_readable_kbs,
     get_starred_service,
     limiter,
-    requires_kb_read,
     requires_tier,
 )
+from ..authz import authorize
 from ..schemas import (
     ReorderStarredRequest,
     ReorderStarredResponse,
@@ -50,17 +50,13 @@ def _require_star_owner(request: Request) -> int:
     return owner
 
 
-@router.get(
-    "/starred",
-    response_model=StarredEntryListResponse,
-    dependencies=[Depends(requires_kb_read())],
-)
+@router.get("/starred", response_model=StarredEntryListResponse)
 @limiter.limit("100/minute")
 def list_starred(
     request: Request,
     kb: str | None = Query(None, description="Filter by KB name"),
     svc: StarredService = Depends(get_starred_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """List the caller's starred entries in the KBs they may read.
 
@@ -71,7 +67,7 @@ def list_starred(
     owner = _star_owner(request)
     if owner is None:
         return StarredEntryListResponse(count=0, starred=[])
-    items = svc.list_starred(owner, kb=kb, kb_names=None if kb else readable)
+    items = svc.list_starred(owner, kb=kb, kb_names=None if kb else scope.as_set())
     return StarredEntryListResponse(
         count=len(items),
         starred=[StarredEntryItem(**item) for item in items],
@@ -81,7 +77,7 @@ def list_starred(
 @router.post(
     "/starred",
     response_model=StarEntryResponse,
-    dependencies=[Depends(requires_tier("write")), Depends(requires_kb_read())],
+    dependencies=[Depends(requires_tier("write")), Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("30/minute")
 def star_entry(
@@ -99,7 +95,7 @@ def star_entry(
 @router.delete(
     "/starred/{entry_id}",
     response_model=UnstarEntryResponse,
-    dependencies=[Depends(requires_tier("write")), Depends(requires_kb_read())],
+    dependencies=[Depends(requires_tier("write")), Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("30/minute")
 def unstar_entry(

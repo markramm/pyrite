@@ -6,16 +6,16 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from ...exceptions import EntryNotFoundError
 from ...plugins.registry import get_registry
+from ...services.access_policy import KB, Action, ReadScope
 from ...services.kb_service import KBService
 from ...utils.metadata import parse_metadata
 from ..api import (
     get_kb_service,
-    get_readable_kbs,
     limiter,
     negotiate_response,
-    requires_kb_read,
     requires_kb_tier,
 )
+from ..authz import authorize
 from ..schemas import (
     CollectionEntriesResponse,
     CollectionListResponse,
@@ -53,17 +53,13 @@ def get_collection_types(request: Request):
     return {"types": merged}
 
 
-@router.get(
-    "/collections",
-    response_model=CollectionListResponse,
-    dependencies=[Depends(requires_kb_read())],
-)
+@router.get("/collections", response_model=CollectionListResponse)
 @limiter.limit("100/minute")
 def list_collections(
     request: Request,
     kb: str | None = Query(None, description="Filter by KB name"),
     svc: KBService = Depends(get_kb_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """List the collections in the KBs the caller may read.
 
@@ -71,7 +67,7 @@ def list_collections(
     ``total`` counts the rows returned. The readable set is pushed into
     the underlying ``list_entries`` query for that reason.
     """
-    results = svc.list_collections(kb_name=kb, kb_names=None if kb else readable)
+    results = svc.list_collections(kb_name=kb, kb_names=None if kb else scope.as_set())
 
     collections = []
     for r in results:
@@ -169,7 +165,7 @@ def create_collection(
 @router.get(
     "/collections/{collection_id}",
     response_model=CollectionResponse,
-    dependencies=[Depends(requires_kb_read())],
+    dependencies=[Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("100/minute")
 def get_collection(
@@ -210,7 +206,7 @@ def get_collection(
 @router.get(
     "/collections/{collection_id}/entries",
     response_model=CollectionEntriesResponse,
-    dependencies=[Depends(requires_kb_read())],
+    dependencies=[Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("100/minute")
 def get_collection_entries(
@@ -258,17 +254,13 @@ def get_collection_entries(
     return CollectionEntriesResponse(entries=entries, total=total, collection_id=collection_id)
 
 
-@router.post(
-    "/collections/query-preview",
-    response_model=QueryPreviewResponse,
-    dependencies=[Depends(requires_kb_read())],
-)
+@router.post("/collections/query-preview", response_model=QueryPreviewResponse)
 @limiter.limit("60/minute")
 def preview_collection_query(
     request: Request,
     body: QueryPreviewRequest = Body(...),
     svc: KBService = Depends(get_kb_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """Preview results for a collection query without saving.
 
@@ -295,7 +287,9 @@ def preview_collection_query(
             detail={"code": "INVALID_QUERY", "message": "; ".join(errors)},
         )
 
-    results, total = evaluate_query(query, svc.db, kb_names=None if query.kb_name else readable)
+    results, total = evaluate_query(
+        query, svc.db, kb_names=None if query.kb_name else scope.as_set()
+    )
 
     entries = []
     for r in results:

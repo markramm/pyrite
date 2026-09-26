@@ -2,22 +2,20 @@
 
 from fastapi import APIRouter, Depends, Query, Request
 
+from ...services.access_policy import KB, Action, ReadScope
 from ...services.kb_service import KBService
 from ..api import (
     get_kb_service,
-    get_readable_kbs,
     limiter,
     negotiate_response,
-    requires_kb_read,
 )
+from ..authz import authorize
 from ..schemas import TimelineEvent, TimelineResponse
 
 router = APIRouter(tags=["Timeline"])
 
 
-@router.get(
-    "/timeline", response_model=TimelineResponse, dependencies=[Depends(requires_kb_read())]
-)
+@router.get("/timeline", response_model=TimelineResponse)
 @limiter.limit("100/minute")
 def get_timeline(
     request: Request,
@@ -28,7 +26,7 @@ def get_timeline(
     sort: str = Query("asc", pattern=r"^(asc|desc)$"),
     limit: int = Query(50, ge=1, le=500),
     svc: KBService = Depends(get_kb_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """Get timeline events from the KBs the caller may read.
 
@@ -44,7 +42,7 @@ def get_timeline(
         kb_name=kb,
         limit=limit,
         sort_order=sort,
-        kb_names=None if kb else readable,
+        kb_names=None if kb else scope.as_set(),
     )
 
     events = [

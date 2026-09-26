@@ -382,13 +382,11 @@ def rest_client(svc_db):
     from pyrite.server.api import (
         create_app,
         get_kb_service,
-        get_readable_kbs,
         get_search_service,
     )
 
     app = create_app()
     app.dependency_overrides[get_search_service] = lambda: SearchService(svc_db)
-    app.dependency_overrides[get_readable_kbs] = lambda: None
 
     class _StubKBService:
         def count_entries(self, *a, **kw):

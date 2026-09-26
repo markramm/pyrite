@@ -3,8 +3,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ...exceptions import InvalidGitRefError
+from ...services.access_policy import KB, Action
 from ...services.version_service import VersionService
-from ..api import get_version_service, limiter, requires_kb_read
+from ..api import get_version_service, limiter
+from ..authz import authorize
 from ..schemas import EntryVersionResponse, VersionListResponse
 
 router = APIRouter(tags=["Versions"])
@@ -13,7 +15,7 @@ router = APIRouter(tags=["Versions"])
 @router.get(
     "/entries/{entry_id}/versions",
     response_model=VersionListResponse,
-    dependencies=[Depends(requires_kb_read())],
+    dependencies=[Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("100/minute")
 def get_entry_versions(
@@ -35,7 +37,8 @@ def get_entry_versions(
 
 
 @router.get(
-    "/entries/{entry_id}/versions/{commit_hash}", dependencies=[Depends(requires_kb_read())]
+    "/entries/{entry_id}/versions/{commit_hash}",
+    dependencies=[Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("100/minute")
 def get_entry_at_version(

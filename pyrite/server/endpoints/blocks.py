@@ -2,9 +2,11 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from ...services.access_policy import KB, Action
 from ...services.block_service import BlockService
 from ...services.kb_service import KBService
-from ..api import get_block_service, get_kb_service, limiter, negotiate_response, requires_kb_read
+from ..api import get_block_service, get_kb_service, limiter, negotiate_response
+from ..authz import authorize
 from ..schemas import BlockListResponse, BlockResponse
 
 router = APIRouter(tags=["Blocks"])
@@ -13,7 +15,7 @@ router = APIRouter(tags=["Blocks"])
 @router.get(
     "/entries/{entry_id}/blocks",
     response_model=BlockListResponse,
-    dependencies=[Depends(requires_kb_read())],
+    dependencies=[Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("100/minute")
 def get_entry_blocks(

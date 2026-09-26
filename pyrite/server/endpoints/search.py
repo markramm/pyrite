@@ -3,17 +3,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
+from ...services.access_policy import KB, Action, ReadScope
 from ...services.kb_service import KBService
 from ...services.read_shaping import parse_fields_param, project_fields
 from ...services.search_service import SearchService
 from ..api import (
     get_kb_service,
-    get_readable_kbs,
     get_search_service,
     limiter,
     negotiate_response,
-    requires_kb_read,
 )
+from ..authz import authorize
 from ..schemas import SearchResponse, SearchResult
 
 router = APIRouter(tags=["Search"])
@@ -26,12 +26,7 @@ router = APIRouter(tags=["Search"])
 # for what a search response owes its caller (#56). The web client already
 # declares the nullable result fields optional (web/src/lib/api/types.ts), so
 # omitting them rather than nulling them matches the contract it was written to.
-@router.get(
-    "/search",
-    response_model=SearchResponse,
-    response_model_exclude_none=True,
-    dependencies=[Depends(requires_kb_read())],
-)
+@router.get("/search", response_model=SearchResponse, response_model_exclude_none=True)
 @limiter.limit("100/minute")
 def search(
     request: Request,
@@ -63,7 +58,7 @@ def search(
     ),
     svc: KBService = Depends(get_kb_service),
     search_svc: SearchService = Depends(get_search_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """Full-text search across the knowledge bases the caller may read."""
     if svc.count_entries() == 0:
@@ -87,7 +82,7 @@ def search(
         fetch_limit = limit * 5 if group_by_kb else limit
 
         results = search_svc.search(
-            kb_names=None if kb else readable,
+            kb_names=None if kb else scope.as_set(),
             query=q,
             kb_name=kb,
             entry_type=type,

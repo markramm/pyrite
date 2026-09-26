@@ -8,13 +8,15 @@ no service-layer duplication.
 
 from fastapi import APIRouter, Depends, Query, Request
 
+from ...services.access_policy import KB, Action, ReadScope
 from ...services.link_discovery_service import LinkDiscoveryService
-from ..api import get_link_discovery_service, get_readable_kbs, limiter, requires_kb_read
+from ..api import get_link_discovery_service, limiter
+from ..authz import authorize
 
 router = APIRouter(tags=["Links"])
 
 
-@router.get("/links/discover-neighbors", dependencies=[Depends(requires_kb_read())])
+@router.get("/links/discover-neighbors")
 @limiter.limit("60/minute")
 def discover_neighbors(
     request: Request,
@@ -27,14 +29,14 @@ def discover_neighbors(
     mode: str = Query("hybrid", description="Search mode: keyword, semantic, hybrid"),
     exclude_linked: bool = Query(True, description="Exclude entries already linked"),
     svc: LinkDiscoveryService = Depends(get_link_discovery_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """Find related entries across all KBs, including the source KB by default.
 
     Excludes the source entry and, by default, already-linked entries.
 
-    `requires_kb_read()` refuses any KB this call names that the caller may
-    not read; `readable` keeps the *candidates* to readable KBs as well.
+    `authorize(Action.KB_READ, KB)` refuses any KB this call names that the
+    caller may not read; `scope` keeps the *candidates* to readable KBs as well.
     With `target_kb` omitted the search spans the index, so the second half
     is what stops a readable KB's entry being matched against a private
     KB's entry and handed back as a suggestion (#186).
@@ -46,7 +48,7 @@ def discover_neighbors(
         limit=limit,
         mode=mode,
         exclude_linked=exclude_linked,
-        readable_kbs=readable,
+        readable_kbs=scope.as_set(),
     )
 
     return {
@@ -57,7 +59,7 @@ def discover_neighbors(
     }
 
 
-@router.get("/links/batch-suggest", dependencies=[Depends(requires_kb_read())])
+@router.get("/links/batch-suggest")
 @limiter.limit("20/minute")
 def batch_suggest(
     request: Request,
@@ -67,7 +69,7 @@ def batch_suggest(
     mode: str = Query("keyword", description="Search mode: keyword, semantic, hybrid"),
     exclude_linked: bool = Query(True, description="Exclude entries already linked"),
     svc: LinkDiscoveryService = Depends(get_link_discovery_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, KB)),
 ):
     """Batch-compare two KBs to find potential cross-KB links."""
     pairs = svc.batch_suggest(
@@ -76,7 +78,7 @@ def batch_suggest(
         limit_per_entry=limit_per_entry,
         mode=mode,
         exclude_linked=exclude_linked,
-        readable_kbs=readable,
+        readable_kbs=scope.as_set(),
     )
 
     return {

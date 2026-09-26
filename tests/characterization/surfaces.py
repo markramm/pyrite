@@ -8,7 +8,8 @@ reusing the exact signals the two existing structural ratchets already trust
 
 - REST: a route's dependant tree contains one of the read-scoping
   dependencies `tests/test_read_scoping_is_structural.py` walks
-  (`requires_kb_read()`, `get_readable_kbs`, `assert_kb_readable`) or one of
+  (`authz.authorize(Action.KB_READ, KB | AnyKB)`, which replaced
+  `requires_kb_read()` and `get_readable_kbs` in ADR-0037 theme 3a) or one of
   the write-scoping guards `tests/test_kb_write_guard_is_structural.py`
   walks (`requires_kb_tier`'s named and row forms).
 - MCP: a tool's `inputSchema` declares one of `KB_ARGUMENT_NAMES`, or its
@@ -65,9 +66,10 @@ from pyrite.server.mcp_server import KB_ARGUMENT_NAMES, NON_KB_CONTENT_TOOLS, Py
 # Qualified names of every dependency that scopes a route to a KB or a row's
 # KB -- the union of the two existing structural ratchets' own lists.
 _READ_SCOPING = {
-    "pyrite.server.api.requires_kb_read.<locals>._check",
-    "pyrite.server.api.get_readable_kbs",
-    "pyrite.server.api.assert_kb_readable",
+    # ADR-0037 theme 3a: `authz.authorize(Action.KB_READ, KB | AnyKB)`, which
+    # replaced `requires_kb_read()` and `get_readable_kbs` route for route.
+    "pyrite.server.authz.authorize.<locals>.authorize_kb_read_named",
+    "pyrite.server.authz.authorize.<locals>.authorize_kb_read_any",
 }
 _WRITE_SCOPING = {
     "pyrite.server.api.requires_kb_tier.<locals>._check_kb_tier",

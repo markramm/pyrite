@@ -5,16 +5,17 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from ...services.access_policy import Action, AnyKB, ReadScope
 from ...services.git_service import GitService
 from ...services.repo_service import RepoService
 from ..api import (
     TIER_LEVELS,
     KBRoleResolver,
     get_kb_role_resolver,
-    get_readable_kbs,
     get_repo_service,
     requires_tier,
 )
+from ..authz import authorize
 from ..schemas import ForkRequest, PRRequest, RepoInfo, RepoListResponse, SubscribeRequest
 
 logger = logging.getLogger(__name__)
@@ -125,9 +126,9 @@ def _requires_github_token(svc: RepoService = Depends(get_repo_service)) -> None
         )
 
 
-def _repo_is_readable(kb_names: list[str], readable: set[str] | None) -> bool:
-    """A repository is readable when every KB it holds is (`None`: unscoped)."""
-    return readable is None or all(kb in readable for kb in kb_names)
+def _repo_is_readable(kb_names: list[str], scope: ReadScope) -> bool:
+    """A repository is readable when every KB it holds is."""
+    return all(scope.permits(kb) for kb in kb_names)
 
 
 def _repo_kb_guard(tier: str, missing_status: int, missing_code: str, missing_error: str):
@@ -135,7 +136,7 @@ def _repo_kb_guard(tier: str, missing_status: int, missing_code: str, missing_er
 
     A repository is a container of KBs, so the per-KB rule applies to it
     through its contents -- the same helpers the KB routes use
-    (`get_readable_kbs`, `resolve_effective_kb_role`), no second rule:
+    (`authorize(Action.KB_READ, AnyKB)`, `resolve_effective_kb_role`), no second rule:
 
     - a KB the caller may not read makes the repository answer **exactly as a
       repository that does not exist** answers on this route (`missing_*` is
@@ -150,7 +151,7 @@ def _repo_kb_guard(tier: str, missing_status: int, missing_code: str, missing_er
 
     async def _check(
         name: str,
-        readable: set[str] | None = Depends(get_readable_kbs),
+        scope: ReadScope = Depends(authorize(Action.KB_READ, AnyKB)),
         role_of: KBRoleResolver = Depends(get_kb_role_resolver),
         svc: RepoService = Depends(get_repo_service),
     ) -> None:
@@ -159,7 +160,7 @@ def _repo_kb_guard(tier: str, missing_status: int, missing_code: str, missing_er
             return
         kb_names = svc.repo_kb_names(repo["id"])
 
-        if not _repo_is_readable(kb_names, readable):
+        if not _repo_is_readable(kb_names, scope):
             raise HTTPException(
                 status_code=missing_status,
                 detail=_error_detail({"error": missing_error.format(name=name)}, missing_code, svc),
@@ -243,7 +244,7 @@ def _repo_dict_to_info(repo: dict, svc: object) -> RepoInfo:
 def list_repos(
     request: Request,
     svc: RepoService = Depends(get_repo_service),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, AnyKB)),
 ):
     """List the subscribed/forked repos whose KBs the caller may read.
 
@@ -251,8 +252,8 @@ def list_repos(
     as if it did not exist -- the rule `GET /repos/{name}` applies.
     """
     repos = svc.list_repos()
-    if readable is not None:
-        repos = [r for r in repos if _repo_is_readable(svc.repo_kb_names(r["id"]), readable)]
+    if not scope.unscoped:
+        repos = [r for r in repos if _repo_is_readable(svc.repo_kb_names(r["id"]), scope)]
     return RepoListResponse(repos=[_repo_dict_to_info(r, svc) for r in repos])
 
 

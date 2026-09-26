@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from ...config import PyriteConfig
 from ...exceptions import InvalidGitRefError, KBNotFoundError
+from ...services.access_policy import KB, Action, AnyKB, ReadScope
 from ...services.auth_service import AuthService
 from ...services.export_service import ExportService
 from ...services.kb_registry_service import KBRegistryService
@@ -15,12 +16,11 @@ from ..api import (
     get_export_service,
     get_kb_registry,
     get_kb_service,
-    get_readable_kbs,
     limiter,
     negotiate_response,
-    requires_kb_read,
     requires_tier,
 )
+from ..authz import authorize
 from ..schemas import KBHealthResponse, KBInfo, KBListResponse
 
 router = APIRouter(tags=["Knowledge Bases"])
@@ -56,12 +56,12 @@ def _kb_to_info(kb: dict) -> KBInfo:
 def list_kbs(
     request: Request,
     registry: KBRegistryService = Depends(get_kb_registry),
-    readable: set[str] | None = Depends(get_readable_kbs),
+    scope: ReadScope = Depends(authorize(Action.KB_READ, AnyKB)),
 ):
     """List the knowledge bases the caller may read."""
     kbs_data = registry.list_kbs()
-    if readable is not None:
-        kbs_data = [kb for kb in kbs_data if kb.get("name") in readable]
+    if not scope.unscoped:
+        kbs_data = [kb for kb in kbs_data if scope.permits(kb.get("name"))]
     kbs = [_kb_to_info(kb) for kb in kbs_data]
     resp_data = {"kbs": [kb.model_dump() for kb in kbs], "total": len(kbs)}
     neg = negotiate_response(request, resp_data)
@@ -70,7 +70,9 @@ def list_kbs(
     return KBListResponse(kbs=kbs, total=len(kbs))
 
 
-@router.get("/kbs/{kb_name}", response_model=KBInfo, dependencies=[Depends(requires_kb_read())])
+@router.get(
+    "/kbs/{kb_name}", response_model=KBInfo, dependencies=[Depends(authorize(Action.KB_READ, KB))]
+)
 @limiter.limit("100/minute")
 def get_kb(
     kb_name: str,
@@ -89,7 +91,7 @@ def get_kb(
 @router.get(
     "/kbs/{kb_name}/health",
     response_model=KBHealthResponse,
-    dependencies=[Depends(requires_kb_read())],
+    dependencies=[Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("100/minute")
 def kb_health(
@@ -108,7 +110,7 @@ def kb_health(
     return KBHealthResponse(**result)
 
 
-@router.get("/kbs/{kb_name}/schema", dependencies=[Depends(requires_kb_read())])
+@router.get("/kbs/{kb_name}/schema", dependencies=[Depends(authorize(Action.KB_READ, KB))])
 @limiter.limit("100/minute")
 def get_kb_schema(
     kb_name: str,
@@ -126,7 +128,7 @@ def get_kb_schema(
     return schema.to_agent_schema()
 
 
-@router.get("/kbs/{kb_name}/orient", dependencies=[Depends(requires_kb_read())])
+@router.get("/kbs/{kb_name}/orient", dependencies=[Depends(authorize(Action.KB_READ, KB))])
 @limiter.limit("60/minute")
 def orient_kb(
     kb_name: str,
@@ -156,7 +158,7 @@ def orient_kb(
 # not change the KB, and anything it carries out a reader can already fetch.
 @router.post(
     "/kbs/{kb_name}/export",
-    dependencies=[Depends(requires_tier("write")), Depends(requires_kb_read())],
+    dependencies=[Depends(requires_tier("write")), Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("5/minute")
 def export_kb_to_repo(

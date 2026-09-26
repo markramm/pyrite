@@ -3,15 +3,16 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
 from ...exceptions import InvalidGitRefError, KBNotFoundError, PyriteError
+from ...services.access_policy import KB, Action
 from ...services.export_service import ExportService
 from ...services.kb_service import KBService
 from ..api import (
     get_export_service,
     get_kb_service,
     limiter,
-    requires_kb_read,
     requires_tier,
 )
+from ..authz import authorize
 
 router = APIRouter(tags=["Git Operations"])
 
@@ -21,7 +22,7 @@ router = APIRouter(tags=["Git Operations"])
 # has to be here too.
 @router.get(
     "/kbs/{kb_name}/changes",
-    dependencies=[Depends(requires_tier("read")), Depends(requires_kb_read())],
+    dependencies=[Depends(requires_tier("read")), Depends(authorize(Action.KB_READ, KB))],
 )
 @limiter.limit("60/minute")
 def get_pending_changes(
