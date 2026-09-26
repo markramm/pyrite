@@ -2,6 +2,8 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 
+import { wsProxy } from './vite.ws-proxy';
+
 declare const process: { env: Record<string, string | undefined> };
 
 // The backend this dev server proxies to. Plain `npm run dev` keeps the
@@ -24,6 +26,9 @@ export default defineConfig({
 		// pyrite/server/api.py's create_app) -- /auth, /branding, and
 		// /config were missing here, so any dev-server or e2e request to
 		// them 404'd against Vite itself instead of reaching the backend.
+		// /ws (the live-update socket, #336) was missing too, so `npm run dev`
+		// never received live updates at all (#421) -- see vite.ws-proxy.ts
+		// for why its entry cannot just copy the others' changeOrigin: true.
 		proxy: {
 			'/api': {
 				target: backendTarget,
@@ -44,7 +49,8 @@ export default defineConfig({
 			'/config': {
 				target: backendTarget,
 				changeOrigin: true
-			}
+			},
+			...wsProxy(backendTarget)
 		}
 	},
 	resolve: process.env.VITEST
