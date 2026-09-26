@@ -616,9 +616,12 @@ maintainer.
 - **Plugins out of tree.** The plugin contract becomes the public API.
   Journalism-investigation is the pilot, and software-kb stays in tree. An
   import-inventory spike and a proposed ADR come first.
-- **The CLI is the agent interface.** A pi agent or Claude Code uses
-  `pyrite` commands with pipes and `--json` as shared memory. Its friction
-  list comes from the CLI-only hallway test.
+- **Meet agents where they are.** The CLI is the core of the terminal agent
+  interface: pi and Claude Code use `pyrite` commands with pipes and `--json`
+  as shared memory. MCP serves Claude Desktop and Cowork agents; the web UI
+  serves people. The output and error contract and the index freshness the
+  CLI hallway test asked for live in the service layer, so every surface
+  gets them.
 
 ## Later, unscheduled
 
