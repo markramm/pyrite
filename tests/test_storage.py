@@ -2203,5 +2203,76 @@ class TestSubdirectoryMismatchInHealth:
                 db.close()
 
 
+class TestTransactionMode:
+    """Pin pysqlite's legacy transaction handling (#440).
+
+    `_create_session`'s cap fix (#435) and other code in this module rely on
+    pysqlite's legacy ("no isolation_level override") transaction control: a
+    SELECT opens no transaction, and a write opens a *deferred* one only at
+    the write statement. Nothing asserted that until now, so a driver-level
+    change -- switching to ``isolation_level=None`` (autocommit) plus manual
+    ``BEGIN``, or SQLAlchemy 2's new-style ``AUTOCOMMIT`` isolation -- could
+    silently change when the write lock is taken, which is exactly the
+    ordering #435's fix depends on.
+    """
+
+    @pytest.fixture
+    def db(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            db = PyriteDB(db_path)
+            yield db
+            db.close()
+
+    @staticmethod
+    def _dbapi_conn(db: PyriteDB) -> sqlite3.Connection:
+        """The raw pysqlite connection backing the calling thread's session."""
+        return db.session.connection().connection.dbapi_connection
+
+    def test_select_leaves_in_transaction_false(self, db):
+        from sqlalchemy import text
+
+        conn = self._dbapi_conn(db)
+        db.session.execute(text("SELECT 1"))
+        assert conn.in_transaction is False, (
+            "a SELECT started a transaction -- pysqlite is no longer in legacy "
+            "mode (autocommit=False or new-style isolation), and #435's "
+            "write-lock-first ordering no longer holds"
+        )
+
+    def test_write_starts_a_deferred_transaction(self, db):
+        from sqlalchemy import text
+
+        conn = self._dbapi_conn(db)
+        assert conn.in_transaction is False
+        db.session.execute(
+            text(
+                "INSERT INTO local_user "
+                "(username, password_hash, role, auth_provider, created_at) "
+                "VALUES ('txn-mode-probe', 'hash', 'read', 'local', datetime('now'))"
+            )
+        )
+        try:
+            assert conn.in_transaction is True, (
+                "a write did not open a transaction on the underlying pysqlite "
+                "connection -- eviction-after-insert ordering (#435) can no "
+                "longer be assumed to share one write lock"
+            )
+        finally:
+            db.session.rollback()
+
+    def test_busy_timeout_is_set_explicitly(self, db):
+        """An explicit busy timeout, in one place, on every connection the
+        pool hands out (#440) -- not pysqlite's own unstated default."""
+        from pyrite.storage.connection import SQLITE_BUSY_TIMEOUT_MS
+
+        cursor = self._dbapi_conn(db).cursor()
+        cursor.execute("PRAGMA busy_timeout")
+        (timeout_ms,) = cursor.fetchone()
+        cursor.close()
+        assert timeout_ms == SQLITE_BUSY_TIMEOUT_MS
+        assert timeout_ms > 0, "busy_timeout=0 means a contended write fails instantly"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
