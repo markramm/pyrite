@@ -26,6 +26,7 @@ from typer.testing import CliRunner
 
 import pyrite.config as config_module
 from pyrite.config import (
+    ConfigFileUnreadableError,
     ConfigSaveRefusedError,
     KBConfig,
     PyriteConfig,
@@ -154,17 +155,37 @@ class TestTheRule:
     @pytest.mark.parametrize(
         "content",
         [
-            "knowledge_bases: [\n  - name: broken\n",  # unparseable YAML
-            "- just\n- a list\n",  # not a mapping
-            "knowledge_bases: not-a-list\n",
-            "knowledge_bases:\n- path: /no/name\n",  # an entry with no name
+            # #377's cases: already refused as unreadable; #405 only tightens
+            # the assertion from the base class.
+            *(
+                pytest.param(c, marks=pytest.mark.control(reason="refused before #405"))
+                for c in (
+                    "knowledge_bases: [\n  - name: broken\n",  # unparseable YAML
+                    "- just\n- a list\n",  # not a mapping
+                    "knowledge_bases: not-a-list\n",
+                    "knowledge_bases:\n- path: /no/name\n",  # an entry with no name
+                )
+            ),
+            # #405: from_dict reads kb_data["path"] and iterates the value of a
+            # present knowledge_bases key, so none of these loads either.
+            "knowledge_bases:\n- name: no-path\n",
+            "knowledge_bases:\n- name: null-path\n  path: null\n",
+            "knowledge_bases: null\n",
+            "knowledge_bases: false\n",
         ],
     )
     def test_an_unreadable_file_is_refused_not_treated_as_empty(self, cfg_dir, tmp_path, content):
         (cfg_dir / "config.yaml").write_text(content)
-        with pytest.raises(ConfigSaveRefusedError):
+        with pytest.raises(ConfigFileUnreadableError):
             save_config(PyriteConfig(knowledge_bases=[_kb(tmp_path, "x")]))
         assert (cfg_dir / "config.yaml").read_text() == content
+
+    @pytest.mark.control(reason="an empty file or an absent key already counts as no KBs")
+    @pytest.mark.parametrize("content", ["", "settings: {}\n", "knowledge_bases: []\n"])
+    def test_an_empty_file_or_an_absent_key_counts_as_no_kbs(self, cfg_dir, tmp_path, content):
+        (cfg_dir / "config.yaml").write_text(content)
+        save_config(PyriteConfig(knowledge_bases=[_kb(tmp_path, "x")]))
+        assert _names(cfg_dir) == ["x"]
 
     def test_allow_drop_may_replace_an_unreadable_file(self, cfg_dir, tmp_path):
         (cfg_dir / "config.yaml").write_text("knowledge_bases: [\n")

@@ -1312,17 +1312,23 @@ def _kb_names_on_disk(config_file: Path) -> list[str]:
         data = load_yaml_file(config_file)
     except Exception as e:
         raise unreadable(f"it could not be parsed ({type(e).__name__})") from e
-    if data is None:
-        return []
     if not isinstance(data, dict):
         raise unreadable("it is not a YAML mapping")
-    kbs = data.get("knowledge_bases") or []
+    # An absent key is an empty registry; a present one must be a list, as
+    # from_dict iterates it (null or false would fail to load, #405). An
+    # untrusted repo-local file with null still *loads* (_restrict_untrusted
+    # reads it as empty); this check deliberately does not branch on trust:
+    # refusing to overwrite a malformed registry costs one manual fix.
+    kbs = data.get("knowledge_bases", [])
     if not isinstance(kbs, list):
         raise unreadable("its knowledge_bases is not a list")
     names = []
     for kb in kbs:
         if not isinstance(kb, dict) or kb.get("name") is None or str(kb["name"]) == "":
             raise unreadable("a knowledge_bases entry has no name")
+        # from_dict reads kb_data["path"]: an entry without one fails to load.
+        if kb.get("path") is None:
+            raise unreadable(f"the knowledge_bases entry {kb['name']!s} has no path")
         names.append(str(kb["name"]))
     return names
 
@@ -1390,7 +1396,9 @@ def save_config(
         logger.warning("Writing Pyrite config %s through symlink %s", real_file, config_file)
     trusted = current_config_source()[1]
     dump_yaml_file(
-        config.to_dict() if trusted else _untrusted_save_data(config, config_file), config_file
+        config.to_dict() if trusted else _untrusted_save_data(config, config_file),
+        config_file,
+        atomic=True,
     )
 
 
