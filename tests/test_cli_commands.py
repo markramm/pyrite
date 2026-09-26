@@ -4,6 +4,7 @@ Tests create/update/delete/list/timeline/tags/backlinks via the Typer app.
 Uses shared fixtures from conftest.py.
 """
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -209,6 +210,7 @@ class TestTyperCreateCommand:
             )
             assert result.exit_code == 1
             assert "not found" in result.output.lower() or "Error" in result.output
+            assert "KB_NOT_FOUND" in result.output
 
 
 @pytest.mark.cli
@@ -240,9 +242,12 @@ class TestTyperUpdateCommand:
                     "test-events",
                     "--title",
                     "New",
+                    "--format",
+                    "json",
                 ],
             )
             assert result.exit_code == 1
+            assert json.loads(result.output)["error_code"] == "NOT_FOUND"
 
 
 @pytest.mark.cli
@@ -263,6 +268,49 @@ class TestTyperDeleteCommand:
                 ["delete", "nonexistent", "--kb", "test-events", "--force"],
             )
             assert result.exit_code == 1
+            assert "NOT_FOUND" in result.output
+
+
+@pytest.mark.cli
+@pytest.mark.parametrize(
+    ("args", "expected_code"),
+    [
+        (
+            [
+                "update",
+                "2025-01-10--test-event-0",
+                "--kb",
+                "nonexistent",
+                "--title",
+                "New",
+                "--format",
+                "json",
+            ],
+            "KB_NOT_FOUND",
+        ),
+        (
+            ["delete", "2025-01-10--test-event-0", "--kb", "nonexistent", "--force"],
+            "KB_NOT_FOUND",
+        ),
+        (
+            ["link", "2025-01-10--test-event-0", "2025-01-11--test-event-1", "--kb", "nonexistent"],
+            "KB_NOT_FOUND",
+        ),
+        (
+            ["link", "missing-source", "2025-01-11--test-event-1", "--kb", "test-events"],
+            "NOT_FOUND",
+        ),
+    ],
+)
+def test_entry_write_commands_emit_specific_not_found_codes(cli_env, args, expected_code):
+    with _patch_config(cli_env):
+        result = runner.invoke(app, args)
+
+    assert result.exit_code == 1
+    if "--format" in args:
+        assert json.loads(result.output)["error_code"] == expected_code
+    else:
+        assert f"[{expected_code}]" in result.output
 
 
 @pytest.mark.cli
