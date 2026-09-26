@@ -7,6 +7,9 @@ checked against behaviour rather than against the diff.
 
 import contextlib
 import json
+import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -223,7 +226,7 @@ class TestAdminCli:
         assert "org/none" in result.output or "not found" in result.output.lower()
 
 
-def test_patched_restores_the_real_load_config_even_when_admin_cli_is_unimported(config):
+def test_patched_restores_the_real_load_config_even_when_admin_cli_is_unimported():
     """#510: _patched() must leave every patched name as the real function.
 
     ``patch("pyrite.admin_cli.load_config", ...)`` resolves its target by
@@ -236,23 +239,42 @@ def test_patched_restores_the_real_load_config_even_when_admin_cli_is_unimported
     leaves ``pyrite.admin_cli.load_config`` a Mock forever -- for every test
     that runs afterward in the same worker.
 
-    This forces the failure mode deterministically by evicting admin_cli
-    (and its submodules) from sys.modules first, so this test fails on dev
-    regardless of xdist's distribution or import order.
+    This must run in a fresh subprocess rather than by evicting
+    ``pyrite.admin_cli`` from this process's ``sys.modules``: eviction plus
+    re-import leaves a *second* module object in ``sys.modules`` while every
+    other already-imported module (and the Typer ``app`` under test) still
+    holds a reference to the *original* ``pyrite.admin_cli`` module object
+    through its own globals. Asserting against the freshly re-imported
+    object would prove nothing about the object the code under test
+    actually reads -- the same class of import-identity bug this test
+    exists to catch, one layer up (we've been bitten before by
+    ``importlib.reload`` breaking ``isinstance`` checks elsewhere). A
+    subprocess that imports nothing first sidesteps module-identity
+    questions entirely: there is only ever one ``pyrite.admin_cli`` object.
     """
-    import sys
-
-    import pyrite.admin_cli as admin_cli_module
-    import pyrite.config as config_module
-
-    for name in list(sys.modules):
-        if name == "pyrite.admin_cli" or name.startswith("pyrite.admin_cli."):
-            del sys.modules[name]
-
-    with _patched(config):
-        pass
-
-    import pyrite.admin_cli as admin_cli_module  # noqa: F811 (re-import after eviction)
-
-    assert admin_cli_module.load_config is config_module.load_config
-    assert "return_value" not in repr(admin_cli_module.load_config)
+    script = (
+        "from tests.test_cli_surfaces_through_services import _config, _patched\n"
+        "import tempfile, pathlib\n"
+        "with tempfile.TemporaryDirectory() as tmpdir:\n"
+        "    config = _config(pathlib.Path(tmpdir))\n"
+        "    with _patched(config):\n"
+        "        pass\n"
+        # Import admin_cli only *after* _patched() has exited -- importing
+        # it earlier would make it already-present in sys.modules, which
+        # is the safe case _patched()'s own pre-import guard also relies
+        # on, and this check would then pass for the wrong reason.
+        "import pyrite.admin_cli as admin_cli_module\n"
+        "import pyrite.config as config_module\n"
+        "assert admin_cli_module.load_config is config_module.load_config, (\n"
+        "    admin_cli_module.load_config\n"
+        ")\n"
+        "assert 'return_value' not in repr(admin_cli_module.load_config)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parent.parent,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

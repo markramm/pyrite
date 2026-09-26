@@ -80,24 +80,7 @@ def admin_env():
 
 @contextlib.contextmanager
 def _patch_config(env):
-    """Patch load_config at the source so all importers see it.
-
-    Imports every module below before entering any patch (#510). If
-    `pyrite.config.load_config` is patched first and one of these modules
-    has not yet been imported by this worker, `patch("mod.load_config", ...)`
-    importing that module to resolve its target runs while
-    `pyrite.config.load_config` is already a Mock -- the module's own
-    `from ..config import load_config` then binds the Mock, and `patch`
-    "restores" its attribute to that Mock on exit, leaking it into every
-    later test in the same worker.
-    """
-    import pyrite.cli  # noqa: F401
-    import pyrite.cli.context  # noqa: F401
-    import pyrite.cli.kb_commands  # noqa: F401
-    import pyrite.cli.repo_commands  # noqa: F401
-    import pyrite.cli.search_commands  # noqa: F401
-    import pyrite.config  # noqa: F401
-
+    """Patch load_config at the source so all importers see it."""
     target = env["config"]
     with (
         patch("pyrite.config.load_config", return_value=target),
