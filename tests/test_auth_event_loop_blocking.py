@@ -56,17 +56,8 @@ from pyrite.services.oauth_providers import OAuthProfile, OAuthToken
 from pyrite.storage.database import PyriteDB
 from tests.auth_seed import seed_user
 
-try:
-    # New in this PR (#440). Falls back to pysqlite's own previously-implicit
-    # default so this file still collects, and its RED tests still run and
-    # fail for the real reason (the event loop blocks), against a tree that
-    # predates the constant.
-    from pyrite.storage.connection import SQLITE_BUSY_TIMEOUT_MS
-except ImportError:
-    SQLITE_BUSY_TIMEOUT_MS = 5000
-
-_BARRIER_TIMEOUT = 60.0
-_LOCK_TIMEOUT = 60.0
+_BARRIER_TIMEOUT = 90.0
+_LOCK_TIMEOUT = 90.0
 # Matches the first *write* statement (not a preceding read) each handler
 # issues against a table this ticket's writers touch: `session` for login's
 # insert, `local_user` for register's and oauth_login's insert/update,
@@ -80,8 +71,35 @@ _WRITE_STATEMENT = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
-# Well under SQLITE_BUSY_TIMEOUT_MS -- see the comment at its use below.
-SHORT_WAIT_S = 0.5
+# The busy timeout every PyriteDB in this file's fixtures gets, monkeypatched
+# in place of the shipped SQLITE_BUSY_TIMEOUT_MS (#440 round 1): the shipped
+# value must stay whatever production wants it to be (5 s), independent of
+# what this test needs. Long enough that pysqlite's own busy handling cannot
+# time out and unblock the loop on its own inside WAIT_WHILE_LOCKED_S below --
+# only releasing the lock does -- so the test cannot pass "by the block
+# resolving itself" the way a tight window tied to the shipped value once did.
+_TEST_BUSY_TIMEOUT_MS = 60_000
+
+# How long the test waits to see whether the concurrent, DB-free
+# /auth/config request completes while the writer still holds the lock.
+# Wide enough to absorb scheduling delay under a loaded machine (xdist,
+# other suites) without becoming a false pass: it stays far under
+# _TEST_BUSY_TIMEOUT_MS, so a completion inside this window can only mean
+# the event loop was actually free, never that pysqlite's own busy handling
+# expired and unblocked the loop on its own.
+WAIT_WHILE_LOCKED_S = 20.0
+
+
+@pytest.fixture(autouse=True)
+def _long_busy_timeout(monkeypatch):
+    """Every PyriteDB this file builds gets a busy timeout long enough that
+    it cannot expire inside WAIT_WHILE_LOCKED_S -- see the comment on
+    _TEST_BUSY_TIMEOUT_MS. Applied once per test, before any PyriteDB in the
+    test is constructed, since the pragma is set at each connection's own
+    `connect` event."""
+    from pyrite.storage import connection as connection_module
+
+    monkeypatch.setattr(connection_module, "SQLITE_BUSY_TIMEOUT_MS", _TEST_BUSY_TIMEOUT_MS)
 
 
 def _make_client(
@@ -107,7 +125,7 @@ def _make_client(
 
 
 @pytest.fixture
-def env(tmp_path):
+def env(tmp_path, _long_busy_timeout):
     test_client, config, db = _make_client(tmp_path)
     try:
         yield test_client, config.settings.index_path, db
@@ -116,7 +134,7 @@ def env(tmp_path):
 
 
 @pytest.fixture
-def oauth_env(tmp_path):
+def oauth_env(tmp_path, _long_busy_timeout):
     providers = {
         "github": OAuthProviderConfig(client_id="test-client-id", client_secret="test-secret")
     }
@@ -200,18 +218,21 @@ def _assert_request_does_not_block_the_loop(test_client, db_path, db, fire_reque
 
             # /auth/config touches no DB at all, so a free event loop answers
             # it fast. The window here must stay well under
-            # SQLITE_BUSY_TIMEOUT_MS: pysqlite's own busy handling eventually
+            # _TEST_BUSY_TIMEOUT_MS: pysqlite's own busy handling eventually
             # raises "database is locked" and unblocks the loop on its own,
             # so a window close to (or past) the busy timeout would let that
             # expiry pass for "not blocked" instead of ever observing the
-            # loop while it is genuinely still stuck. A short window forces
-            # the assertion to catch the loop *during* the block, not after
-            # it resolves itself.
-            assert SHORT_WAIT_S * 1000 < SQLITE_BUSY_TIMEOUT_MS / 4, (
+            # loop while it is genuinely still stuck. WAIT_WHILE_LOCKED_S
+            # forces the assertion to catch the loop *during* the block, not
+            # after it resolves itself -- while staying wide enough (20 s)
+            # that scheduling delay under a loaded machine cannot produce a
+            # false failure the way a tight, e.g. 0.5 s, window could (#440
+            # round 1).
+            assert WAIT_WHILE_LOCKED_S * 1000 < _TEST_BUSY_TIMEOUT_MS / 2, (
                 "the wait window is not short enough relative to the busy "
                 "timeout for this assertion to mean anything"
             )
-            finished_while_locked = config_done.wait(timeout=SHORT_WAIT_S)
+            finished_while_locked = config_done.wait(timeout=WAIT_WHILE_LOCKED_S)
 
             lock.release()
             request_thread.join(timeout=_BARRIER_TIMEOUT)
@@ -333,6 +354,33 @@ class TestOAuthCallbackDoesNotBlockTheEventLoop:
                     new_callable=AsyncMock,
                     return_value=mock_profile,
                 ),
+            ):
+                test_client.get(
+                    "/auth/github/callback?code=testcode&state=stubbed",
+                    follow_redirects=False,
+                )
+
+        _assert_request_does_not_block_the_loop(test_client, db_path, db, _fire_callback)
+
+    def test_verify_session_specifically_does_not_stall_a_concurrent_request(self, oauth_env):
+        """Isolates the "connect" flow's `verify_session` call (#440 round 1
+        item 4): it writes `last_used` on the session row, so it can block
+        behind another connection's write lock exactly like the writes the
+        other tests here cover. `verify_oauth_state` is stubbed to return a
+        connect-flow state directly (no DB), so the only write this request
+        makes is `verify_session`'s own UPDATE."""
+        test_client, db_path, db = oauth_env
+
+        login = test_client.post(
+            "/auth/login", json={"username": "alice", "password": "password123"}
+        )
+        assert login.status_code == 200
+        alice_id = login.json()["id"]
+
+        def _fire_callback() -> None:
+            with patch(
+                "pyrite.server.auth_endpoints.AuthService.verify_oauth_state",
+                return_value={"flow": "connect", "user_id": alice_id},
             ):
                 test_client.get(
                     "/auth/github/callback?code=testcode&state=stubbed",
