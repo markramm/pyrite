@@ -112,6 +112,7 @@ def test_kb_validate_json(cli_env):
     data = json.loads(result.output)
     assert "kbs" in data
     assert "all_valid" in data
+    assert data["drift_checked"] is True
     assert isinstance(data["kbs"], list)
 
 

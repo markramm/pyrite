@@ -276,6 +276,7 @@ def kb_validate(
         return current_config.all_kbs()
 
     config, db, health = open_index_for_validation(config)
+    drift_checked = db is not None
     try:
         kbs = _select_kbs(config)
     finally:
@@ -316,6 +317,7 @@ def kb_validate(
             "kbs": kb_results,
             "all_valid": not any_structural_errors,
             "has_drift": any_drift,
+            "drift_checked": drift_checked,
         },
         output_format,
     )
@@ -328,6 +330,11 @@ def kb_validate(
         return
 
     # Rich output
+    if not drift_checked:
+        console.print(
+            "\n[yellow]Content-drift checks were skipped because the index database could not be read.[/yellow]"
+        )
+
     for kb_res in kb_results:
         console.print(f"\n[bold]Validating {kb_res['name']}...[/bold]")
         if kb_res["errors"]:
