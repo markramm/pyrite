@@ -154,6 +154,30 @@ def _legacy_mcp_code(exc: PyriteError) -> str | None:
     return "REQUEST_REFUSED"
 
 
+def _safe_message(exc: Exception) -> str:
+    """The message an MCP tool handler may show for ``exc``.
+
+    ADR-0037 theme 2 round 2 (conductor cold read of 5d65caa7, item 1): a
+    hand-written ``except PyriteError as e: return _error(CODE, str(e))``
+    site bypasses the ``public_message`` ``_refusal`` already respects for
+    the dispatcher's own catch-all. A ``StorageError``/``PluginError``/
+    ``ConfigError`` (or a subclass that doesn't set its own) can carry
+    server-side detail in ``str(exc)`` -- a real path, a driver's own text.
+    Every one of these hand-written sites should call this instead of
+    ``str(e)`` directly. Logs the real detail server-side when it masks it,
+    the same split ``_refusal``/``server/errors.py`` already make.
+
+    Some of these sites catch ``(PyriteError, ValueError)`` together, so
+    ``exc`` is not always a ``PyriteError`` -- ``public_message`` is looked
+    up with ``getattr``, not assumed present.
+    """
+    public_message = getattr(exc, "public_message", None)
+    if public_message is not None:
+        logger.warning("%s", exc)
+        return public_message
+    return str(exc)
+
+
 def _error(
     code: str,
     message: str,
@@ -961,7 +985,7 @@ class PyriteMCPServer:
         try:
             return self.svc.orient(kb_name, recent_limit=recent_limit)
         except PyriteError as e:
-            return _error("OPERATION_FAILED", str(e))
+            return _error("OPERATION_FAILED", _safe_message(e))
 
     def _kb_recent(
         self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
@@ -1177,7 +1201,7 @@ class PyriteMCPServer:
         except ValidationError as e:
             return _refusal(e)
         except PyriteError as e:
-            return _error("CREATE_FAILED", str(e), retryable=True)
+            return _error("CREATE_FAILED", _safe_message(e), retryable=True)
 
         entry = written.entry
         result = {
@@ -1213,7 +1237,7 @@ class PyriteMCPServer:
                 kb_name, entries, allow_undeclared=bool(args.get("allow_undeclared"))
             )
         except PyriteError as e:
-            return _error("BULK_CREATE_FAILED", str(e), retryable=True)
+            return _error("BULK_CREATE_FAILED", _safe_message(e), retryable=True)
 
         created = sum(1 for r in results if r.get("created"))
         failed = len(results) - created
@@ -1251,7 +1275,7 @@ class PyriteMCPServer:
         except ValidationError as e:
             return _refusal(e)
         except PyriteError as e:
-            return _error("UPDATE_FAILED", str(e), retryable=True)
+            return _error("UPDATE_FAILED", _safe_message(e), retryable=True)
 
         entry = written.entry
         result: dict[str, Any] = {
@@ -1274,7 +1298,7 @@ class PyriteMCPServer:
         try:
             deleted = self.svc.delete_entry(entry_id, kb_name)
         except PyriteError as e:
-            return _error("DELETE_FAILED", str(e), retryable=True)
+            return _error("DELETE_FAILED", _safe_message(e), retryable=True)
 
         if not deleted:
             return _error(
@@ -1313,7 +1337,7 @@ class PyriteMCPServer:
             # retryability.
             return _error("LINK_FAILED", str(e), retryable=False)
         except PyriteError as e:
-            return _error("LINK_FAILED", str(e), retryable=True)
+            return _error("LINK_FAILED", _safe_message(e), retryable=True)
 
         return {
             "linked": True,
@@ -1566,7 +1590,7 @@ class PyriteMCPServer:
             )
             return {"decomposed": True, "parent_id": args["parent_id"], "children": results}
         except (PyriteError, ValueError) as e:
-            return _error("OPERATION_FAILED", str(e))
+            return _error("OPERATION_FAILED", _safe_message(e))
 
     def _task_checkpoint(self, args: dict[str, Any]) -> dict[str, Any]:
         """Log a checkpoint on a task."""
@@ -1579,7 +1603,7 @@ class PyriteMCPServer:
                 partial_evidence=args.get("partial_evidence"),
             )
         except (PyriteError, ValueError) as e:
-            return _error("OPERATION_FAILED", str(e))
+            return _error("OPERATION_FAILED", _safe_message(e))
 
     # =========================================================================
     # Admin handlers
@@ -1689,7 +1713,7 @@ class PyriteMCPServer:
                 return svc.set_schema(kb_name, schema)
 
         except (PyriteError, ValueError) as e:
-            return _error("OPERATION_FAILED", str(e))
+            return _error("OPERATION_FAILED", _safe_message(e))
 
         return _error("OPERATION_FAILED", f"Unknown schema action: {action}")
 
@@ -1708,7 +1732,7 @@ class PyriteMCPServer:
                 kb_name, message=message, paths=paths, sign_off=sign_off
             )
         except PyriteError as e:
-            return _error("OPERATION_FAILED", str(e))
+            return _error("OPERATION_FAILED", _safe_message(e))
 
     def _kb_push(self, args: dict[str, Any]) -> dict[str, Any]:
         """Push KB commits to a remote repository."""
@@ -1724,7 +1748,7 @@ class PyriteMCPServer:
         except InvalidGitRefError as e:
             return _error("VALIDATION_ERROR", str(e))
         except PyriteError as e:
-            return _error("OPERATION_FAILED", str(e))
+            return _error("OPERATION_FAILED", _safe_message(e))
 
     def _kb_registry_add(self, args: dict[str, Any]) -> dict[str, Any]:
         """Register a new user KB by path."""
@@ -1741,7 +1765,7 @@ class PyriteMCPServer:
             )
             return {"created": True, **result}
         except (PyriteError, ValueError) as e:
-            return _error("CONFLICT", str(e))
+            return _error("CONFLICT", _safe_message(e))
 
     def _kb_registry_remove(self, args: dict[str, Any]) -> dict[str, Any]:
         """Remove a user-added KB."""

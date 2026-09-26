@@ -227,6 +227,58 @@ class TestCentralExceptionHandler:
         resp = client.get("/probe/unlisted-config")
         assert resp.status_code == 409, resp.json()
 
+    def _fallback_probe(self, base, code):
+        """A throwaway subclass of ``base`` with a code no one added to
+        ``_STATUS_BY_CODE``, run through the real registered handler."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        subclass = type(f"_Unlisted{base.__name__}", (base,), {"error_code": code})
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            raise subclass("not in the table")
+
+        app.add_api_route("/probe/fallback", _route, methods=["GET"])
+        return TestClient(app, raise_server_exceptions=False).get("/probe/fallback")
+
+    def test_an_unlisted_plugin_error_subclass_falls_back_to_the_base_status(self):
+        """Item 2 (conductor cold read of 5d65caa7): _BASE_CLASS_FALLBACK
+        only covered ValidationError/ConfigError/StorageError. A future
+        PluginError subclass with its own code needs the same safety net."""
+        from pyrite.exceptions import PluginError
+
+        resp = self._fallback_probe(PluginError, "SOME_PLUGIN_CODE_NOBODY_ADDED")
+        assert resp.status_code == 502, resp.json()
+
+    def test_an_unlisted_entry_not_found_subclass_falls_back_to_the_base_status(self):
+        from pyrite.exceptions import EntryNotFoundError
+
+        resp = self._fallback_probe(EntryNotFoundError, "SOME_ENTRY_CODE_NOBODY_ADDED")
+        assert resp.status_code == 404, resp.json()
+
+    def test_an_unlisted_kb_not_found_subclass_falls_back_to_the_base_status(self):
+        from pyrite.exceptions import KBNotFoundError
+
+        resp = self._fallback_probe(KBNotFoundError, "SOME_KB_CODE_NOBODY_ADDED")
+        assert resp.status_code == 404, resp.json()
+
+    def test_an_unlisted_kb_read_only_subclass_falls_back_to_the_base_status(self):
+        from pyrite.exceptions import KBReadOnlyError
+
+        resp = self._fallback_probe(KBReadOnlyError, "SOME_READ_ONLY_CODE_NOBODY_ADDED")
+        assert resp.status_code == 403, resp.json()
+
+    def test_an_unlisted_kb_protected_subclass_falls_back_to_the_base_status(self):
+        from pyrite.exceptions import KBProtectedError
+
+        resp = self._fallback_probe(KBProtectedError, "SOME_PROTECTED_CODE_NOBODY_ADDED")
+        assert resp.status_code == 403, resp.json()
+
     def test_body_has_no_top_level_code_or_message(self, error_client):
         """The old flat shape is gone: everything lives under detail."""
         resp = error_client.get("/probe/entry_not_found")

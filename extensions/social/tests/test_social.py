@@ -635,6 +635,38 @@ class TestMcpPostGoesThroughPipeline:
         finally:
             del reg._plugins["probe_hook_plugin"]
 
+    def test_a_storage_error_reports_its_public_message_not_the_raw_detail(
+        self, env, plugin, monkeypatch
+    ):
+        """ADR-0037 theme 2 round 2 (conductor cold read of 5d65caa7, item 1):
+        _mcp_post's except PyriteError clause put str(e) straight into the
+        "error" field, bypassing the public_message every other transport
+        already respects. A StorageError's str(exc) can carry server-side
+        detail (a real path, a driver's own text)."""
+        from pyrite.exceptions import StorageError
+        from pyrite.services.kb_service import KBService
+
+        def _boom(self, *a, **kw):
+            raise StorageError(
+                "Failed to write /real/secret/server/path/writeup.md: disk quota exceeded"
+            )
+
+        monkeypatch.setattr(KBService, "create_entry", _boom)
+        result = plugin._mcp_post(
+            {
+                "kb_name": "social-kb",
+                "title": "Boom",
+                "body": "body",
+                "author_id": "alice",
+            }
+        )
+        assert "/real/secret/server/path" not in result["error"], result
+        assert result["error"] == (
+            "A storage operation failed. An administrator needs to check the "
+            "server log for the underlying error."
+        ), result
+        assert result["error_code"] == "STORAGE_ERROR", result
+
     def test_existing_id_is_refused_with_entry_exists_and_file_untouched(self, env, plugin):
         first = plugin._mcp_post(
             {

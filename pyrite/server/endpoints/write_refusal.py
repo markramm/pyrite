@@ -19,16 +19,19 @@ def refusal_http(exc: ValidationError) -> HTTPException:
     retryable: the same request fails the same way.
 
     ``exc.error_code`` is a class attribute on every ``PyriteError`` since
-    ADR-0037 theme 2 -- the base ``ValidationError``'s is ``VALIDATION_ERROR``
-    (REST's long-standing central-handler spelling), so the ``or
-    "VALIDATION_FAILED"`` fallback below is now unreachable for any
-    ``ValidationError``; kept only in case a caller ever passes something
-    that isn't one. This is also the code `#378`'s write-pipeline parity test
-    (`test_write_surface_parity.py`) checks agrees with MCP's `kb_create`,
-    `kb_bulk_create`, `POST /api/entries/import` and every CLI write surface
-    -- one pipeline, one code, on every surface including this one.
+    ADR-0037 theme 2 -- the base ``ValidationError``'s is
+    ``VALIDATION_FAILED`` (conductor decision, fix round 1: the write
+    pipeline's long-documented spelling, which REST, MCP and the CLI all
+    already agreed on before this theme). ``exc.error_code`` is unconditional
+    on every ``PyriteError`` subclass now, so there is no fallback case left
+    to reach here: this function's own type hint (``exc: ValidationError``)
+    guarantees a class code is always present. This is also the code
+    `#378`'s write-pipeline parity test (`test_write_surface_parity.py`)
+    checks agrees with MCP's `kb_create`, `kb_bulk_create`,
+    `POST /api/entries/import` and every CLI write surface -- one pipeline,
+    one code, on every surface including this one.
     """
-    code = getattr(exc, "error_code", None) or "VALIDATION_FAILED"
+    code = exc.error_code
     detail: dict = {"code": code, "message": str(exc), "retryable": False}
     suggestion = getattr(exc, "suggestion", None)
     if suggestion:

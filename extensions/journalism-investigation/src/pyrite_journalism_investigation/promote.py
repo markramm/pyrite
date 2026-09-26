@@ -1,10 +1,13 @@
 """Promote a corroborated claim to an edge-entity (ownership, membership, funding)."""
 
+import logging
 from typing import Any
 
 from pyrite.schema import generate_entry_id
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
+
+logger = logging.getLogger(__name__)
 
 PROMOTABLE_STATUSES = {"corroborated", "partially_verified"}
 VALID_EDGE_TYPES = {"ownership", "membership", "funding"}
@@ -191,4 +194,13 @@ def promote_claim_to_edge(
             "source_claim": claim_id,
         }
     except Exception as e:
+        # A StorageError/PluginError/ConfigError (or a subclass that doesn't
+        # set its own) can carry server-side detail in str(e) -- a real
+        # path, a driver's own text. public_message, when set, is what
+        # every other transport already shows (ADR-0037 theme 2 round 2,
+        # item 1); the real detail still reaches the log.
+        public_message = getattr(e, "public_message", None)
+        if public_message is not None:
+            logger.warning("%s", e)
+            return {"error": public_message}
         return {"error": str(e)}

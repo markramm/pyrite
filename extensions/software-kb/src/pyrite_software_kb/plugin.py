@@ -1,5 +1,6 @@
 """Software KB plugin — ADRs, design docs, standards, components, backlog, runbooks for pyrite."""
 
+import logging
 from collections.abc import Callable
 from datetime import UTC
 from typing import Any, ClassVar
@@ -23,6 +24,26 @@ from .entry_types import (
 from .preset import SOFTWARE_KB_PRESET
 from .validators import validate_software_kb
 from .workflows import ADR_LIFECYCLE, BACKLOG_WORKFLOW
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_error(e: Exception) -> str:
+    """The message an MCP tool handler may show for ``e``.
+
+    ADR-0037 theme 2 round 2 (conductor cold read of 5d65caa7, item 1): a
+    broad ``except Exception as e: ... str(e)`` catches a
+    StorageError/PluginError/ConfigError (or a subclass that doesn't set its
+    own) too, and those can carry server-side detail in str(e) -- a real
+    path, a driver's own text. public_message, when set, is what every
+    other transport already shows; the real detail still reaches the log.
+    """
+    public_message = getattr(e, "public_message", None)
+    if public_message is not None:
+        logger.warning("%s", e)
+        return public_message
+    return str(e)
+
 
 # Default page size for list-shaped sw_* surfaces (#233). These commands are
 # advertised as orientation aids ("quick context lookups"), not exhaustive
@@ -1311,7 +1332,7 @@ class SoftwareKBPlugin:
                         svc.update_entry(iid, kb_name, rank=rank)
                         updated.append({"id": iid, "rank": rank})
                     except Exception as e:
-                        updated.append({"id": iid, "error": str(e)})
+                        updated.append({"id": iid, "error": _safe_error(e)})
                 return {"updated": updated, "count": len(updated)}
 
             elif item_id and (after_id or before_id):
@@ -2969,7 +2990,7 @@ class SoftwareKBPlugin:
                 "effort": effort,
             }
         except Exception as e:
-            return {"created": False, "error": str(e)}
+            return {"created": False, "error": _safe_error(e)}
         finally:
             if should_close:
                 db.close()

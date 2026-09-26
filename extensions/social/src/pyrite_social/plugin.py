@@ -1,5 +1,6 @@
 """Social KB plugin — Everything2-inspired community knowledge base for pyrite."""
 
+import logging
 from collections.abc import Callable
 from typing import Any, ClassVar
 
@@ -15,6 +16,8 @@ from .hooks import (
 from .preset import SOCIAL_PRESET
 from .tables import SOCIAL_TABLES
 from .validators import validate_social
+
+logger = logging.getLogger(__name__)
 
 
 class SocialPlugin:
@@ -377,7 +380,18 @@ class SocialPlugin:
             return {"created": True, "entry_id": entry.id, "file_path": str(file_path)}
         except PyriteError as e:
             code = getattr(e, "error_code", None) or "CREATE_FAILED"
-            return {"error": str(e), "error_code": code}
+            # A StorageError/PluginError/ConfigError (or a subclass that
+            # doesn't set its own) can carry server-side detail in str(e) --
+            # a real path, a driver's own text. public_message, when set, is
+            # what every other transport already shows; the real detail
+            # still reaches the log (ADR-0037 theme 2 round 2, item 1).
+            public_message = getattr(e, "public_message", None)
+            if public_message is not None:
+                logger.warning("%s", e)
+                message = public_message
+            else:
+                message = str(e)
+            return {"error": message, "error_code": code}
         finally:
             if should_close:
                 db.close()

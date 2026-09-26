@@ -433,6 +433,36 @@ def test_bulk_create_missing_title_is_a_validation_refusal(env, mcp):
     }, res
 
 
+def test_bulk_create_a_storage_error_reports_its_public_message_not_the_raw_detail(
+    env, mcp, monkeypatch
+):
+    """ADR-0037 theme 2 round 2 (conductor cold read of 5d65caa7, item 1):
+    a StorageError's str(exc) can carry server-side detail (a real path, a
+    driver's own text) -- _refusal_result (pyrite/services/kb_service.py)
+    put that raw text straight into the bulk per-item result's "error"
+    field, bypassing the public_message REST's central handler and MCP's
+    _refusal already respect. The real detail belongs in the server log
+    only.
+    """
+    from pyrite.exceptions import StorageError
+    from pyrite.services import kb_service as kb_service_module
+
+    def _boom(self, kb_name, kb_config, spec, **kwargs):
+        raise StorageError("Failed to write /real/secret/server/path/entry.md: disk quota exceeded")
+
+    monkeypatch.setattr(kb_service_module.KBService, "_prepare_and_save", _boom)
+    res = mcp._dispatch_tool(
+        "kb_bulk_create",
+        {"kb_name": KB, "entries": [{"entry_type": "person", "title": "X", "body": "b"}]},
+    )
+    error_text = res["results"][0]["error"]
+    assert "/real/secret/server/path" not in error_text, res
+    assert error_text == (
+        "A storage operation failed. An administrator needs to check the "
+        "server log for the underlying error."
+    ), res
+
+
 def test_cli_add_validate_only_reports_a_refusal_without_writing(env):
     src = env["tmp_path"] / "v.md"
     src.write_text("---\ntitle: Checked Person\ntype: person\nrole: bogus\n---\n\nbody\n")

@@ -1,5 +1,6 @@
 """Journalism Investigation plugin for pyrite."""
 
+import logging
 import secrets
 from typing import Any, ClassVar
 
@@ -30,6 +31,26 @@ from .queries import (
 )
 from .utils import parse_meta
 from .validators import validate_investigation_entry
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_error(e: Exception) -> str:
+    """The message an MCP create tool may show for ``e``.
+
+    ADR-0037 theme 2 round 2 (conductor cold read of 5d65caa7, item 1): a
+    broad ``except Exception as e: return {"error": str(e)}`` catches a
+    StorageError/PluginError/ConfigError (or a subclass that doesn't set its
+    own) too, and those can carry server-side detail in str(e) -- a real
+    path, a driver's own text. public_message, when set, is what every
+    other transport already shows; the real detail still reaches the log.
+    """
+    public_message = getattr(e, "public_message", None)
+    if public_message is not None:
+        logger.warning("%s", e)
+        return public_message
+    return str(e)
+
 
 # Prefix for the fresh guard name used when a scoped caller may not read the KB
 # a tool resolves to (#223). KB names are unrestricted, so a fixed public name
@@ -1109,7 +1130,7 @@ class JournalismInvestigationPlugin:
             )
             return {"created": entry_id, "type": entity_type, "title": title}
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": _safe_error(e)}
 
     def _mcp_create_event(self, args: dict[str, Any]) -> dict[str, Any]:
         """Create an event entry."""
@@ -1147,7 +1168,7 @@ class JournalismInvestigationPlugin:
             )
             return {"created": entry_id, "type": event_type, "title": title}
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": _safe_error(e)}
 
     def _mcp_create_claim(self, args: dict[str, Any]) -> dict[str, Any]:
         """Create a claim entry."""
@@ -1189,7 +1210,7 @@ class JournalismInvestigationPlugin:
                 result["warnings"] = warnings
             return result
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": _safe_error(e)}
 
     def _mcp_log_source(self, args: dict[str, Any]) -> dict[str, Any]:
         """Log a source document."""
@@ -1222,7 +1243,7 @@ class JournalismInvestigationPlugin:
             )
             return {"created": entry_id, "type": "document_source", "title": title}
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": _safe_error(e)}
 
     def _mcp_search_all(
         self, args: dict[str, Any], *, readable_kbs: set[str] | None = None

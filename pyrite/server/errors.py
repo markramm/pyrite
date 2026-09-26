@@ -31,7 +31,17 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from ..exceptions import ConfigError, PyriteError, StorageError, ValidationError
+from ..exceptions import (
+    ConfigError,
+    EntryNotFoundError,
+    KBNotFoundError,
+    KBProtectedError,
+    KBReadOnlyError,
+    PluginError,
+    PyriteError,
+    StorageError,
+    ValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +107,18 @@ _STATUS_BY_CODE: dict[str, int] = {
 #: ValidationError/ConfigError/StorageError subclass that narrows its own
 #: error_code (#378's family, and any future one) but whose code nobody
 #: added to _STATUS_BY_CODE above -- a silent 500 for a request the caller
-#: got right, instead of the 4xx its base answers for the same condition.
+#: got right, instead of the 4xx (or 502) its base answers for the same
+#: condition. Item 2 (conductor cold read of 5d65caa7) widened this from
+#: three bases to every base with more than one concrete code today.
 _BASE_CLASS_FALLBACK: tuple[tuple[type[PyriteError], int], ...] = (
     (ValidationError, 422),
     (ConfigError, 409),
     (StorageError, 500),
+    (PluginError, 502),
+    (EntryNotFoundError, 404),
+    (KBNotFoundError, 404),
+    (KBReadOnlyError, 403),
+    (KBProtectedError, 403),
 )
 
 

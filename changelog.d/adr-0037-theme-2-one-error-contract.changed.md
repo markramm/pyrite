@@ -2,12 +2,15 @@
   instead of being decided separately per transport, closing the gap where
   the same exception answered a different code on different surfaces.
 
-  **REST.** The central `PyriteError` handler's wire shape is unchanged
-  (`{"detail": {"code", "message", "retryable", "hint"?}}`); its status
-  codes are unchanged. What changes is which `code` string a handful of
-  classes get when the handler answers them directly (most callers see no
-  difference, since 91 of 124 `HTTPException` sites already answer their
-  own code and are untouched):
+  **REST.** A `PyriteError` that reaches the central handler now answers
+  in the same `{"detail": {"code", "message", "retryable", "hint"?}}` shape
+  every `HTTPException(detail={...})` site already used. **Before this
+  release the central handler answered a flat `{"code", "message"}` body**,
+  so a client reading `body["code"]` from those responses must now read
+  `body["detail"]["code"]`. Status codes are unchanged. Most responses are
+  unaffected: 91 of 124 `HTTPException` sites already answer their own
+  code in the `detail` shape and are untouched. The code string changes
+  for these classes when the central handler answers them:
   - `UndeclaredTypeError`, `EntryExistsError`, `SchemaViolationError` and
     `InvalidGitRefError` now answer their own codes (`UNDECLARED_TYPE`,
     `ENTRY_EXISTS`, `SCHEMA_VIOLATION`, `INVALID_REF`) where the central
@@ -15,16 +18,13 @@
     four (their status codes are unchanged).
   - `ClipperBlockedHostError` now answers `CLIPPER_BLOCKED_HOST` where the
     central handler previously answered `INTERNAL_ERROR` (both 500).
-  - A bare `ValidationError` (not one of the above) still answers
-    `VALIDATION_FAILED`, unchanged from before — REST's write pipeline
-    (`server/endpoints/write_refusal.py`, `services/kb_service.py`'s bulk
-    per-item results) already used that spelling; only the *central
-    handler's* now-fixed second, disagreeing spelling (`VALIDATION_ERROR`)
-    is gone.
-  - The central handler's body was flat (`{"code", "message"}`, no wrapper,
-    no `retryable`) before this release; it is now the same
-    `{"detail": {...}}` shape every `HTTPException(detail={...})` site
-    already answered.
+  - A bare `ValidationError` (and any subclass without its own code, e.g.
+    `TruncatedBodyError`) answered by the central handler now answers
+    `VALIDATION_FAILED` where it previously answered `VALIDATION_ERROR`.
+    `VALIDATION_FAILED` is the spelling REST's write pipeline
+    (`server/endpoints/write_refusal.py`, bulk per-item results) and MCP
+    already used; the central handler's disagreeing second spelling is
+    gone.
 
   **MCP.** Where MCP's code used to differ from REST's (`NOT_FOUND` vs
   `ENTRY_NOT_FOUND`/`KB_NOT_FOUND`, `READ_ONLY` vs `KB_READ_ONLY`,
@@ -41,12 +41,15 @@
   same way — for the common case (a bare `ValidationError`, e.g. a missing
   title) that code is `VALIDATION_FAILED`, unchanged.
 
-  **CLI.** No CLI write command has adopted the new class-level codes yet
-  (`cli_error_from`, added by this release, has no call site); the CLI's
-  visible behavior is unchanged in this release. A future change wiring
-  CLI commands to `cli_error_from` will emit the exception's own code
-  (e.g. `ENTRY_NOT_FOUND` for a missing entry) where several commands
-  today emit the generic `ERROR` (`#481`).
+  **CLI.** Core CLI write commands have not adopted the class-level codes
+  yet (`cli_error_from`, added by this release, has no call site), so their
+  output is unchanged; wiring them will emit the exception's own code (e.g.
+  `ENTRY_NOT_FOUND`) where several commands today emit the generic `ERROR`
+  (`#481`). The **extension** CLI create commands (zettelkasten,
+  software-kb) do change: they read the exception's `error_code` and fell
+  back to `CREATE_FAILED`, and since every `PyriteError` now carries a code
+  (the base's is `INTERNAL_ERROR`), a failed create there now reports the
+  exception's own code instead of `CREATE_FAILED`.
 
   **Server log.** The central handler's Python logger name changed from
   `pyrite.server.api` to `pyrite.server.errors` (the handler moved to its
@@ -62,5 +65,8 @@
   (`ConfigSaveRefusedError`/`ConfigFileUnreadableError`, #377) are
   unaffected. The CLI's generic error path does not read `public_message`
   at all (see above), so this is a REST/MCP-only visible change for now.
+  The per-item bulk `"error"` field (`kb_bulk_create`,
+  `POST /api/entries/import`, and the social plugin's create tool) now
+  uses `public_message` the same way for these three classes.
 
   (ADR-0037 theme 2)
