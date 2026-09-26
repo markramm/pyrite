@@ -471,10 +471,16 @@ them.
 - A **structural authorization guard** is on `dev`. It enumerates every REST
   route and MCP tool and fails when one lacks a covering read **and** write
   authorization test.
+  **G1 is in 0.26** (maintainer, 2026-09-26). It compares every entry point's
+  answer, for each kind of principal, with what the policy says, and it
+  follows directly after security batch 3b.
 - The README states the multi-user status honestly: alpha, the review date,
   and the known gaps.
-- No open issue labelled `security` lacks a disposition (fixed, scheduled, or
-  accepted with a reason).
+- Every finding in the private security tracker, and every backlog item
+  tagged `security`, has a disposition: fixed, scheduled, or accepted with a
+  reason. No public `security` label is created (maintainer, 2026-09-26).
+- Findings are published only after their fixes ship. Before then, only
+  counts and structural gaps are public.
 
 The review starts once the in-flight security fixes have landed, so it audits
 current code rather than a moving target.
@@ -490,8 +496,10 @@ current code rather than a moving target.
 - **#223** the remaining extension MCP tools that span every KB.
 - **The write-path audit.** Reads were made structural in 0.25; writes still
   rely on per-endpoint checks. This is the review's largest surface.
-- **#228** and the 56 open CodeQL alerts: triage them, and treat MCP tool
-  arguments as untrusted.
+- **The 56 open CodeQL alerts:** triage them in 0.26 (audit A8). **#228**
+  (CodeQL advanced setup, so MCP tool arguments count as untrusted) moves to
+  0.27; until then audit A2 reviews those arguments by hand (maintainer,
+  2026-09-26).
 - Recorded by the 2026-09-23 cold reads, as properties for the review: every
   path built from request or KB input stays inside its root and survives
   unusual names (NUL, overlong, drive-relative, symlinks); a message to an
@@ -595,6 +603,22 @@ trusted multi-user path is a prerequisite for showing it to anyone but the
 maintainer.
 
 ---
+
+## 0.27 — Direction (maintainer decisions, 2026-09-26; not yet groomed)
+
+- **ADR-0037 themes 3b–5:** writes and MCP go through the one policy point.
+- **CodeQL advanced setup (#228).**
+- **A separate `published` flag.** Being on the anonymous `/site` becomes its
+  own switch, apart from `default_role: read` for registered users.
+- **One KB registry** (ADR-0039, proposed after a spike). A single source of
+  truth for KB membership and per-KB policy; it removes the class behind
+  private #61/#69 and the characterization-harness leaks.
+- **Plugins out of tree.** The plugin contract becomes the public API.
+  Journalism-investigation is the pilot, and software-kb stays in tree. An
+  import-inventory spike and a proposed ADR come first.
+- **The CLI is the agent interface.** A pi agent or Claude Code uses
+  `pyrite` commands with pipes and `--json` as shared memory. Its friction
+  list comes from the CLI-only hallway test.
 
 ## Later, unscheduled
 

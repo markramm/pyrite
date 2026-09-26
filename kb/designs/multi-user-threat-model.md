@@ -410,9 +410,7 @@ cross-reference).
 | **medium** | G-exist (a P-R5 or P-S1 breach revealing names or counts); G-persist within a bounded window; a derived-data leak of titles or counts only; G-deny by one principal against all |
 | **low** | a property holds in effect, but only by accident of another check (defence in depth missing); information about the instance, not about any KB |
 
-A **finding** violates a property here, with a reproduction on `dev` at a
-named SHA: a single failing test, or a request sequence run alone against
-a scratch server (no suites). A property that holds today but is enforced
+A **finding** violates a property here, shown by a failing regression test on `dev` at a named SHA: one pytest test asserting the property, red on `dev`, which the fix then keeps (maintainer, 2026-09-26). Briefs ask for that test, never for a reproduction or a request sequence. A property that holds today but is enforced
 nowhere structural is **hardening**, not a finding. Hardening may become an
 ordinary backlog item. In every brief, a divergence **toward refusal** (the
 code refuses what the policy allows) is not a finding either: it is a G1
