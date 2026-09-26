@@ -55,6 +55,11 @@ from tests._surface_inventory import (
 
 pytestmark = pytest.mark.core
 
+_UNCHANGED_SURFACE = pytest.mark.control(
+    reason="a ratchet over what this PR does not change (the MCP registry, /mcp, /ws) "
+    "or list bookkeeping that holds on either side of it: it guards the next change"
+)
+
 _SELF_TEST = pytest.mark.control(
     reason="tests the guard itself (its walk, its detection, or its list bookkeeping): "
     "true on either side of the change that adds it"
@@ -388,6 +393,7 @@ def test_every_rest_operation_passes_the_policy_exactly_once():
     check_rest(_real_operations(), PUBLIC_ENTRY_POINTS, REST_NOT_YET_MIGRATED)
 
 
+@_UNCHANGED_SURFACE
 def test_the_lists_hold_only_what_is_still_owed():
     check_lists_owe(_real_operations(), PUBLIC_ENTRY_POINTS, REST_NOT_YET_MIGRATED)
 
@@ -487,6 +493,7 @@ def _tool_action(meta: dict) -> Action | None:
     return action if isinstance(action, Action) else None
 
 
+@_UNCHANGED_SURFACE
 def test_every_mcp_tool_resolves_an_action_or_is_owed():
     with mcp_server() as server:
         tools = {t.name: server.tools[t.name] for t in mcp_tools(server)}
@@ -553,6 +560,7 @@ def _all_handler_read_sites() -> set[tuple[str, str]]:
     return sites
 
 
+@_UNCHANGED_SURFACE
 def test_a_tool_handler_is_taken_from_the_registry_only_by_the_chokepoint():
     sites = _all_handler_read_sites()
     extra = sorted(f"{f}::{fn}" for f, fn in sites - set(HANDLER_READ_SITES))
@@ -581,6 +589,7 @@ def test_a_handler_called_outside_the_chokepoint_is_found():
 # =============================================================================
 
 
+@_UNCHANGED_SURFACE
 def test_the_non_route_entry_points_are_the_recorded_ones():
     from pyrite.server.api import create_app
 
