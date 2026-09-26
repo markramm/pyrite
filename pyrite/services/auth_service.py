@@ -741,6 +741,13 @@ class AuthService:
 
         Evicted sessions are announced after the commit, so a listener never
         acts on an eviction that was rolled back (#433).
+
+        On failure, ``rollback()`` discards everything pending on the
+        caller's session -- not only this method's own INSERT and eviction.
+        The session is scope-owned (see ``PyriteDB.session``), so on the
+        server that is only this request's own uncommitted work; a caller
+        sharing a longer-lived session (the CLI, a background job) loses
+        whatever else it had queued there too (#440).
         """
         raw_token, token_hash = self._generate_token()
         now = datetime.now(UTC)
