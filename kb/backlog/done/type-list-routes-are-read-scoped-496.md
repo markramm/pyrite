@@ -6,7 +6,7 @@ tags:
 - security
 importance: 5
 kind: bug
-status: in_progress
+status: done
 priority: critical
 assignee: agent:pyrite-worker
 effort: XS
