@@ -8,17 +8,18 @@ external edits (a file written by hand, a duplicate id, a hand-changed id, a
 file with no ``id:`` line, an edit that keeps the old mtime, ``mv``/``git mv``,
 ``rm``). After each step it checks the ADR's invariants.
 
-One state machine, one parametrized test per invariant: each run enables only
-that invariant's check, so an invariant today's code violates is a strict
-``xfail`` naming its GitHub issue while the others must pass. When an issue is
-fixed its case XPASSes and fails the suite, which is the prompt to delete the
-xfail.
+Two layers:
+
+- **One hand-written test per known violation**, replaying the sequence
+  Hypothesis shrank it to. Each is a strict xfail tied to ONE issue that must
+  fail with an ``AssertionError`` starting ``I<n>:``; fixing the issue flips
+  exactly that test (plus, for #483, the other tests of the same bug).
+- **An exploratory run** of the machine with a pinned ``@seed``, checking only
+  the invariants with no known violation (I5, I9, minus the two I9 shapes that
+  have their own tests). It is what catches a new regression.
 
 I10 (history) needs git and a handful of commits, so it is three plain tests at
 the end rather than a rule of the machine.
-
-Deterministic (``derandomize=True``, no example database) and bounded, so it
-runs the same in CI as locally.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ import pytest
 
 hypothesis = pytest.importorskip("hypothesis")
 
-from hypothesis import HealthCheck, Phase, settings  # noqa: E402
+from hypothesis import HealthCheck, Phase, seed, settings  # noqa: E402
 from hypothesis import strategies as st  # noqa: E402
 from hypothesis.stateful import (  # noqa: E402
     RuleBasedStateMachine,
@@ -79,6 +80,7 @@ class StorageMachine(RuleBasedStateMachine):
     """One throwaway KB per example; ``ENABLED`` names the invariants checked."""
 
     ENABLED: frozenset[str] = ALL
+    SKIP_KNOWN: bool = False
 
     def __init__(self) -> None:
         super().__init__()
@@ -135,6 +137,15 @@ class StorageMachine(RuleBasedStateMachine):
         before_bytes = self.snapshot()
         before = self.disk()
         before_claims = self.claims(before)
+        # Ids whose lookup is already wrong before this op, by a known bug:
+        # a filename hit holding another id (#483), an id held only by a file
+        # find_file cannot find (#484), an id held by two files (#494).
+        ambiguous = set()
+        for i in {args.get("id"), args.get("old"), args.get("new")} - {None}:
+            found = self.repo.find_file(i)
+            held = before_claims.get(i, [])
+            if len(held) > 1 or (found is None and held) or (found and before.get(found) != i):
+                ambiguous.add(i)
         try:
             result, err = fn(), None
         except PyriteError as e:  # a typed refusal is a legitimate outcome
@@ -188,7 +199,15 @@ class StorageMachine(RuleBasedStateMachine):
             wrong = {f for f in removed if before[f] != args["id"]}
             assert not wrong, f"I7: {ctx} removed files of other ids: {wrong}"
 
-        if self.on("I9") and err is None:
+        # The known I9 violations have their own tests below; the exploratory
+        # machine skips exactly those shapes -- by the state that causes them,
+        # not by seed -- so it stays green and can still catch anything else
+        # (e.g. update not writing the index).
+        known_i9 = self.SKIP_KNOWN and (
+            (kind == "rename" and args.get("old") == args.get("new"))  # #493
+            or bool(ambiguous)  # #483, #484, #494
+        )
+        if self.on("I9") and err is None and not known_i9:
             # Write-through: the index agrees with disk for the ids the write
             # touched, with no sync in between.
             rows = self.rows()
@@ -363,39 +382,156 @@ class StorageMachine(RuleBasedStateMachine):
                 assert found is not None, f"I8: {i!r} is on disk at {claims[i]} but not findable"
 
 
-FAST = settings(
-    max_examples=50,
+# ---------------------------------------------------------------------------
+# The exploratory run: invariants with no known violation, pinned seed.
+# ---------------------------------------------------------------------------
+
+# Invariants whose checks the random run keeps. The others each have known
+# violations, pinned below as one hand-written test per bug.
+CLEAN = frozenset({"I5", "I9"})
+
+
+@seed(20260925)
+class ExploratoryStorageMachine(StorageMachine):
+    """Random sequences over every rule, checking only CLEAN invariants.
+
+    The seed is pinned on the class (``@seed``), so the examples do not depend
+    on the class or test name (``derandomize`` hashes the test's identity).
+    """
+
+    ENABLED = CLEAN
+    SKIP_KNOWN = True
+
+
+EXPLORE = settings(
+    max_examples=int(os.environ.get("PYRITE_INVARIANT_EXAMPLES", "150")),
     stateful_step_count=20,
-    derandomize=True,
     database=None,
     deadline=None,
-    # A strict xfail only needs the failure; shrinking is for a human. Set
-    # PYRITE_INVARIANT_SHRINK=1 to get the minimal sequence for an issue.
+    # Shrinking is for a human reading a new failure; set
+    # PYRITE_INVARIANT_SHRINK=1 to get the minimal sequence.
     phases=[Phase.explicit, Phase.generate]
     + ([Phase.shrink] if os.environ.get("PYRITE_INVARIANT_SHRINK") else []),
-    suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
+    suppress_health_check=list(HealthCheck),
 )
 
-# Invariant -> the issue that tracks today's violation (strict xfail).
-VIOLATED: dict[str, str] = {
-    "I1": "#484 find_file ignores derived ids, so create writes a second file",
-    "I2": "#486 index_kb keeps rows for vanished files; #487 sync_kb/mtime-only staleness",
-    "I3": "#485 duplicate ids flip the row on every sync",
-    "I4": "#483 delete by id removes a file named like the id that holds another id",
-    "I6": "#488 update moves a KB-root file; #489 rename moves id-named files",
-    "I7": "#483 delete by id removes a file named like the id that holds another id",
-    "I8": "#483 filename hit not verified; #484 derived ids not findable",
-}
+
+def test_exploratory_storage_machine():
+    run_state_machine_as_test(ExploratoryStorageMachine, settings=EXPLORE)
 
 
-@pytest.mark.parametrize("inv", sorted(ALL, key=lambda s: int(s[1:])))
-def test_storage_invariant(inv, request):
-    if inv in VIOLATED:
-        request.applymarker(
-            pytest.mark.xfail(strict=True, reason=f"violates {inv}: {VIOLATED[inv]}")
-        )
-    machine = type(f"Machine{inv}", (StorageMachine,), {"ENABLED": frozenset({inv})})
-    run_state_machine_as_test(machine, settings=FAST)
+# ---------------------------------------------------------------------------
+# One test per known violation: the shrunk sequence, one issue, one invariant.
+# Each is a strict xfail that must fail with an AssertionError whose message
+# starts "I<n>:" -- any other failure (a crash, another invariant) is turned
+# into a non-AssertionError and so fails the xfail instead of satisfying it.
+# When the issue is fixed the test XPASSes, which fails the suite: delete the
+# marker then.
+# ---------------------------------------------------------------------------
+
+
+def _violates(inv: str, issue: str, what: str):
+    return pytest.mark.xfail(strict=True, raises=AssertionError, reason=f"{issue}: {inv} {what}")
+
+
+def _run(inv: str, steps: list[tuple[str, dict]], *, check_lookup: bool = False) -> None:
+    m = StorageMachine()
+    m.ENABLED = frozenset({inv})
+    try:
+        for name, kwargs in steps:
+            getattr(m, name)(**kwargs)
+        if check_lookup:
+            m.lookup_by_id()
+    except AssertionError as e:
+        if not str(e).startswith(f"{inv}:"):
+            raise RuntimeError(f"expected an {inv}: failure, got: {e}") from e
+        raise
+    finally:
+        m.teardown()
+
+
+NO_ID_BETA_AT_ALPHA = ("ext_write", {"name": "alpha.md", "id": None, "t": "Beta"})
+
+
+@_violates("I1", "#484", "create writes a second file for a derived id")
+def test_i1_create_duplicates_a_derived_id():
+    _run("I1", [NO_ID_BETA_AT_ALPHA, ("create_note", {"title": "Beta", "id": None})])
+
+
+@_violates("I2", "#486", "index build keeps a row for a deleted file")
+def test_i2_index_build_keeps_a_deleted_files_row():
+    steps = [("create_decision", {"id": "dec-1", "n": 1, "title": "Alpha"})]
+    _run("I2", [*steps, ("ext_rm", {"k": 0}), ("full_index", {})])
+
+
+@_violates("I2", "#487", "kb reindex keeps a moved file's old path")
+def test_i2_reindex_keeps_a_moved_files_old_path():
+    steps = [("create_note", {"title": "Alpha", "id": None})]
+    _run("I2", [*steps, ("ext_mv", {"k": 0, "name": "x.md"}), ("reindex", {})])
+
+
+@_violates("I2", "#495", "sync misses an edit that keeps the mtime")
+def test_i2_edit_keeping_mtime_is_not_synced():
+    steps = [("create_note", {"title": "Alpha", "id": None})]
+    edit = ("ext_edit_body", {"k": 0, "keep_mtime": True})
+    _run("I2", [*steps, edit, ("sync_incremental", {})])
+
+
+@_violates("I3", "#485", "a duplicated id flips its row on every sync")
+def test_i3_duplicate_id_flips_on_every_sync():
+    steps = [
+        ("create_note", {"title": "Alpha", "id": None}),
+        ("ext_write", {"name": "alpha.md", "id": None, "t": "Alpha"}),
+    ]
+    _run("I3", [*steps, ("sync_incremental", {})])
+
+
+@_violates("I4", "#483", "delete by a filename removes another id's content")
+def test_i4_delete_by_filename_removes_another_entry():
+    _run("I4", [NO_ID_BETA_AT_ALPHA, ("delete", {"id": "alpha"})])
+
+
+@_violates("I6", "#488", "update moves a KB-root file into the type's folder")
+def test_i6_update_moves_a_root_file():
+    steps = [("ext_write", {"name": "alpha.md", "id": "gamma", "t": "Alpha"})]
+    _run("I6", [*steps, ("update", {"id": "gamma", "what": "title"})])
+
+
+@_violates("I6", "#489", "rename moves an id-named file")
+def test_i6_rename_moves_an_id_named_file():
+    steps = [("create_note", {"title": "Alpha", "id": None})]
+    _run("I6", [*steps, ("rename", {"old": "alpha", "new": "renamed-1"})])
+
+
+@_violates("I7", "#483", "delete removes a file holding another id")
+def test_i7_delete_removes_a_file_holding_another_id():
+    steps = [("ext_write", {"name": "alpha.md", "id": "beta", "t": "Alpha"})]
+    _run("I7", [*steps, ("delete", {"id": "alpha"})])
+
+
+@_violates("I8", "#483", "find_file returns a filename hit holding another id")
+def test_i8_find_file_trusts_the_filename():
+    _run("I8", [NO_ID_BETA_AT_ALPHA], check_lookup=True)
+
+
+@_violates("I8", "#484", "a derived id is indexed but not findable")
+def test_i8_derived_id_is_not_findable():
+    _run("I8", [("ext_write", {"name": "beta.md", "id": None, "t": "Alpha"})], check_lookup=True)
+
+
+@_violates("I9", "#493", "rename(x, x) succeeds and leaves no row")
+def test_i9_rename_to_same_id_leaves_no_row():
+    steps = [("ext_write", {"name": "alpha.md", "id": None, "t": "Alpha"})]
+    _run("I9", [*steps, ("rename", {"old": "alpha", "new": "alpha"})])
+
+
+@_violates("I9", "#494", "delete of a duplicated id orphans the other file")
+def test_i9_delete_of_a_duplicated_id_orphans_a_file():
+    steps = [
+        ("create_note", {"title": "Gamma", "id": None}),
+        ("ext_write", {"name": "x.md", "id": "gamma", "t": "Alpha"}),
+    ]
+    _run("I9", [*steps, ("delete", {"id": "gamma"})])
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +544,9 @@ def test_storage_invariant(inv, request):
 def _git(cwd: Path, *args: str) -> None:
     env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com"}
     env |= {"GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
+    # No user or system git config: hooks, signing or a template must not
+    # change what these tests see.
+    env |= {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, env=env)
 
 
@@ -443,9 +582,7 @@ def _history_after_rename(git_kb, spec: dict, new_id: str) -> list[str]:
     return [v["message"] for v in db.get_entry_versions(new_id, KB)]
 
 
-@pytest.mark.xfail(
-    strict=True, reason="violates I10: #489 rename of an id-named file loses history"
-)
+@_violates("I10", "#489", "rename of an id-named file loses history")
 def test_i10_history_survives_rename_of_an_id_named_file(git_kb):
     msgs = _history_after_rename(git_kb, {"entry_type": "note", "title": "Alpha"}, "omega")
     assert sorted(msgs) == ["create", "edit", "rename"], f"I10: history of 'omega' is {msgs}"
@@ -457,7 +594,7 @@ def test_i10_history_survives_rename_of_a_file_pattern_file(git_kb):
     assert sorted(msgs) == ["create", "edit", "rename"], f"I10: history of 'dec-9' is {msgs}"
 
 
-@pytest.mark.xfail(strict=True, reason="violates I10: #490 in-place id change inherits history")
+@_violates("I10", "#490", "an in-place id change inherits history")
 def test_i10_hand_changed_id_does_not_inherit_the_old_entrys_history(git_kb):
     from pyrite.services.git_service import GitService
 
