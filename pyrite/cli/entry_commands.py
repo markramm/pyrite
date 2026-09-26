@@ -14,7 +14,7 @@ from typing import Any
 import typer
 from rich.console import Console
 
-from ..exceptions import PyriteError, ValidationError
+from ..exceptions import EntryNotFoundError, KBNotFoundError, PyriteError, ValidationError
 from ..services.read_shaping import parse_fields_param, project_fields
 from .context import cli_context
 
@@ -286,6 +286,10 @@ def register_entry_commands(app: typer.Typer) -> None:
                 written = svc.create(kb_name, spec, allow_undeclared=allow_undeclared)
             except ValidationError as e:
                 _refusal_exit(e)
+            except EntryNotFoundError as e:
+                _cli_error(str(e), "rich", "NOT_FOUND")
+            except KBNotFoundError as e:
+                _cli_error(str(e), "rich", "KB_NOT_FOUND")
             except (PyriteError, ValueError) as e:
                 _cli_error(str(e), "rich")
             entry = written.entry
@@ -430,6 +434,10 @@ def register_entry_commands(app: typer.Typer) -> None:
                 entry = svc.update(entry_id, kb_name, updates).entry
             except ValidationError as e:
                 _refusal_exit(e, output_format)
+            except EntryNotFoundError as e:
+                _cli_error(str(e), output_format, "NOT_FOUND")
+            except KBNotFoundError as e:
+                _cli_error(str(e), output_format, "KB_NOT_FOUND")
             except (PyriteError, ValueError) as e:
                 _cli_error(str(e), output_format)
             if output_format != "rich":
@@ -454,6 +462,10 @@ def register_entry_commands(app: typer.Typer) -> None:
                 if not deleted:
                     _cli_error(f"Entry '{entry_id}' not found", "rich", "NOT_FOUND")
                 console.print(f"[green]Deleted:[/green] {entry_id}")
+            except EntryNotFoundError as e:
+                _cli_error(str(e), "rich", "NOT_FOUND")
+            except KBNotFoundError as e:
+                _cli_error(str(e), "rich", "KB_NOT_FOUND")
             except (PyriteError, ValueError) as e:
                 _cli_error(str(e), "rich", "ERROR")
 
@@ -550,5 +562,9 @@ def register_entry_commands(app: typer.Typer) -> None:
                         target, tkb, source, inverse, target_kb=kb_name, note=note
                     )
                     _report(inv_result["created"], target, inv_result["relation"], source, kb_name)
+            except EntryNotFoundError as e:
+                _cli_error(str(e), "rich", "NOT_FOUND")
+            except KBNotFoundError as e:
+                _cli_error(str(e), "rich", "KB_NOT_FOUND")
             except (PyriteError, ValueError) as e:
                 _cli_error(str(e), "rich", "ERROR")
