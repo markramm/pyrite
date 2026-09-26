@@ -16,6 +16,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = REPO_ROOT / "pyrite"
 HOME = "pyrite/services/access_policy.py"
@@ -43,6 +45,7 @@ def test_the_role_list_literal_is_only_in_the_policy():
     assert _hits(ROLE_LIST) == {HOME: 1}
 
 
+@pytest.mark.control(reason="tests the ratchet's own patterns: true on either side of the change")
 def test_the_patterns_catch_every_spelling():
     for text in (
         '{"read": 0, "write": 1, "admin": 2}',
