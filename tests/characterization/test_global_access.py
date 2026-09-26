@@ -54,7 +54,7 @@ def test_local_user_is_refused_the_same_kb(world):
 
 def test_global_user_reads_it_over_mcp_too(world):
     principal = world.principals["global_user"]
-    result = world.mcp_server._dispatch_tool(
+    result = world.dispatch_tool(
         "kb_get",
         {"entry_id": NO_DEFAULT_ROLE_ENTRY, "kb_name": NO_DEFAULT_ROLE},
         client_id="characterization-global-access-check",
@@ -66,7 +66,7 @@ def test_global_user_reads_it_over_mcp_too(world):
 
 def test_local_user_is_refused_it_over_mcp_too(world):
     principal = world.principals["local_user"]
-    result = world.mcp_server._dispatch_tool(
+    result = world.dispatch_tool(
         "kb_get",
         {"entry_id": NO_DEFAULT_ROLE_ENTRY, "kb_name": NO_DEFAULT_ROLE},
         client_id="characterization-global-access-check-2",

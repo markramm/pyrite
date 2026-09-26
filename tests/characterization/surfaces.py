@@ -91,6 +91,50 @@ INLINE_ACCESS_DECIDING_ROUTES: dict[tuple[str, str], str] = {
         "per-KB decision before granting or revoking a permission on the "
         "named KB."
     ),
+    # The four worktree routes (#476 round-2 issue 2's route-completeness
+    # sweep): each takes `kb` (query or body) and calls
+    # `WorktreeService.get_worktree`/`submit`/`reset_to_main`(kb, user_id)
+    # inline -- gated only by `requires_tier("read"/"write")` (instance-
+    # wide, no KB_SCOPING_DEPENDENCIES shape) -- so naming a KB is itself a
+    # per-(kb, caller) decision, even though `WorktreeService` keys strictly
+    # off row existence (kb_name, user_id), never off the caller's ROLE on
+    # that KB: naming a private KB with no worktree row answers exactly the
+    # same "none"/empty shape as naming a readable or missing one (verified
+    # by reading `pyrite/server/endpoints/worktree.py` directly -- no
+    # leaked content either way). Characterized anyway, per this dict's own
+    # rule: it names why a route belongs here, not whether today's answer
+    # looks safe.
+    ("GET", "/api/worktree/status"): (
+        "worktree_status calls WorktreeService.get_worktree(kb, user_id) inline; "
+        "only requires_tier('read') (instance-wide) gates it."
+    ),
+    ("GET", "/api/worktree/changes"): (
+        "worktree_changes calls WorktreeService.get_worktree(kb, user_id) inline; "
+        "only requires_tier('read') (instance-wide) gates it."
+    ),
+    ("POST", "/api/worktree/submit"): (
+        "worktree_submit calls WorktreeService.submit(kb, user_id) inline; "
+        "only requires_tier('write') (instance-wide) gates it."
+    ),
+    ("POST", "/api/worktree/reset"): (
+        "worktree_reset calls WorktreeService.reset_to_main(kb, user_id) inline; "
+        "only requires_tier('write') (instance-wide) gates it."
+    ),
+    # `entries/types`/`entries/type-schemas` (#476 round-2 issue 2): both
+    # take an optional `kb` and read that KB's content (distinct entry
+    # types; kb.yaml type schemas) with NO auth dependency on the route at
+    # all -- not even an instance-wide tier gate, unlike every other route
+    # in entries.py. Characterized here so the harness pins TODAY's actual
+    # (unauthorized) behaviour rather than silently passing it over; filed
+    # as its own bug (#496) rather than fixed in this test-only branch.
+    ("GET", "/api/entries/types"): (
+        "list_entry_types reads svc.get_distinct_types(kb_name=kb) for the named "
+        "KB with NO auth dependency on the route at all (#496)."
+    ),
+    ("GET", "/api/entries/type-schemas"): (
+        "list_type_schemas reads the named KB's kb.yaml type definitions with NO "
+        "auth dependency on the route at all (#496)."
+    ),
 }
 
 # Routes with NO per-KB component at all: read and verified individually,
@@ -147,6 +191,124 @@ REST_ACCESS_EXCLUSIONS: dict[tuple[str, str], str] = {
     ("GET", "/site/sitemap.xml"): "static, pre-rendered cache; no auth dependency at all.",
     ("GET", "/site/robots.txt"): "static, pre-rendered cache; no auth dependency at all.",
     ("GET", "/site/_static/{name}"): "static asset serving; no auth dependency at all.",
+    # ---- #476 round-2 issue 2: the remaining 41 of the 49 routes a full
+    # create_app() sweep found neither characterized nor excluded. Each was
+    # read (its handler body, not just its path), not assumed -- see the
+    # round-2 report on #476 for the sweep itself.
+    #
+    # KB registry / ephemeral / admin: requires_tier('admin') only, same
+    # shape as the already-excluded PUT/DELETE /api/kbs/{name} above.
+    ("POST", "/api/kbs"): (
+        "create_kb creates a NEW kb (or ephemeral kb); no EXISTING KB's role to "
+        "check, same reasoning as kb_registry_add's exclusion."
+    ),
+    ("POST", "/api/kbs/gc"): (
+        "gc_ephemeral_kbs sweeps every expired ephemeral KB instance-wide; "
+        "requires_tier('admin') only, no per-KB branch."
+    ),
+    ("GET", "/api/kbs/ephemeral"): (
+        "list_ephemeral_kbs lists all of them; requires_tier('admin') only, no per-KB branch."
+    ),
+    ("DELETE", "/api/kbs/ephemeral/{name}"): (
+        "force_expire_ephemeral_kb; requires_tier('admin') only, its only "
+        "per-name fact is 404-if-missing, not the caller's role on it."
+    ),
+    ("POST", "/api/kbs/ephemeral"): (
+        "create_ephemeral_kb creates a NEW kb for the caller; only checks "
+        "auth_user is present, no per-KB branch."
+    ),
+    ("GET", "/api/index/jobs"): "requires_tier('admin') only; job_id is an index job, not a KB.",
+    ("GET", "/api/index/jobs/{job_id}"): (
+        "requires_tier('admin') only; job_id is an index job, not a KB."
+    ),
+    ("GET", "/api/admin/usage"): (
+        "requires_tier('admin') only; instance-wide per-user usage listing."
+    ),
+    # User/session/account-scoped: self-owned data, no KB param anywhere.
+    ("GET", "/api/ai/status"): "instance AI config; no KB param, no auth dependency at all.",
+    ("POST", "/api/ai/test"): (
+        "requires_tier('write') only; pings the provider with the operator's own key, no KB param."
+    ),
+    ("GET", "/api/usage/me"): "scoped to the caller's own user_id only, no KB param.",
+    ("PUT", "/api/starred/reorder"): (
+        "requires_tier('write') only; reorders the caller's OWN starred list by "
+        "owner identity, no kb/kb_name param anywhere."
+    ),
+    # Plugin/instance introspection: no KB param anywhere.
+    ("GET", "/api/plugins"): "lists all installed plugins instance-wide, no KB param.",
+    ("GET", "/api/plugins/{name}"): (
+        "name is a plugin name, not a KB; 404 if not installed, no per-KB branch."
+    ),
+    ("GET", "/api/collections/types"): (
+        "built-in + plugin collection type listing; no kb param anywhere."
+    ),
+    # Repo management: creates/discovers NEW repos, no existing KB's role to
+    # check -- same shape as kb_registry_add.
+    ("POST", "/api/repos/fork"): (
+        "forks a NEW GitHub repo by remote_url; no dependency on the route at "
+        "all, only precondition is 'GitHub connected'."
+    ),
+    ("POST", "/api/repos/subscribe"): (
+        "subscribes to a NEW remote repo by remote_url; no dependency on the route at all."
+    ),
+    ("GET", "/api/github/repos"): (
+        "lists the caller's OWN GitHub account's repos via their stored token; "
+        "no KB param, no dependency on the route."
+    ),
+    # Site cache / index: instance-wide, admin, or fully public.
+    ("POST", "/api/site/render"): (
+        "requires_tier('admin') only; renders every /site page, no single-KB branch."
+    ),
+    ("GET", "/api/index/embed-status"): (
+        "instance-wide embedding queue status, no KB param, no auth dependency."
+    ),
+    # Auth / session / GitHub OAuth / API keys / invite codes: keyed by user
+    # identity or global admin, zero kb/kb_name anywhere in any of these.
+    ("POST", "/auth/register"): "no KB param anywhere; creates the caller's account.",
+    ("POST", "/auth/login"): "no KB param anywhere; authenticates the caller.",
+    ("POST", "/auth/logout"): "no KB param anywhere; ends the caller's session.",
+    ("GET", "/auth/me"): (
+        "no KB param anywhere; the response body includes the caller's OWN "
+        "kb_permissions map as informational output, not a gate."
+    ),
+    ("GET", "/auth/config"): "no KB param anywhere; instance-wide auth configuration.",
+    ("GET", "/auth/github"): "no KB param anywhere; starts the caller's OAuth flow.",
+    ("GET", "/auth/github/callback"): "no KB param anywhere; OAuth callback.",
+    ("GET", "/auth/github/connect"): "no KB param anywhere; links the caller's GitHub account.",
+    ("DELETE", "/auth/github/connect"): (
+        "no KB param anywhere; unlinks the caller's GitHub account."
+    ),
+    ("GET", "/auth/github/status"): "no KB param anywhere; the caller's own link status.",
+    ("GET", "/auth/api-keys"): "no KB param anywhere; the caller's own API keys.",
+    ("POST", "/auth/api-keys"): "no KB param anywhere; creates the caller's own API key.",
+    ("DELETE", "/auth/api-keys/{provider}"): (
+        "no KB param anywhere; provider names an OAuth provider, not a KB."
+    ),
+    ("POST", "/auth/invite-codes"): "no KB param anywhere; admin-issued invite codes.",
+    ("GET", "/auth/invite-codes"): "no KB param anywhere; lists invite codes.",
+    ("DELETE", "/auth/invite-codes/{code}"): "no KB param anywhere; code is an invite code.",
+    # Public/static/no-auth: same class as the already-excluded /site/* entries.
+    ("GET", "/health"): "infra probe; no auth dependency, no KB param.",
+    ("GET", "/robots.txt"): (
+        "public SEO route mounted outside /api (no auth), per seo_endpoints.py's own docstring."
+    ),
+    ("GET", "/sitemap.xml"): (
+        "public SEO route mounted outside /api (no auth), per seo_endpoints.py's own docstring."
+    ),
+    ("GET", "/viewer"): "static SPA file serving, include_in_schema=False, no auth dependency.",
+    ("GET", "/viewer/{path:path}"): (
+        "static SPA file serving, include_in_schema=False, no auth dependency."
+    ),
+    ("GET", "/branding/{filename}"): (
+        "mounted outside /api (no auth) so the login page can fetch branding "
+        "before the caller is authenticated, per branding_endpoints.py's own "
+        "docstring."
+    ),
+    ("GET", "/config/branding"): (
+        "mounted outside /api (no auth) so the login page can fetch branding "
+        "before the caller is authenticated, per branding_endpoints.py's own "
+        "docstring."
+    ),
 }
 REST_ACCESS_EXCLUSIONS_COUNT = len(REST_ACCESS_EXCLUSIONS)
 
@@ -162,6 +324,15 @@ MCP_ACCESS_EXCLUSIONS: dict[str, str] = {
     ),
     "kb_registry_reindex": "admin tool tier only; no per-KB branch beyond KBNotFoundError.",
     "kb_registry_health": "admin tool tier only; no per-KB branch beyond KBNotFoundError.",
+    # Both already excluded from kb_bearing_mcp_tool_names's OWN output (it
+    # subtracts NON_KB_CONTENT_TOOLS, mcp_server.py's own authoritative "no
+    # KB content" list) -- added here too (#476 round-2 issue 2's
+    # completeness sweep) so the reasoning is visible in the one place a
+    # reviewer checks coverage, not only in production code.
+    "kb_index_job_status": (
+        "NON_KB_CONTENT_TOOLS (mcp_server.py): background job state keyed by job id, not a KB."
+    ),
+    "social_reputation": "NON_KB_CONTENT_TOOLS (mcp_server.py): a per-user score, no KB rows.",
 }
 MCP_ACCESS_EXCLUSIONS_COUNT = len(MCP_ACCESS_EXCLUSIONS)
 

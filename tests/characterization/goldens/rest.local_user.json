@@ -145,7 +145,7 @@
   },
   "GET /api/collections | local_user | readable-kb": {
     "body": {
-      "collections": "<ENUMERATION_CONTENT>",
+      "collections": [],
       "total": "<ENUMERATION_CONTENT>"
     },
     "status": 200
@@ -251,7 +251,7 @@
   },
   "GET /api/daily/dates | local_user | readable-kb": {
     "body": {
-      "dates": "<ENUMERATION_CONTENT>"
+      "dates": []
     },
     "status": 200
   },
@@ -320,7 +320,12 @@
   },
   "GET /api/entries | local_user | readable-kb": {
     "body": {
-      "entries": "<ENUMERATION_CONTENT>",
+      "entries": [
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
+      ],
       "limit": 50,
       "offset": 0,
       "total": "<ENUMERATION_CONTENT>"
@@ -356,7 +361,12 @@
   },
   "GET /api/entries/export | local_user | readable-kb": {
     "body": {
-      "entries": "<ENUMERATION_CONTENT>",
+      "entries": [
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
+      ],
       "total": "<ENUMERATION_CONTENT>"
     },
     "status": 200
@@ -427,7 +437,3190 @@
   },
   "GET /api/entries/titles | local_user | readable-kb": {
     "body": {
-      "entries": "<ENUMERATION_CONTENT>"
+      "entries": [
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
+      ]
+    },
+    "status": 200
+  },
+  "GET /api/entries/type-schemas | local_user | missing-kb": {
+    "body": {
+      "declared": [],
+      "types": {
+        "account": {
+          "description": "A financial account \u2014 bank, brokerage, crypto wallet, shell company, trust",
+          "fields": {
+            "account_type": {
+              "description": "",
+              "type": "text"
+            },
+            "closed_date": {
+              "description": "",
+              "type": "date"
+            },
+            "holder": {
+              "description": "",
+              "type": "text"
+            },
+            "institution": {
+              "description": "",
+              "type": "text"
+            },
+            "jurisdiction": {
+              "description": "",
+              "type": "text"
+            },
+            "opened_date": {
+              "description": "",
+              "type": "date"
+            }
+          },
+          "subdirectory": "entities/"
+        },
+        "adr": {
+          "description": "Architecture Decision Record",
+          "fields": {
+            "adr_number": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "deciders": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            },
+            "superseded_by": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "adrs/"
+        },
+        "article": {
+          "description": "Encyclopedia article with quality assessment and review workflow",
+          "fields": {
+            "categories": {
+              "description": "",
+              "type": "text"
+            },
+            "protection_level": {
+              "description": "",
+              "type": "text"
+            },
+            "quality": {
+              "description": "",
+              "type": "text"
+            },
+            "review_status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "articles/"
+        },
+        "asset": {
+          "description": "A tracked asset \u2014 real estate, vehicle, vessel, aircraft, etc.",
+          "fields": {
+            "acquisition_date": {
+              "description": "",
+              "type": "date"
+            },
+            "asset_type": {
+              "description": "",
+              "type": "text"
+            },
+            "currency": {
+              "description": "",
+              "type": "text"
+            },
+            "description": {
+              "description": "",
+              "type": "text"
+            },
+            "jurisdiction": {
+              "description": "",
+              "type": "text"
+            },
+            "registered_owner": {
+              "description": "",
+              "type": "text"
+            },
+            "value": {
+              "description": "",
+              "type": "number"
+            }
+          },
+          "subdirectory": "entities/"
+        },
+        "backlog_item": {
+          "description": "Feature, bug, or tech debt item",
+          "fields": {
+            "assignee": {
+              "description": "",
+              "type": "text"
+            },
+            "effort": {
+              "description": "",
+              "type": "text"
+            },
+            "kind": {
+              "description": "",
+              "type": "text"
+            },
+            "priority": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "backlog/"
+        },
+        "claim": {
+          "description": "A factual assertion with verification lifecycle tracking",
+          "fields": {
+            "assertion": {
+              "description": "",
+              "type": "text"
+            },
+            "claim_status": {
+              "description": "",
+              "type": "text"
+            },
+            "confidence": {
+              "description": "",
+              "type": "text"
+            },
+            "disputed_by": {
+              "description": "",
+              "type": "text"
+            },
+            "evidence_refs": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "claims/"
+        },
+        "component": {
+          "description": "Module or service documentation",
+          "fields": {
+            "dependencies": {
+              "description": "",
+              "type": "text"
+            },
+            "kind": {
+              "description": "",
+              "type": "text"
+            },
+            "owner": {
+              "description": "",
+              "type": "text"
+            },
+            "path": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "components/"
+        },
+        "design_doc": {
+          "description": "Design document or specification",
+          "fields": {
+            "author": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "reviewers": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            },
+            "url": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "designs/"
+        },
+        "development_convention": {
+          "description": "Judgment-based guidance carried as context during work",
+          "fields": {
+            "category": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "conventions/"
+        },
+        "document": {
+          "description": "A reference document",
+          "fields": {
+            "author": {
+              "description": "Author or issuing body",
+              "type": "text"
+            },
+            "date": {
+              "description": "Publication or filing date",
+              "type": "text"
+            },
+            "document_type": {
+              "description": "Category: report, filing, memo, article, press-release, court-document, etc.",
+              "type": "text"
+            },
+            "url": {
+              "description": "URL to the original document",
+              "type": "text"
+            }
+          },
+          "subdirectory": "documents"
+        },
+        "document_source": {
+          "description": "A source document with reliability and classification metadata",
+          "fields": {
+            "author": {
+              "description": "",
+              "type": "text"
+            },
+            "classification": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "obtained_date": {
+              "description": "",
+              "type": "date"
+            },
+            "obtained_method": {
+              "description": "",
+              "type": "text"
+            },
+            "reliability": {
+              "description": "",
+              "type": "text"
+            },
+            "url": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "sources/"
+        },
+        "event": {
+          "description": "Something that happened",
+          "fields": {
+            "date": {
+              "description": "When the event occurred (YYYY-MM-DD)",
+              "type": "text"
+            },
+            "importance": {
+              "description": "Significance score from 1 (minor) to 10 (major)",
+              "type": "number"
+            },
+            "location": {
+              "description": "Where the event took place",
+              "type": "text"
+            },
+            "participants": {
+              "description": "People or organizations involved",
+              "type": "list"
+            },
+            "status": {
+              "description": "Verification status: confirmed, disputed, alleged, rumored",
+              "type": "text"
+            }
+          },
+          "subdirectory": "events"
+        },
+        "evidence": {
+          "description": "A piece of evidence linked to a source document",
+          "fields": {
+            "chain_of_custody": {
+              "description": "",
+              "type": "text"
+            },
+            "evidence_type": {
+              "description": "",
+              "type": "text"
+            },
+            "obtained_date": {
+              "description": "",
+              "type": "date"
+            },
+            "reliability": {
+              "description": "",
+              "type": "text"
+            },
+            "source_document": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "evidence/"
+        },
+        "funding": {
+          "description": "Funding relationship between entities",
+          "fields": {
+            "amount": {
+              "description": "",
+              "type": "number"
+            },
+            "currency": {
+              "description": "",
+              "type": "text"
+            },
+            "date_range": {
+              "description": "",
+              "type": "text"
+            },
+            "funder": {
+              "description": "",
+              "type": "text"
+            },
+            "mechanism": {
+              "description": "",
+              "type": "text"
+            },
+            "purpose": {
+              "description": "",
+              "type": "text"
+            },
+            "recipient": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "connections/"
+        },
+        "investigation_event": {
+          "description": "A dated event in the investigation with actors and verification status",
+          "fields": {
+            "actors": {
+              "description": "",
+              "type": "list"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "location": {
+              "description": "",
+              "type": "text"
+            },
+            "source_refs": {
+              "description": "",
+              "type": "list"
+            },
+            "verification_status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "events/"
+        },
+        "legal_action": {
+          "description": "A legal or regulatory action \u2014 case, indictment, sanctions, etc.",
+          "fields": {
+            "case_number": {
+              "description": "",
+              "type": "text"
+            },
+            "case_status": {
+              "description": "",
+              "type": "text"
+            },
+            "case_type": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "jurisdiction": {
+              "description": "",
+              "type": "text"
+            },
+            "outcome": {
+              "description": "",
+              "type": "text"
+            },
+            "parties": {
+              "description": "",
+              "type": "list"
+            }
+          },
+          "subdirectory": "events/"
+        },
+        "literature_note": {
+          "description": "Note capturing ideas from a source work",
+          "fields": {
+            "author": {
+              "description": "",
+              "type": "text"
+            },
+            "page_refs": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "literature/"
+        },
+        "membership": {
+          "description": "Membership relationship between a person and an organization",
+          "fields": {
+            "end_date": {
+              "description": "",
+              "type": "text"
+            },
+            "organization": {
+              "description": "",
+              "type": "text"
+            },
+            "person": {
+              "description": "",
+              "type": "text"
+            },
+            "role": {
+              "description": "",
+              "type": "text"
+            },
+            "start_date": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "connections/"
+        },
+        "milestone": {
+          "description": "Project milestone for grouping backlog items",
+          "fields": {
+            "status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "milestones/"
+        },
+        "note": {
+          "description": "General research note or analysis",
+          "fields": {},
+          "subdirectory": "notes/"
+        },
+        "organization": {
+          "description": "A known organization \u2014 company, government body, NGO, agency, etc.",
+          "fields": {
+            "aliases": {
+              "description": "",
+              "type": "text"
+            },
+            "founded": {
+              "description": "Date or year the organization was established",
+              "type": "text"
+            },
+            "jurisdiction": {
+              "description": "Geographic or legal jurisdiction",
+              "type": "text"
+            },
+            "org_type": {
+              "description": "Category: gov, ngo, corp, media, political, military, academic, religious, etc.",
+              "type": "text"
+            },
+            "research_status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "organizations/"
+        },
+        "ownership": {
+          "description": "Ownership relationship between an entity and an asset/organization",
+          "fields": {
+            "asset": {
+              "description": "",
+              "type": "text"
+            },
+            "beneficial": {
+              "description": "",
+              "type": "text"
+            },
+            "end_date": {
+              "description": "",
+              "type": "text"
+            },
+            "legal_basis": {
+              "description": "",
+              "type": "text"
+            },
+            "owner": {
+              "description": "",
+              "type": "text"
+            },
+            "percentage": {
+              "description": "",
+              "type": "text"
+            },
+            "start_date": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "connections/"
+        },
+        "person": {
+          "description": "A known person \u2014 politician, oligarch, executive, official, etc.",
+          "fields": {
+            "affiliations": {
+              "description": "Organizations this person is associated with",
+              "type": "list"
+            },
+            "aliases": {
+              "description": "",
+              "type": "text"
+            },
+            "nationality": {
+              "description": "",
+              "type": "text"
+            },
+            "research_status": {
+              "description": "",
+              "type": "text"
+            },
+            "role": {
+              "description": "Primary role, title, or position",
+              "type": "text"
+            }
+          },
+          "subdirectory": "people/"
+        },
+        "programmatic_validation": {
+          "description": "Automated check with verifiable pass/fail criteria",
+          "fields": {
+            "category": {
+              "description": "",
+              "type": "text"
+            },
+            "check_command": {
+              "description": "",
+              "type": "text"
+            },
+            "pass_criteria": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "validations/"
+        },
+        "relationship": {
+          "description": "A connection between entities",
+          "fields": {
+            "relationship_type": {
+              "description": "Type of relationship (see relationship_types in schema)",
+              "type": "text"
+            },
+            "source": {
+              "description": "",
+              "type": "text"
+            },
+            "target": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "relationships"
+        },
+        "runbook": {
+          "description": "How-to guide or operational procedure",
+          "fields": {
+            "audience": {
+              "description": "",
+              "type": "text"
+            },
+            "runbook_kind": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "runbooks/"
+        },
+        "standard": {
+          "description": "Coding standard or convention (legacy \u2014 use programmatic_validation or development_convention)",
+          "fields": {
+            "category": {
+              "description": "",
+              "type": "text"
+            },
+            "enforced": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "standards/"
+        },
+        "talk_page": {
+          "description": "Discussion page for an article",
+          "fields": {},
+          "subdirectory": "talk/"
+        },
+        "task": {
+          "description": "Agent-oriented task with workflow state machine",
+          "fields": {
+            "agent_context": {
+              "description": "",
+              "type": "text"
+            },
+            "assignee": {
+              "description": "",
+              "type": "text"
+            },
+            "dependencies": {
+              "description": "",
+              "type": "text"
+            },
+            "due_date": {
+              "description": "",
+              "type": "text"
+            },
+            "evidence": {
+              "description": "",
+              "type": "text"
+            },
+            "parent": {
+              "description": "",
+              "type": "text"
+            },
+            "priority": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "tasks/"
+        },
+        "timeline": {
+          "description": "An ordered sequence of events",
+          "fields": {
+            "date_range": {
+              "description": "Time span covered, e.g. '2024-01 to 2025-06'",
+              "type": "text"
+            }
+          },
+          "subdirectory": "timelines"
+        },
+        "topic": {
+          "description": "A theme, subject area, or concept",
+          "fields": {},
+          "subdirectory": "topics"
+        },
+        "transaction": {
+          "description": "A financial transaction \u2014 payment, bribe, grant, etc.",
+          "fields": {
+            "amount": {
+              "description": "",
+              "type": "number"
+            },
+            "currency": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "method": {
+              "description": "",
+              "type": "text"
+            },
+            "purpose": {
+              "description": "",
+              "type": "text"
+            },
+            "receiver": {
+              "description": "",
+              "type": "text"
+            },
+            "sender": {
+              "description": "",
+              "type": "text"
+            },
+            "transaction_type": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "events/"
+        },
+        "user_profile": {
+          "description": "Community member profile",
+          "fields": {
+            "join_date": {
+              "description": "",
+              "type": "text"
+            },
+            "reputation": {
+              "description": "",
+              "type": "text"
+            },
+            "writeup_count": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "users/"
+        },
+        "writeup": {
+          "description": "User-authored writeup (essay, story, review, etc.)",
+          "fields": {
+            "allow_voting": {
+              "description": "",
+              "type": "text"
+            },
+            "writeup_type": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "writeups/"
+        },
+        "zettel": {
+          "description": "Atomic knowledge note",
+          "fields": {
+            "maturity": {
+              "description": "",
+              "type": "text"
+            },
+            "processing_stage": {
+              "description": "",
+              "type": "text"
+            },
+            "source_ref": {
+              "description": "",
+              "type": "text"
+            },
+            "zettel_type": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "zettels/"
+        }
+      }
+    },
+    "status": 200
+  },
+  "GET /api/entries/type-schemas | local_user | no-default-role-kb": {
+    "body": {
+      "declared": [],
+      "types": {
+        "account": {
+          "description": "A financial account \u2014 bank, brokerage, crypto wallet, shell company, trust",
+          "fields": {
+            "account_type": {
+              "description": "",
+              "type": "text"
+            },
+            "closed_date": {
+              "description": "",
+              "type": "date"
+            },
+            "holder": {
+              "description": "",
+              "type": "text"
+            },
+            "institution": {
+              "description": "",
+              "type": "text"
+            },
+            "jurisdiction": {
+              "description": "",
+              "type": "text"
+            },
+            "opened_date": {
+              "description": "",
+              "type": "date"
+            }
+          },
+          "subdirectory": "entities/"
+        },
+        "adr": {
+          "description": "Architecture Decision Record",
+          "fields": {
+            "adr_number": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "deciders": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            },
+            "superseded_by": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "adrs/"
+        },
+        "article": {
+          "description": "Encyclopedia article with quality assessment and review workflow",
+          "fields": {
+            "categories": {
+              "description": "",
+              "type": "text"
+            },
+            "protection_level": {
+              "description": "",
+              "type": "text"
+            },
+            "quality": {
+              "description": "",
+              "type": "text"
+            },
+            "review_status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "articles/"
+        },
+        "asset": {
+          "description": "A tracked asset \u2014 real estate, vehicle, vessel, aircraft, etc.",
+          "fields": {
+            "acquisition_date": {
+              "description": "",
+              "type": "date"
+            },
+            "asset_type": {
+              "description": "",
+              "type": "text"
+            },
+            "currency": {
+              "description": "",
+              "type": "text"
+            },
+            "description": {
+              "description": "",
+              "type": "text"
+            },
+            "jurisdiction": {
+              "description": "",
+              "type": "text"
+            },
+            "registered_owner": {
+              "description": "",
+              "type": "text"
+            },
+            "value": {
+              "description": "",
+              "type": "number"
+            }
+          },
+          "subdirectory": "entities/"
+        },
+        "backlog_item": {
+          "description": "Feature, bug, or tech debt item",
+          "fields": {
+            "assignee": {
+              "description": "",
+              "type": "text"
+            },
+            "effort": {
+              "description": "",
+              "type": "text"
+            },
+            "kind": {
+              "description": "",
+              "type": "text"
+            },
+            "priority": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "backlog/"
+        },
+        "claim": {
+          "description": "A factual assertion with verification lifecycle tracking",
+          "fields": {
+            "assertion": {
+              "description": "",
+              "type": "text"
+            },
+            "claim_status": {
+              "description": "",
+              "type": "text"
+            },
+            "confidence": {
+              "description": "",
+              "type": "text"
+            },
+            "disputed_by": {
+              "description": "",
+              "type": "text"
+            },
+            "evidence_refs": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "claims/"
+        },
+        "component": {
+          "description": "Module or service documentation",
+          "fields": {
+            "dependencies": {
+              "description": "",
+              "type": "text"
+            },
+            "kind": {
+              "description": "",
+              "type": "text"
+            },
+            "owner": {
+              "description": "",
+              "type": "text"
+            },
+            "path": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "components/"
+        },
+        "design_doc": {
+          "description": "Design document or specification",
+          "fields": {
+            "author": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "reviewers": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            },
+            "url": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "designs/"
+        },
+        "development_convention": {
+          "description": "Judgment-based guidance carried as context during work",
+          "fields": {
+            "category": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "conventions/"
+        },
+        "document": {
+          "description": "A reference document",
+          "fields": {
+            "author": {
+              "description": "Author or issuing body",
+              "type": "text"
+            },
+            "date": {
+              "description": "Publication or filing date",
+              "type": "text"
+            },
+            "document_type": {
+              "description": "Category: report, filing, memo, article, press-release, court-document, etc.",
+              "type": "text"
+            },
+            "url": {
+              "description": "URL to the original document",
+              "type": "text"
+            }
+          },
+          "subdirectory": "documents"
+        },
+        "document_source": {
+          "description": "A source document with reliability and classification metadata",
+          "fields": {
+            "author": {
+              "description": "",
+              "type": "text"
+            },
+            "classification": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "obtained_date": {
+              "description": "",
+              "type": "date"
+            },
+            "obtained_method": {
+              "description": "",
+              "type": "text"
+            },
+            "reliability": {
+              "description": "",
+              "type": "text"
+            },
+            "url": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "sources/"
+        },
+        "event": {
+          "description": "Something that happened",
+          "fields": {
+            "date": {
+              "description": "When the event occurred (YYYY-MM-DD)",
+              "type": "text"
+            },
+            "importance": {
+              "description": "Significance score from 1 (minor) to 10 (major)",
+              "type": "number"
+            },
+            "location": {
+              "description": "Where the event took place",
+              "type": "text"
+            },
+            "participants": {
+              "description": "People or organizations involved",
+              "type": "list"
+            },
+            "status": {
+              "description": "Verification status: confirmed, disputed, alleged, rumored",
+              "type": "text"
+            }
+          },
+          "subdirectory": "events"
+        },
+        "evidence": {
+          "description": "A piece of evidence linked to a source document",
+          "fields": {
+            "chain_of_custody": {
+              "description": "",
+              "type": "text"
+            },
+            "evidence_type": {
+              "description": "",
+              "type": "text"
+            },
+            "obtained_date": {
+              "description": "",
+              "type": "date"
+            },
+            "reliability": {
+              "description": "",
+              "type": "text"
+            },
+            "source_document": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "evidence/"
+        },
+        "funding": {
+          "description": "Funding relationship between entities",
+          "fields": {
+            "amount": {
+              "description": "",
+              "type": "number"
+            },
+            "currency": {
+              "description": "",
+              "type": "text"
+            },
+            "date_range": {
+              "description": "",
+              "type": "text"
+            },
+            "funder": {
+              "description": "",
+              "type": "text"
+            },
+            "mechanism": {
+              "description": "",
+              "type": "text"
+            },
+            "purpose": {
+              "description": "",
+              "type": "text"
+            },
+            "recipient": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "connections/"
+        },
+        "investigation_event": {
+          "description": "A dated event in the investigation with actors and verification status",
+          "fields": {
+            "actors": {
+              "description": "",
+              "type": "list"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "location": {
+              "description": "",
+              "type": "text"
+            },
+            "source_refs": {
+              "description": "",
+              "type": "list"
+            },
+            "verification_status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "events/"
+        },
+        "legal_action": {
+          "description": "A legal or regulatory action \u2014 case, indictment, sanctions, etc.",
+          "fields": {
+            "case_number": {
+              "description": "",
+              "type": "text"
+            },
+            "case_status": {
+              "description": "",
+              "type": "text"
+            },
+            "case_type": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "jurisdiction": {
+              "description": "",
+              "type": "text"
+            },
+            "outcome": {
+              "description": "",
+              "type": "text"
+            },
+            "parties": {
+              "description": "",
+              "type": "list"
+            }
+          },
+          "subdirectory": "events/"
+        },
+        "literature_note": {
+          "description": "Note capturing ideas from a source work",
+          "fields": {
+            "author": {
+              "description": "",
+              "type": "text"
+            },
+            "page_refs": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "literature/"
+        },
+        "membership": {
+          "description": "Membership relationship between a person and an organization",
+          "fields": {
+            "end_date": {
+              "description": "",
+              "type": "text"
+            },
+            "organization": {
+              "description": "",
+              "type": "text"
+            },
+            "person": {
+              "description": "",
+              "type": "text"
+            },
+            "role": {
+              "description": "",
+              "type": "text"
+            },
+            "start_date": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "connections/"
+        },
+        "milestone": {
+          "description": "Project milestone for grouping backlog items",
+          "fields": {
+            "status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "milestones/"
+        },
+        "note": {
+          "description": "General research note or analysis",
+          "fields": {},
+          "subdirectory": "notes/"
+        },
+        "organization": {
+          "description": "A known organization \u2014 company, government body, NGO, agency, etc.",
+          "fields": {
+            "aliases": {
+              "description": "",
+              "type": "text"
+            },
+            "founded": {
+              "description": "Date or year the organization was established",
+              "type": "text"
+            },
+            "jurisdiction": {
+              "description": "Geographic or legal jurisdiction",
+              "type": "text"
+            },
+            "org_type": {
+              "description": "Category: gov, ngo, corp, media, political, military, academic, religious, etc.",
+              "type": "text"
+            },
+            "research_status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "organizations/"
+        },
+        "ownership": {
+          "description": "Ownership relationship between an entity and an asset/organization",
+          "fields": {
+            "asset": {
+              "description": "",
+              "type": "text"
+            },
+            "beneficial": {
+              "description": "",
+              "type": "text"
+            },
+            "end_date": {
+              "description": "",
+              "type": "text"
+            },
+            "legal_basis": {
+              "description": "",
+              "type": "text"
+            },
+            "owner": {
+              "description": "",
+              "type": "text"
+            },
+            "percentage": {
+              "description": "",
+              "type": "text"
+            },
+            "start_date": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "connections/"
+        },
+        "person": {
+          "description": "A known person \u2014 politician, oligarch, executive, official, etc.",
+          "fields": {
+            "affiliations": {
+              "description": "Organizations this person is associated with",
+              "type": "list"
+            },
+            "aliases": {
+              "description": "",
+              "type": "text"
+            },
+            "nationality": {
+              "description": "",
+              "type": "text"
+            },
+            "research_status": {
+              "description": "",
+              "type": "text"
+            },
+            "role": {
+              "description": "Primary role, title, or position",
+              "type": "text"
+            }
+          },
+          "subdirectory": "people/"
+        },
+        "programmatic_validation": {
+          "description": "Automated check with verifiable pass/fail criteria",
+          "fields": {
+            "category": {
+              "description": "",
+              "type": "text"
+            },
+            "check_command": {
+              "description": "",
+              "type": "text"
+            },
+            "pass_criteria": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "validations/"
+        },
+        "relationship": {
+          "description": "A connection between entities",
+          "fields": {
+            "relationship_type": {
+              "description": "Type of relationship (see relationship_types in schema)",
+              "type": "text"
+            },
+            "source": {
+              "description": "",
+              "type": "text"
+            },
+            "target": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "relationships"
+        },
+        "runbook": {
+          "description": "How-to guide or operational procedure",
+          "fields": {
+            "audience": {
+              "description": "",
+              "type": "text"
+            },
+            "runbook_kind": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "runbooks/"
+        },
+        "standard": {
+          "description": "Coding standard or convention (legacy \u2014 use programmatic_validation or development_convention)",
+          "fields": {
+            "category": {
+              "description": "",
+              "type": "text"
+            },
+            "enforced": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "standards/"
+        },
+        "talk_page": {
+          "description": "Discussion page for an article",
+          "fields": {},
+          "subdirectory": "talk/"
+        },
+        "task": {
+          "description": "Agent-oriented task with workflow state machine",
+          "fields": {
+            "agent_context": {
+              "description": "",
+              "type": "text"
+            },
+            "assignee": {
+              "description": "",
+              "type": "text"
+            },
+            "dependencies": {
+              "description": "",
+              "type": "text"
+            },
+            "due_date": {
+              "description": "",
+              "type": "text"
+            },
+            "evidence": {
+              "description": "",
+              "type": "text"
+            },
+            "parent": {
+              "description": "",
+              "type": "text"
+            },
+            "priority": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "tasks/"
+        },
+        "timeline": {
+          "description": "An ordered sequence of events",
+          "fields": {
+            "date_range": {
+              "description": "Time span covered, e.g. '2024-01 to 2025-06'",
+              "type": "text"
+            }
+          },
+          "subdirectory": "timelines"
+        },
+        "topic": {
+          "description": "A theme, subject area, or concept",
+          "fields": {},
+          "subdirectory": "topics"
+        },
+        "transaction": {
+          "description": "A financial transaction \u2014 payment, bribe, grant, etc.",
+          "fields": {
+            "amount": {
+              "description": "",
+              "type": "number"
+            },
+            "currency": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "method": {
+              "description": "",
+              "type": "text"
+            },
+            "purpose": {
+              "description": "",
+              "type": "text"
+            },
+            "receiver": {
+              "description": "",
+              "type": "text"
+            },
+            "sender": {
+              "description": "",
+              "type": "text"
+            },
+            "transaction_type": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "events/"
+        },
+        "user_profile": {
+          "description": "Community member profile",
+          "fields": {
+            "join_date": {
+              "description": "",
+              "type": "text"
+            },
+            "reputation": {
+              "description": "",
+              "type": "text"
+            },
+            "writeup_count": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "users/"
+        },
+        "writeup": {
+          "description": "User-authored writeup (essay, story, review, etc.)",
+          "fields": {
+            "allow_voting": {
+              "description": "",
+              "type": "text"
+            },
+            "writeup_type": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "writeups/"
+        },
+        "zettel": {
+          "description": "Atomic knowledge note",
+          "fields": {
+            "maturity": {
+              "description": "",
+              "type": "text"
+            },
+            "processing_stage": {
+              "description": "",
+              "type": "text"
+            },
+            "source_ref": {
+              "description": "",
+              "type": "text"
+            },
+            "zettel_type": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "zettels/"
+        }
+      }
+    },
+    "status": 200
+  },
+  "GET /api/entries/type-schemas | local_user | private-kb": {
+    "body": {
+      "declared": [],
+      "types": {
+        "account": {
+          "description": "A financial account \u2014 bank, brokerage, crypto wallet, shell company, trust",
+          "fields": {
+            "account_type": {
+              "description": "",
+              "type": "text"
+            },
+            "closed_date": {
+              "description": "",
+              "type": "date"
+            },
+            "holder": {
+              "description": "",
+              "type": "text"
+            },
+            "institution": {
+              "description": "",
+              "type": "text"
+            },
+            "jurisdiction": {
+              "description": "",
+              "type": "text"
+            },
+            "opened_date": {
+              "description": "",
+              "type": "date"
+            }
+          },
+          "subdirectory": "entities/"
+        },
+        "adr": {
+          "description": "Architecture Decision Record",
+          "fields": {
+            "adr_number": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "deciders": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            },
+            "superseded_by": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "adrs/"
+        },
+        "article": {
+          "description": "Encyclopedia article with quality assessment and review workflow",
+          "fields": {
+            "categories": {
+              "description": "",
+              "type": "text"
+            },
+            "protection_level": {
+              "description": "",
+              "type": "text"
+            },
+            "quality": {
+              "description": "",
+              "type": "text"
+            },
+            "review_status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "articles/"
+        },
+        "asset": {
+          "description": "A tracked asset \u2014 real estate, vehicle, vessel, aircraft, etc.",
+          "fields": {
+            "acquisition_date": {
+              "description": "",
+              "type": "date"
+            },
+            "asset_type": {
+              "description": "",
+              "type": "text"
+            },
+            "currency": {
+              "description": "",
+              "type": "text"
+            },
+            "description": {
+              "description": "",
+              "type": "text"
+            },
+            "jurisdiction": {
+              "description": "",
+              "type": "text"
+            },
+            "registered_owner": {
+              "description": "",
+              "type": "text"
+            },
+            "value": {
+              "description": "",
+              "type": "number"
+            }
+          },
+          "subdirectory": "entities/"
+        },
+        "backlog_item": {
+          "description": "Feature, bug, or tech debt item",
+          "fields": {
+            "assignee": {
+              "description": "",
+              "type": "text"
+            },
+            "effort": {
+              "description": "",
+              "type": "text"
+            },
+            "kind": {
+              "description": "",
+              "type": "text"
+            },
+            "priority": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "backlog/"
+        },
+        "claim": {
+          "description": "A factual assertion with verification lifecycle tracking",
+          "fields": {
+            "assertion": {
+              "description": "",
+              "type": "text"
+            },
+            "claim_status": {
+              "description": "",
+              "type": "text"
+            },
+            "confidence": {
+              "description": "",
+              "type": "text"
+            },
+            "disputed_by": {
+              "description": "",
+              "type": "text"
+            },
+            "evidence_refs": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "claims/"
+        },
+        "component": {
+          "description": "Module or service documentation",
+          "fields": {
+            "dependencies": {
+              "description": "",
+              "type": "text"
+            },
+            "kind": {
+              "description": "",
+              "type": "text"
+            },
+            "owner": {
+              "description": "",
+              "type": "text"
+            },
+            "path": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "components/"
+        },
+        "design_doc": {
+          "description": "Design document or specification",
+          "fields": {
+            "author": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "reviewers": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            },
+            "url": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "designs/"
+        },
+        "development_convention": {
+          "description": "Judgment-based guidance carried as context during work",
+          "fields": {
+            "category": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "conventions/"
+        },
+        "document": {
+          "description": "A reference document",
+          "fields": {
+            "author": {
+              "description": "Author or issuing body",
+              "type": "text"
+            },
+            "date": {
+              "description": "Publication or filing date",
+              "type": "text"
+            },
+            "document_type": {
+              "description": "Category: report, filing, memo, article, press-release, court-document, etc.",
+              "type": "text"
+            },
+            "url": {
+              "description": "URL to the original document",
+              "type": "text"
+            }
+          },
+          "subdirectory": "documents"
+        },
+        "document_source": {
+          "description": "A source document with reliability and classification metadata",
+          "fields": {
+            "author": {
+              "description": "",
+              "type": "text"
+            },
+            "classification": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "obtained_date": {
+              "description": "",
+              "type": "date"
+            },
+            "obtained_method": {
+              "description": "",
+              "type": "text"
+            },
+            "reliability": {
+              "description": "",
+              "type": "text"
+            },
+            "url": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "sources/"
+        },
+        "event": {
+          "description": "Something that happened",
+          "fields": {
+            "date": {
+              "description": "When the event occurred (YYYY-MM-DD)",
+              "type": "text"
+            },
+            "importance": {
+              "description": "Significance score from 1 (minor) to 10 (major)",
+              "type": "number"
+            },
+            "location": {
+              "description": "Where the event took place",
+              "type": "text"
+            },
+            "participants": {
+              "description": "People or organizations involved",
+              "type": "list"
+            },
+            "status": {
+              "description": "Verification status: confirmed, disputed, alleged, rumored",
+              "type": "text"
+            }
+          },
+          "subdirectory": "events"
+        },
+        "evidence": {
+          "description": "A piece of evidence linked to a source document",
+          "fields": {
+            "chain_of_custody": {
+              "description": "",
+              "type": "text"
+            },
+            "evidence_type": {
+              "description": "",
+              "type": "text"
+            },
+            "obtained_date": {
+              "description": "",
+              "type": "date"
+            },
+            "reliability": {
+              "description": "",
+              "type": "text"
+            },
+            "source_document": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "evidence/"
+        },
+        "funding": {
+          "description": "Funding relationship between entities",
+          "fields": {
+            "amount": {
+              "description": "",
+              "type": "number"
+            },
+            "currency": {
+              "description": "",
+              "type": "text"
+            },
+            "date_range": {
+              "description": "",
+              "type": "text"
+            },
+            "funder": {
+              "description": "",
+              "type": "text"
+            },
+            "mechanism": {
+              "description": "",
+              "type": "text"
+            },
+            "purpose": {
+              "description": "",
+              "type": "text"
+            },
+            "recipient": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "connections/"
+        },
+        "investigation_event": {
+          "description": "A dated event in the investigation with actors and verification status",
+          "fields": {
+            "actors": {
+              "description": "",
+              "type": "list"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "location": {
+              "description": "",
+              "type": "text"
+            },
+            "source_refs": {
+              "description": "",
+              "type": "list"
+            },
+            "verification_status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "events/"
+        },
+        "legal_action": {
+          "description": "A legal or regulatory action \u2014 case, indictment, sanctions, etc.",
+          "fields": {
+            "case_number": {
+              "description": "",
+              "type": "text"
+            },
+            "case_status": {
+              "description": "",
+              "type": "text"
+            },
+            "case_type": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "jurisdiction": {
+              "description": "",
+              "type": "text"
+            },
+            "outcome": {
+              "description": "",
+              "type": "text"
+            },
+            "parties": {
+              "description": "",
+              "type": "list"
+            }
+          },
+          "subdirectory": "events/"
+        },
+        "literature_note": {
+          "description": "Note capturing ideas from a source work",
+          "fields": {
+            "author": {
+              "description": "",
+              "type": "text"
+            },
+            "page_refs": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "literature/"
+        },
+        "membership": {
+          "description": "Membership relationship between a person and an organization",
+          "fields": {
+            "end_date": {
+              "description": "",
+              "type": "text"
+            },
+            "organization": {
+              "description": "",
+              "type": "text"
+            },
+            "person": {
+              "description": "",
+              "type": "text"
+            },
+            "role": {
+              "description": "",
+              "type": "text"
+            },
+            "start_date": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "connections/"
+        },
+        "milestone": {
+          "description": "Project milestone for grouping backlog items",
+          "fields": {
+            "status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "milestones/"
+        },
+        "note": {
+          "description": "General research note or analysis",
+          "fields": {},
+          "subdirectory": "notes/"
+        },
+        "organization": {
+          "description": "A known organization \u2014 company, government body, NGO, agency, etc.",
+          "fields": {
+            "aliases": {
+              "description": "",
+              "type": "text"
+            },
+            "founded": {
+              "description": "Date or year the organization was established",
+              "type": "text"
+            },
+            "jurisdiction": {
+              "description": "Geographic or legal jurisdiction",
+              "type": "text"
+            },
+            "org_type": {
+              "description": "Category: gov, ngo, corp, media, political, military, academic, religious, etc.",
+              "type": "text"
+            },
+            "research_status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "organizations/"
+        },
+        "ownership": {
+          "description": "Ownership relationship between an entity and an asset/organization",
+          "fields": {
+            "asset": {
+              "description": "",
+              "type": "text"
+            },
+            "beneficial": {
+              "description": "",
+              "type": "text"
+            },
+            "end_date": {
+              "description": "",
+              "type": "text"
+            },
+            "legal_basis": {
+              "description": "",
+              "type": "text"
+            },
+            "owner": {
+              "description": "",
+              "type": "text"
+            },
+            "percentage": {
+              "description": "",
+              "type": "text"
+            },
+            "start_date": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "connections/"
+        },
+        "person": {
+          "description": "A known person \u2014 politician, oligarch, executive, official, etc.",
+          "fields": {
+            "affiliations": {
+              "description": "Organizations this person is associated with",
+              "type": "list"
+            },
+            "aliases": {
+              "description": "",
+              "type": "text"
+            },
+            "nationality": {
+              "description": "",
+              "type": "text"
+            },
+            "research_status": {
+              "description": "",
+              "type": "text"
+            },
+            "role": {
+              "description": "Primary role, title, or position",
+              "type": "text"
+            }
+          },
+          "subdirectory": "people/"
+        },
+        "programmatic_validation": {
+          "description": "Automated check with verifiable pass/fail criteria",
+          "fields": {
+            "category": {
+              "description": "",
+              "type": "text"
+            },
+            "check_command": {
+              "description": "",
+              "type": "text"
+            },
+            "pass_criteria": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "validations/"
+        },
+        "relationship": {
+          "description": "A connection between entities",
+          "fields": {
+            "relationship_type": {
+              "description": "Type of relationship (see relationship_types in schema)",
+              "type": "text"
+            },
+            "source": {
+              "description": "",
+              "type": "text"
+            },
+            "target": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "relationships"
+        },
+        "runbook": {
+          "description": "How-to guide or operational procedure",
+          "fields": {
+            "audience": {
+              "description": "",
+              "type": "text"
+            },
+            "runbook_kind": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "runbooks/"
+        },
+        "standard": {
+          "description": "Coding standard or convention (legacy \u2014 use programmatic_validation or development_convention)",
+          "fields": {
+            "category": {
+              "description": "",
+              "type": "text"
+            },
+            "enforced": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "standards/"
+        },
+        "talk_page": {
+          "description": "Discussion page for an article",
+          "fields": {},
+          "subdirectory": "talk/"
+        },
+        "task": {
+          "description": "Agent-oriented task with workflow state machine",
+          "fields": {
+            "agent_context": {
+              "description": "",
+              "type": "text"
+            },
+            "assignee": {
+              "description": "",
+              "type": "text"
+            },
+            "dependencies": {
+              "description": "",
+              "type": "text"
+            },
+            "due_date": {
+              "description": "",
+              "type": "text"
+            },
+            "evidence": {
+              "description": "",
+              "type": "text"
+            },
+            "parent": {
+              "description": "",
+              "type": "text"
+            },
+            "priority": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "tasks/"
+        },
+        "timeline": {
+          "description": "An ordered sequence of events",
+          "fields": {
+            "date_range": {
+              "description": "Time span covered, e.g. '2024-01 to 2025-06'",
+              "type": "text"
+            }
+          },
+          "subdirectory": "timelines"
+        },
+        "topic": {
+          "description": "A theme, subject area, or concept",
+          "fields": {},
+          "subdirectory": "topics"
+        },
+        "transaction": {
+          "description": "A financial transaction \u2014 payment, bribe, grant, etc.",
+          "fields": {
+            "amount": {
+              "description": "",
+              "type": "number"
+            },
+            "currency": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "method": {
+              "description": "",
+              "type": "text"
+            },
+            "purpose": {
+              "description": "",
+              "type": "text"
+            },
+            "receiver": {
+              "description": "",
+              "type": "text"
+            },
+            "sender": {
+              "description": "",
+              "type": "text"
+            },
+            "transaction_type": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "events/"
+        },
+        "user_profile": {
+          "description": "Community member profile",
+          "fields": {
+            "join_date": {
+              "description": "",
+              "type": "text"
+            },
+            "reputation": {
+              "description": "",
+              "type": "text"
+            },
+            "writeup_count": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "users/"
+        },
+        "writeup": {
+          "description": "User-authored writeup (essay, story, review, etc.)",
+          "fields": {
+            "allow_voting": {
+              "description": "",
+              "type": "text"
+            },
+            "writeup_type": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "writeups/"
+        },
+        "zettel": {
+          "description": "Atomic knowledge note",
+          "fields": {
+            "maturity": {
+              "description": "",
+              "type": "text"
+            },
+            "processing_stage": {
+              "description": "",
+              "type": "text"
+            },
+            "source_ref": {
+              "description": "",
+              "type": "text"
+            },
+            "zettel_type": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "zettels/"
+        }
+      }
+    },
+    "status": 200
+  },
+  "GET /api/entries/type-schemas | local_user | readable-kb": {
+    "body": {
+      "declared": [],
+      "types": {
+        "account": {
+          "description": "A financial account \u2014 bank, brokerage, crypto wallet, shell company, trust",
+          "fields": {
+            "account_type": {
+              "description": "",
+              "type": "text"
+            },
+            "closed_date": {
+              "description": "",
+              "type": "date"
+            },
+            "holder": {
+              "description": "",
+              "type": "text"
+            },
+            "institution": {
+              "description": "",
+              "type": "text"
+            },
+            "jurisdiction": {
+              "description": "",
+              "type": "text"
+            },
+            "opened_date": {
+              "description": "",
+              "type": "date"
+            }
+          },
+          "subdirectory": "entities/"
+        },
+        "adr": {
+          "description": "Architecture Decision Record",
+          "fields": {
+            "adr_number": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "deciders": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            },
+            "superseded_by": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "adrs/"
+        },
+        "article": {
+          "description": "Encyclopedia article with quality assessment and review workflow",
+          "fields": {
+            "categories": {
+              "description": "",
+              "type": "text"
+            },
+            "protection_level": {
+              "description": "",
+              "type": "text"
+            },
+            "quality": {
+              "description": "",
+              "type": "text"
+            },
+            "review_status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "articles/"
+        },
+        "asset": {
+          "description": "A tracked asset \u2014 real estate, vehicle, vessel, aircraft, etc.",
+          "fields": {
+            "acquisition_date": {
+              "description": "",
+              "type": "date"
+            },
+            "asset_type": {
+              "description": "",
+              "type": "text"
+            },
+            "currency": {
+              "description": "",
+              "type": "text"
+            },
+            "description": {
+              "description": "",
+              "type": "text"
+            },
+            "jurisdiction": {
+              "description": "",
+              "type": "text"
+            },
+            "registered_owner": {
+              "description": "",
+              "type": "text"
+            },
+            "value": {
+              "description": "",
+              "type": "number"
+            }
+          },
+          "subdirectory": "entities/"
+        },
+        "backlog_item": {
+          "description": "Feature, bug, or tech debt item",
+          "fields": {
+            "assignee": {
+              "description": "",
+              "type": "text"
+            },
+            "effort": {
+              "description": "",
+              "type": "text"
+            },
+            "kind": {
+              "description": "",
+              "type": "text"
+            },
+            "priority": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "backlog/"
+        },
+        "claim": {
+          "description": "A factual assertion with verification lifecycle tracking",
+          "fields": {
+            "assertion": {
+              "description": "",
+              "type": "text"
+            },
+            "claim_status": {
+              "description": "",
+              "type": "text"
+            },
+            "confidence": {
+              "description": "",
+              "type": "text"
+            },
+            "disputed_by": {
+              "description": "",
+              "type": "text"
+            },
+            "evidence_refs": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "claims/"
+        },
+        "component": {
+          "description": "Module or service documentation",
+          "fields": {
+            "dependencies": {
+              "description": "",
+              "type": "text"
+            },
+            "kind": {
+              "description": "",
+              "type": "text"
+            },
+            "owner": {
+              "description": "",
+              "type": "text"
+            },
+            "path": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "components/"
+        },
+        "design_doc": {
+          "description": "Design document or specification",
+          "fields": {
+            "author": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "reviewers": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            },
+            "url": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "designs/"
+        },
+        "development_convention": {
+          "description": "Judgment-based guidance carried as context during work",
+          "fields": {
+            "category": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "conventions/"
+        },
+        "document": {
+          "description": "A reference document",
+          "fields": {
+            "author": {
+              "description": "Author or issuing body",
+              "type": "text"
+            },
+            "date": {
+              "description": "Publication or filing date",
+              "type": "text"
+            },
+            "document_type": {
+              "description": "Category: report, filing, memo, article, press-release, court-document, etc.",
+              "type": "text"
+            },
+            "url": {
+              "description": "URL to the original document",
+              "type": "text"
+            }
+          },
+          "subdirectory": "documents"
+        },
+        "document_source": {
+          "description": "A source document with reliability and classification metadata",
+          "fields": {
+            "author": {
+              "description": "",
+              "type": "text"
+            },
+            "classification": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "obtained_date": {
+              "description": "",
+              "type": "date"
+            },
+            "obtained_method": {
+              "description": "",
+              "type": "text"
+            },
+            "reliability": {
+              "description": "",
+              "type": "text"
+            },
+            "url": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "sources/"
+        },
+        "event": {
+          "description": "Something that happened",
+          "fields": {
+            "date": {
+              "description": "When the event occurred (YYYY-MM-DD)",
+              "type": "text"
+            },
+            "importance": {
+              "description": "Significance score from 1 (minor) to 10 (major)",
+              "type": "number"
+            },
+            "location": {
+              "description": "Where the event took place",
+              "type": "text"
+            },
+            "participants": {
+              "description": "People or organizations involved",
+              "type": "list"
+            },
+            "status": {
+              "description": "Verification status: confirmed, disputed, alleged, rumored",
+              "type": "text"
+            }
+          },
+          "subdirectory": "events"
+        },
+        "evidence": {
+          "description": "A piece of evidence linked to a source document",
+          "fields": {
+            "chain_of_custody": {
+              "description": "",
+              "type": "text"
+            },
+            "evidence_type": {
+              "description": "",
+              "type": "text"
+            },
+            "obtained_date": {
+              "description": "",
+              "type": "date"
+            },
+            "reliability": {
+              "description": "",
+              "type": "text"
+            },
+            "source_document": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "evidence/"
+        },
+        "funding": {
+          "description": "Funding relationship between entities",
+          "fields": {
+            "amount": {
+              "description": "",
+              "type": "number"
+            },
+            "currency": {
+              "description": "",
+              "type": "text"
+            },
+            "date_range": {
+              "description": "",
+              "type": "text"
+            },
+            "funder": {
+              "description": "",
+              "type": "text"
+            },
+            "mechanism": {
+              "description": "",
+              "type": "text"
+            },
+            "purpose": {
+              "description": "",
+              "type": "text"
+            },
+            "recipient": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "connections/"
+        },
+        "investigation_event": {
+          "description": "A dated event in the investigation with actors and verification status",
+          "fields": {
+            "actors": {
+              "description": "",
+              "type": "list"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "location": {
+              "description": "",
+              "type": "text"
+            },
+            "source_refs": {
+              "description": "",
+              "type": "list"
+            },
+            "verification_status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "events/"
+        },
+        "legal_action": {
+          "description": "A legal or regulatory action \u2014 case, indictment, sanctions, etc.",
+          "fields": {
+            "case_number": {
+              "description": "",
+              "type": "text"
+            },
+            "case_status": {
+              "description": "",
+              "type": "text"
+            },
+            "case_type": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "jurisdiction": {
+              "description": "",
+              "type": "text"
+            },
+            "outcome": {
+              "description": "",
+              "type": "text"
+            },
+            "parties": {
+              "description": "",
+              "type": "list"
+            }
+          },
+          "subdirectory": "events/"
+        },
+        "literature_note": {
+          "description": "Note capturing ideas from a source work",
+          "fields": {
+            "author": {
+              "description": "",
+              "type": "text"
+            },
+            "page_refs": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "literature/"
+        },
+        "membership": {
+          "description": "Membership relationship between a person and an organization",
+          "fields": {
+            "end_date": {
+              "description": "",
+              "type": "text"
+            },
+            "organization": {
+              "description": "",
+              "type": "text"
+            },
+            "person": {
+              "description": "",
+              "type": "text"
+            },
+            "role": {
+              "description": "",
+              "type": "text"
+            },
+            "start_date": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "connections/"
+        },
+        "milestone": {
+          "description": "Project milestone for grouping backlog items",
+          "fields": {
+            "status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "milestones/"
+        },
+        "note": {
+          "description": "General research note or analysis",
+          "fields": {},
+          "subdirectory": "notes/"
+        },
+        "organization": {
+          "description": "A known organization \u2014 company, government body, NGO, agency, etc.",
+          "fields": {
+            "aliases": {
+              "description": "",
+              "type": "text"
+            },
+            "founded": {
+              "description": "Date or year the organization was established",
+              "type": "text"
+            },
+            "jurisdiction": {
+              "description": "Geographic or legal jurisdiction",
+              "type": "text"
+            },
+            "org_type": {
+              "description": "Category: gov, ngo, corp, media, political, military, academic, religious, etc.",
+              "type": "text"
+            },
+            "research_status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "organizations/"
+        },
+        "ownership": {
+          "description": "Ownership relationship between an entity and an asset/organization",
+          "fields": {
+            "asset": {
+              "description": "",
+              "type": "text"
+            },
+            "beneficial": {
+              "description": "",
+              "type": "text"
+            },
+            "end_date": {
+              "description": "",
+              "type": "text"
+            },
+            "legal_basis": {
+              "description": "",
+              "type": "text"
+            },
+            "owner": {
+              "description": "",
+              "type": "text"
+            },
+            "percentage": {
+              "description": "",
+              "type": "text"
+            },
+            "start_date": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "connections/"
+        },
+        "person": {
+          "description": "A known person \u2014 politician, oligarch, executive, official, etc.",
+          "fields": {
+            "affiliations": {
+              "description": "Organizations this person is associated with",
+              "type": "list"
+            },
+            "aliases": {
+              "description": "",
+              "type": "text"
+            },
+            "nationality": {
+              "description": "",
+              "type": "text"
+            },
+            "research_status": {
+              "description": "",
+              "type": "text"
+            },
+            "role": {
+              "description": "Primary role, title, or position",
+              "type": "text"
+            }
+          },
+          "subdirectory": "people/"
+        },
+        "programmatic_validation": {
+          "description": "Automated check with verifiable pass/fail criteria",
+          "fields": {
+            "category": {
+              "description": "",
+              "type": "text"
+            },
+            "check_command": {
+              "description": "",
+              "type": "text"
+            },
+            "pass_criteria": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "validations/"
+        },
+        "relationship": {
+          "description": "A connection between entities",
+          "fields": {
+            "relationship_type": {
+              "description": "Type of relationship (see relationship_types in schema)",
+              "type": "text"
+            },
+            "source": {
+              "description": "",
+              "type": "text"
+            },
+            "target": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "relationships"
+        },
+        "runbook": {
+          "description": "How-to guide or operational procedure",
+          "fields": {
+            "audience": {
+              "description": "",
+              "type": "text"
+            },
+            "runbook_kind": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "runbooks/"
+        },
+        "standard": {
+          "description": "Coding standard or convention (legacy \u2014 use programmatic_validation or development_convention)",
+          "fields": {
+            "category": {
+              "description": "",
+              "type": "text"
+            },
+            "enforced": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "standards/"
+        },
+        "talk_page": {
+          "description": "Discussion page for an article",
+          "fields": {},
+          "subdirectory": "talk/"
+        },
+        "task": {
+          "description": "Agent-oriented task with workflow state machine",
+          "fields": {
+            "agent_context": {
+              "description": "",
+              "type": "text"
+            },
+            "assignee": {
+              "description": "",
+              "type": "text"
+            },
+            "dependencies": {
+              "description": "",
+              "type": "text"
+            },
+            "due_date": {
+              "description": "",
+              "type": "text"
+            },
+            "evidence": {
+              "description": "",
+              "type": "text"
+            },
+            "parent": {
+              "description": "",
+              "type": "text"
+            },
+            "priority": {
+              "description": "",
+              "type": "text"
+            },
+            "status": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "tasks/"
+        },
+        "timeline": {
+          "description": "An ordered sequence of events",
+          "fields": {
+            "date_range": {
+              "description": "Time span covered, e.g. '2024-01 to 2025-06'",
+              "type": "text"
+            }
+          },
+          "subdirectory": "timelines"
+        },
+        "topic": {
+          "description": "A theme, subject area, or concept",
+          "fields": {},
+          "subdirectory": "topics"
+        },
+        "transaction": {
+          "description": "A financial transaction \u2014 payment, bribe, grant, etc.",
+          "fields": {
+            "amount": {
+              "description": "",
+              "type": "number"
+            },
+            "currency": {
+              "description": "",
+              "type": "text"
+            },
+            "date": {
+              "description": "",
+              "type": "date"
+            },
+            "method": {
+              "description": "",
+              "type": "text"
+            },
+            "purpose": {
+              "description": "",
+              "type": "text"
+            },
+            "receiver": {
+              "description": "",
+              "type": "text"
+            },
+            "sender": {
+              "description": "",
+              "type": "text"
+            },
+            "transaction_type": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "events/"
+        },
+        "user_profile": {
+          "description": "Community member profile",
+          "fields": {
+            "join_date": {
+              "description": "",
+              "type": "text"
+            },
+            "reputation": {
+              "description": "",
+              "type": "text"
+            },
+            "writeup_count": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "users/"
+        },
+        "writeup": {
+          "description": "User-authored writeup (essay, story, review, etc.)",
+          "fields": {
+            "allow_voting": {
+              "description": "",
+              "type": "text"
+            },
+            "writeup_type": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "writeups/"
+        },
+        "zettel": {
+          "description": "Atomic knowledge note",
+          "fields": {
+            "maturity": {
+              "description": "",
+              "type": "text"
+            },
+            "processing_stage": {
+              "description": "",
+              "type": "text"
+            },
+            "source_ref": {
+              "description": "",
+              "type": "text"
+            },
+            "zettel_type": {
+              "description": "",
+              "type": "text"
+            }
+          },
+          "subdirectory": "zettels/"
+        }
+      }
+    },
+    "status": 200
+  },
+  "GET /api/entries/types | local_user | missing-kb": {
+    "body": {
+      "types": []
+    },
+    "status": 200
+  },
+  "GET /api/entries/types | local_user | no-default-role-kb": {
+    "body": {
+      "types": [
+        "note"
+      ]
+    },
+    "status": 200
+  },
+  "GET /api/entries/types | local_user | private-kb": {
+    "body": {
+      "types": [
+        "note"
+      ]
+    },
+    "status": 200
+  },
+  "GET /api/entries/types | local_user | readable-kb": {
+    "body": {
+      "types": [
+        "note"
+      ]
     },
     "status": 200
   },
@@ -461,7 +3654,7 @@
   "GET /api/entries/wanted | local_user | readable-kb": {
     "body": {
       "count": "<ENUMERATION_CONTENT>",
-      "pages": "<ENUMERATION_CONTENT>"
+      "pages": []
     },
     "status": 200
   },
@@ -583,7 +3776,7 @@
       "count": "<ENUMERATION_CONTENT>",
       "entry_id": "readable-note",
       "kb_name": "readable-kb",
-      "versions": "<ENUMERATION_CONTENT>"
+      "versions": []
     },
     "status": 200
   },
@@ -652,8 +3845,8 @@
   },
   "GET /api/graph | local_user | readable-kb": {
     "body": {
-      "edges": "<ENUMERATION_CONTENT>",
-      "nodes": "<ENUMERATION_CONTENT>"
+      "edges": [],
+      "nodes": []
     },
     "status": 200
   },
@@ -681,7 +3874,7 @@
           "name": "readable-kb",
           "read_only": false,
           "shortname": null,
-          "source": "user",
+          "source": "config",
           "type": "generic"
         }
       ],
@@ -713,7 +3906,7 @@
           "name": "readable-kb",
           "read_only": false,
           "shortname": null,
-          "source": "user",
+          "source": "config",
           "type": "generic"
         }
       ],
@@ -745,7 +3938,7 @@
           "name": "readable-kb",
           "read_only": false,
           "shortname": null,
-          "source": "user",
+          "source": "config",
           "type": "generic"
         }
       ],
@@ -777,7 +3970,7 @@
           "name": "readable-kb",
           "read_only": false,
           "shortname": null,
-          "source": "user",
+          "source": "config",
           "type": "generic"
         }
       ],
@@ -823,7 +4016,7 @@
       "path": "<TMPDIR>/readable-kb",
       "read_only": false,
       "shortname": null,
-      "source": "user",
+      "source": "config",
       "type": "generic"
     },
     "status": 200
@@ -857,7 +4050,7 @@
   },
   "GET /api/kbs/{kb_name}/changes | local_user | readable-kb": {
     "body": {
-      "changes": "<ENUMERATION_CONTENT>",
+      "changes": [],
       "summary": "<ENUMERATION_CONTENT>"
     },
     "status": 200
@@ -898,7 +4091,7 @@
       "name": "readable-kb",
       "path": "<TMPDIR>/readable-kb",
       "path_exists": true,
-      "source": "user"
+      "source": "config"
     },
     "status": 200
   },
@@ -1263,7 +4456,7 @@
           }
         }
       },
-      "top_tags": "<ENUMERATION_CONTENT>",
+      "top_tags": [],
       "total_entries": "<ENUMERATION_CONTENT>",
       "types": "<ENUMERATION_CONTENT>"
     },
@@ -1642,7 +4835,7 @@
   },
   "GET /api/kbs/{kb_name}/templates | local_user | readable-kb": {
     "body": {
-      "templates": "<ENUMERATION_CONTENT>",
+      "templates": [],
       "total": "<ENUMERATION_CONTENT>"
     },
     "status": 200
@@ -1737,7 +4930,7 @@
   "GET /api/links/batch-suggest | local_user | readable-kb": {
     "body": {
       "count": "<ENUMERATION_CONTENT>",
-      "pairs": "<ENUMERATION_CONTENT>",
+      "pairs": [],
       "source_kb": "readable-kb",
       "target_kb": "readable-kb"
     },
@@ -1773,7 +4966,12 @@
   "GET /api/links/discover-neighbors | local_user | readable-kb": {
     "body": {
       "count": "<ENUMERATION_CONTENT>",
-      "discoveries": "<ENUMERATION_CONTENT>",
+      "discoveries": [
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        }
+      ],
       "entry_id": "readable-note",
       "kb_name": "readable-kb"
     },
@@ -2131,7 +5329,12 @@
     "body": {
       "count": "<ENUMERATION_CONTENT>",
       "query": "zebra",
-      "results": "<ENUMERATION_CONTENT>"
+      "results": [
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
+      ]
     },
     "status": 200
   },
@@ -2165,7 +5368,7 @@
   "GET /api/starred | local_user | readable-kb": {
     "body": {
       "count": "<ENUMERATION_CONTENT>",
-      "starred": "<ENUMERATION_CONTENT>"
+      "starred": []
     },
     "status": 200
   },
@@ -2239,7 +5442,7 @@
   "GET /api/tags | local_user | readable-kb": {
     "body": {
       "count": "<ENUMERATION_CONTENT>",
-      "tags": "<ENUMERATION_CONTENT>"
+      "tags": []
     },
     "status": 200
   },
@@ -2272,7 +5475,7 @@
   },
   "GET /api/tags/tree | local_user | readable-kb": {
     "body": {
-      "tree": "<ENUMERATION_CONTENT>"
+      "tree": []
     },
     "status": 200
   },
@@ -2306,7 +5509,7 @@
   "GET /api/tasks | local_user | readable-kb": {
     "body": {
       "count": "<ENUMERATION_CONTENT>",
-      "tasks": "<ENUMERATION_CONTENT>"
+      "tasks": []
     },
     "status": 200
   },
@@ -2342,7 +5545,79 @@
       "count": "<ENUMERATION_CONTENT>",
       "date_from": null,
       "date_to": null,
-      "events": "<ENUMERATION_CONTENT>"
+      "events": []
+    },
+    "status": 200
+  },
+  "GET /api/worktree/changes | local_user | missing-kb": {
+    "body": {
+      "changes": [],
+      "count": 0
+    },
+    "status": 200
+  },
+  "GET /api/worktree/changes | local_user | no-default-role-kb": {
+    "body": {
+      "changes": [],
+      "count": 0
+    },
+    "status": 200
+  },
+  "GET /api/worktree/changes | local_user | private-kb": {
+    "body": {
+      "changes": [],
+      "count": 0
+    },
+    "status": 200
+  },
+  "GET /api/worktree/changes | local_user | readable-kb": {
+    "body": {
+      "changes": [],
+      "count": 0
+    },
+    "status": 200
+  },
+  "GET /api/worktree/status | local_user | missing-kb": {
+    "body": {
+      "branch": null,
+      "changes_count": 0,
+      "feedback": null,
+      "has_worktree": false,
+      "status": "none",
+      "submitted_at": null
+    },
+    "status": 200
+  },
+  "GET /api/worktree/status | local_user | no-default-role-kb": {
+    "body": {
+      "branch": null,
+      "changes_count": 0,
+      "feedback": null,
+      "has_worktree": false,
+      "status": "none",
+      "submitted_at": null
+    },
+    "status": 200
+  },
+  "GET /api/worktree/status | local_user | private-kb": {
+    "body": {
+      "branch": null,
+      "changes_count": 0,
+      "feedback": null,
+      "has_worktree": false,
+      "status": "none",
+      "submitted_at": null
+    },
+    "status": 200
+  },
+  "GET /api/worktree/status | local_user | readable-kb": {
+    "body": {
+      "branch": null,
+      "changes_count": 0,
+      "feedback": null,
+      "has_worktree": false,
+      "status": "none",
+      "submitted_at": null
     },
     "status": 200
   },
@@ -2570,7 +5845,12 @@
   },
   "POST /api/collections/query-preview | local_user | readable-kb": {
     "body": {
-      "entries": "<ENUMERATION_CONTENT>",
+      "entries": [
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
+      ],
       "query_parsed": {
         "date_from": null,
         "date_to": null,
@@ -2655,7 +5935,7 @@
   },
   "POST /api/entries/batch | local_user | missing-kb": {
     "body": {
-      "entries": "<ENUMERATION_CONTENT>",
+      "entries": [],
       "found": "<ENUMERATION_CONTENT>",
       "not_found": "<ENUMERATION_CONTENT>"
     },
@@ -2663,7 +5943,7 @@
   },
   "POST /api/entries/batch | local_user | no-default-role-kb": {
     "body": {
-      "entries": "<ENUMERATION_CONTENT>",
+      "entries": [],
       "found": "<ENUMERATION_CONTENT>",
       "not_found": "<ENUMERATION_CONTENT>"
     },
@@ -2671,7 +5951,7 @@
   },
   "POST /api/entries/batch | local_user | private-kb": {
     "body": {
-      "entries": "<ENUMERATION_CONTENT>",
+      "entries": [],
       "found": "<ENUMERATION_CONTENT>",
       "not_found": "<ENUMERATION_CONTENT>"
     },
@@ -2679,9 +5959,14 @@
   },
   "POST /api/entries/batch | local_user | readable-kb": {
     "body": {
-      "entries": "<ENUMERATION_CONTENT>",
+      "entries": [
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
+      ],
       "found": "<ENUMERATION_CONTENT>",
-      "not_found": "<ENUMERATION_CONTENT>"
+      "not_found": []
     },
     "status": 200
   },
@@ -2972,6 +6257,54 @@
   "POST /api/tasks/{task_id}/claim | local_user | readable-kb": {
     "body": {
       "detail": "Insufficient permissions on KB 'readable-kb': requires 'write' tier"
+    },
+    "status": 403
+  },
+  "POST /api/worktree/reset | local_user | missing-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "POST /api/worktree/reset | local_user | no-default-role-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "POST /api/worktree/reset | local_user | private-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "POST /api/worktree/reset | local_user | readable-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "POST /api/worktree/submit | local_user | missing-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "POST /api/worktree/submit | local_user | no-default-role-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "POST /api/worktree/submit | local_user | private-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
+    },
+    "status": 403
+  },
+  "POST /api/worktree/submit | local_user | readable-kb": {
+    "body": {
+      "detail": "Insufficient permissions: requires 'write' tier, your role is 'read'"
     },
     "status": 403
   },

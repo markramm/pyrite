@@ -15,7 +15,7 @@
     "retryable": false
   },
   "cascade_actors | local_user | readable-kb": {
-    "actors": "<ENUMERATION_CONTENT>",
+    "actors": [],
     "count": "<ENUMERATION_CONTENT>"
   },
   "cascade_capture_lanes | local_user | missing-kb": {
@@ -35,7 +35,7 @@
   },
   "cascade_capture_lanes | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "lanes": "<ENUMERATION_CONTENT>"
+    "lanes": []
   },
   "cascade_network | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -84,7 +84,7 @@
   },
   "cascade_timeline | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>"
+    "events": []
   },
   "investigation_bulk_edges | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -122,7 +122,7 @@
     "retryable": false
   },
   "investigation_claims | local_user | readable-kb": {
-    "claims": "<ENUMERATION_CONTENT>",
+    "claims": [],
     "count": "<ENUMERATION_CONTENT>",
     "summary": "<ENUMERATION_CONTENT>"
   },
@@ -203,7 +203,7 @@
   },
   "investigation_entities | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entities": "<ENUMERATION_CONTENT>",
+    "entities": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_evidence_chain | local_user | missing-kb": {
@@ -259,7 +259,7 @@
     "retryable": false
   },
   "investigation_find_duplicates | local_user | readable-kb": {
-    "duplicates": "<ENUMERATION_CONTENT>"
+    "duplicates": []
   },
   "investigation_ftm_export | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -277,7 +277,7 @@
     "retryable": false
   },
   "investigation_ftm_export | local_user | readable-kb": {
-    "entities": "<ENUMERATION_CONTENT>"
+    "entities": []
   },
   "investigation_ftm_import | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -437,7 +437,7 @@
     "claims": "<ENUMERATION_CONTENT>",
     "quality_score": "<ENUMERATION_CONTENT>",
     "source_tiers": "<ENUMERATION_CONTENT>",
-    "warnings": "<ENUMERATION_CONTENT>"
+    "warnings": []
   },
   "investigation_search_all | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -476,7 +476,7 @@
   },
   "investigation_sources | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "sources": "<ENUMERATION_CONTENT>",
+    "sources": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_start | local_user | missing-kb": {
@@ -521,7 +521,7 @@
     "event_count": "<ENUMERATION_CONTENT>",
     "source_count": "<ENUMERATION_CONTENT>",
     "summary": "<ENUMERATION_CONTENT>",
-    "unverified_claims": "<ENUMERATION_CONTENT>"
+    "unverified_claims": []
   },
   "investigation_timeline | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -540,7 +540,7 @@
   },
   "investigation_timeline | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "kb_backlinks | local_user | missing-kb": {
@@ -560,7 +560,7 @@
   },
   "kb_backlinks | local_user | readable-kb": {
     "backlink_count": "<ENUMERATION_CONTENT>",
-    "backlinks": "<ENUMERATION_CONTENT>",
+    "backlinks": [],
     "entry_id": "readable-note",
     "has_more": "<ENUMERATION_CONTENT>"
   },
@@ -647,7 +647,7 @@
   },
   "kb_batch_suggest | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "pairs": "<ENUMERATION_CONTENT>",
+    "pairs": [],
     "source_kb": "readable-kb",
     "target_kb": "readable-kb"
   },
@@ -748,7 +748,7 @@
   },
   "kb_discover_neighbors | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "discoveries": "<ENUMERATION_CONTENT>",
+    "discoveries": [],
     "entry_id": "readable-note",
     "kb_name": "readable-kb"
   },
@@ -770,7 +770,7 @@
   "kb_find_by_assignee | local_user | readable-kb": {
     "assignee": "characterization-assignee",
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": []
   },
   "kb_find_by_location | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -789,7 +789,7 @@
   },
   "kb_find_by_location | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [],
     "location": "characterization-location-kb_find_by_location-local_user-readable-kb"
   },
   "kb_find_by_status | local_user | missing-kb": {
@@ -809,7 +809,7 @@
   },
   "kb_find_by_status | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [],
     "status": "open"
   },
   "kb_find_overdue | local_user | missing-kb": {
@@ -829,7 +829,7 @@
   },
   "kb_find_overdue | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": []
   },
   "kb_get | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -922,26 +922,42 @@
   },
   "kb_list | local_user | missing-kb": {
     "knowledge_bases": [
-      "read-only-kb",
-      "readable-kb"
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
     ]
   },
   "kb_list | local_user | no-default-role-kb": {
     "knowledge_bases": [
-      "read-only-kb",
-      "readable-kb"
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
     ]
   },
   "kb_list | local_user | private-kb": {
     "knowledge_bases": [
-      "read-only-kb",
-      "readable-kb"
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
     ]
   },
   "kb_list | local_user | readable-kb": {
     "knowledge_bases": [
-      "read-only-kb",
-      "readable-kb"
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
     ]
   },
   "kb_list_entries | local_user | missing-kb": {
@@ -960,7 +976,12 @@
     "retryable": false
   },
   "kb_list_entries | local_user | readable-kb": {
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
+    ],
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
     "offset": 0,
@@ -1334,7 +1355,7 @@
         }
       }
     },
-    "top_tags": "<ENUMERATION_CONTENT>",
+    "top_tags": [],
     "total_entries": "<ENUMERATION_CONTENT>",
     "types": "<ENUMERATION_CONTENT>"
   },
@@ -1459,7 +1480,12 @@
   },
   "kb_recent | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": [
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
+    ]
   },
   "kb_schema | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -1809,7 +1835,12 @@
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "query": "zebra",
-    "results": "<ENUMERATION_CONTENT>"
+    "results": [
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
+    ]
   },
   "kb_stats | local_user | missing-kb": {
     "kbs": "<ENUMERATION_CONTENT>",
@@ -1857,26 +1888,26 @@
   "kb_tags | local_user | readable-kb": {
     "has_more": "<ENUMERATION_CONTENT>",
     "tag_count": "<ENUMERATION_CONTENT>",
-    "tags": "<ENUMERATION_CONTENT>"
+    "tags": []
   },
   "kb_timeline | local_user | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_timeline | local_user | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_timeline | local_user | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_timeline | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_update | local_user | missing-kb": {
@@ -1935,7 +1966,7 @@
   },
   "social_newest | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "newest": "<ENUMERATION_CONTENT>"
+    "newest": []
   },
   "social_post | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -1974,7 +2005,7 @@
   },
   "social_top | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "top": "<ENUMERATION_CONTENT>"
+    "top": []
   },
   "social_vote | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -2032,7 +2063,7 @@
   },
   "solidarity_timeline | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>"
+    "events": []
   },
   "sw_adrs | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -2050,7 +2081,7 @@
     "retryable": false
   },
   "sw_adrs | local_user | readable-kb": {
-    "adrs": "<ENUMERATION_CONTENT>",
+    "adrs": [],
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
@@ -2075,7 +2106,7 @@
   "sw_backlog | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "limit": 50,
     "offset": 0,
     "total": "<ENUMERATION_CONTENT>"
@@ -2096,7 +2127,23 @@
     "retryable": false
   },
   "sw_board | local_user | readable-kb": {
-    "lanes": "<ENUMERATION_CONTENT>",
+    "lanes": [
+      {
+        "name": "Backlog"
+      },
+      {
+        "name": "Done"
+      },
+      {
+        "name": "In Progress"
+      },
+      {
+        "name": "Ready"
+      },
+      {
+        "name": "Review"
+      }
+    ],
     "wip_policy": "warn"
   },
   "sw_check_ready | local_user | missing-kb": {
@@ -2153,7 +2200,7 @@
     "retryable": false
   },
   "sw_component | local_user | readable-kb": {
-    "components": "<ENUMERATION_CONTENT>",
+    "components": [],
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
@@ -2272,7 +2319,7 @@
   },
   "sw_epics | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "epics": "<ENUMERATION_CONTENT>"
+    "epics": []
   },
   "sw_log | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -2311,7 +2358,7 @@
   },
   "sw_milestones | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "milestones": "<ENUMERATION_CONTENT>"
+    "milestones": []
   },
   "sw_prioritize | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -2369,7 +2416,7 @@
     "retryable": false
   },
   "sw_refine | local_user | readable-kb": {
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "sw_review | local_user | missing-kb": {
@@ -2409,7 +2456,7 @@
   },
   "sw_review_queue | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "over_limit": "<ENUMERATION_CONTENT>",
     "wip_limit": 3
   },
@@ -2652,7 +2699,7 @@
   },
   "task_list | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "tasks": "<ENUMERATION_CONTENT>"
+    "tasks": []
   },
   "task_status | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -2792,7 +2839,7 @@
   },
   "wiki_review_queue | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "queue": "<ENUMERATION_CONTENT>"
+    "queue": []
   },
   "wiki_stubs | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -2811,7 +2858,7 @@
   },
   "wiki_stubs | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "stubs": "<ENUMERATION_CONTENT>"
+    "stubs": []
   },
   "wiki_submit_review | local_user | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -2873,6 +2920,6 @@
   },
   "zettel_inbox | local_user | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "inbox": "<ENUMERATION_CONTENT>"
+    "inbox": []
   }
 }

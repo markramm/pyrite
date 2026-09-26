@@ -8,8 +8,11 @@ tests/characterization/test_mcp_matrix.py -n4``, then review the diff to
 reviewed change. Never set in CI or the pre-push hook.
 
 **Calling through the real chokepoint, not the wire.** Every case calls
-`world.mcp_server._dispatch_tool(name, arguments, client_id=..., readable_kbs=...,
-writable_kbs=...)` directly -- the same function every transport (stdio,
+`world.dispatch_tool(name, arguments, client_id=..., readable_kbs=...,
+writable_kbs=...)` -- a thin wrapper (`World.dispatch_tool`'s own
+docstring) that re-arms the plugin registry's shared context to `world`
+and then calls `world.mcp_server._dispatch_tool` itself, the same function
+every transport (stdio,
 SSE, the in-memory SDK session `test_mcp_read_scoping.py` drives) funnels
 through, and the one place scoping and the write-tier rule are enforced
 (`pyrite/server/mcp_server.py`'s own docstring on `_dispatch_tool`). Theme 0
@@ -34,6 +37,18 @@ principal) and runs both; a tool only in `golden` dropped out of scoping
 and must still be driven. `test_no_golden_mcp_tool_is_orphaned` and
 `test_surface_counts_are_pinned` below are this file's own direct proof of
 that, over the MCP surface (`test_rest_matrix.py` has the REST-side twins).
+
+**Read/write world split (#476 round-2 blocker 1).** A tool's own tier
+(`world.mcp_server._tool_tiers[name]`, the exact classification
+`_build_read_tools`/`_build_write_tools`/`_build_admin_tools` assign at
+registration -- not a name heuristic this file would have to keep in sync
+by hand) decides which world a case dispatches against: `"read"` tools run
+against the session-scoped, read-only `world`; every other tier ("write",
+"admin", or a plugin-declared tier -- anything that is not "read") runs
+against the module-scoped `write_world`, so a write tool's own case can
+never leave a mutation for a read tool's case (in this module or in
+`test_unscoped_calls.py`, which only ever reads through `world`) to trip
+over.
 """
 
 from __future__ import annotations
@@ -78,13 +93,24 @@ def _golden_tools_for(principal_name: str, golden: dict) -> set[str]:
     return tools
 
 
-@pytest.mark.parametrize("principal_name", PRINCIPAL_NAMES)
-def test_mcp_tool_principal_matrix(world, principal_name):
+def _run(world, tier_filter, principal_name, golden, collector):
+    """Drive every tool whose `_tool_tiers` entry passes `tier_filter`
+    against `world`, for one principal across every `KB_STATES` value.
+    Returns the tools actually iterated, for the union computed by the two
+    calls in `test_mcp_tool_principal_matrix` (read tools against `world`,
+    everything else against `write_world` -- #476 round-2 blocker 1).
+    """
     principal = world.principals[principal_name]
-    golden = load(GOLDEN_NAME)
-    collector = MismatchCollector()
-    live_tools = set(kb_bearing_mcp_tool_names(world.mcp_server))
-    golden_tools = _golden_tools_for(principal_name, golden)
+    live_tools = {
+        name
+        for name in kb_bearing_mcp_tool_names(world.mcp_server)
+        if tier_filter(world.mcp_server._tool_tiers.get(name, "read"))
+    }
+    golden_tools = {
+        name
+        for name in _golden_tools_for(principal_name, golden)
+        if tier_filter(world.mcp_server._tool_tiers.get(name, "read"))
+    }
     # The union: a tool only in `golden_tools` dropped out of live scoping
     # (a renamed KB-argument convention, say) and must still be driven --
     # see the module docstring, #476 blocker 1.
@@ -95,8 +121,8 @@ def test_mcp_tool_principal_matrix(world, principal_name):
             # Deterministic across regenerate and compare runs (same
             # tool/principal/kb_state -> same call_key every time), and
             # unique per case, so a write tool run against the shared,
-            # session-scoped world never collides with another case's
-            # earlier write (see mcp_calls.py's `_UNIQUE_PER_CALL`).
+            # write_world never collides with another case's earlier write
+            # (see mcp_calls.py's `_UNIQUE_PER_CALL`).
             call_key = f"{tool_name}-{principal_name}-{kb_state}".replace("/", "_")
             try:
                 arguments = build_arguments(world, tool_name, kb_state, call_key=call_key)
@@ -105,7 +131,7 @@ def test_mcp_tool_principal_matrix(world, principal_name):
                 # all (the tool itself, not just its scoping, was removed).
                 collector.check(GOLDEN_NAME, key, {"no_call_spec": True}, golden)
                 continue
-            result = world.mcp_server._dispatch_tool(
+            result = world.dispatch_tool(
                 tool_name,
                 arguments,
                 # A unique client_id per case: MCPRateLimiter is keyed by
@@ -126,6 +152,21 @@ def test_mcp_tool_principal_matrix(world, principal_name):
             )
             actual = normalize_mcp_result(tool_name, result, tmpdir=str(world.tmpdir))
             collector.check(GOLDEN_NAME, key, actual, golden)
+    return all_tools
+
+
+@pytest.mark.parametrize("principal_name", PRINCIPAL_NAMES)
+def test_mcp_tool_principal_matrix(world, write_world, principal_name):
+    golden = load(GOLDEN_NAME)
+    collector = MismatchCollector()
+    # Read tools against the session-scoped, read-only `world`; every other
+    # tier (write, admin, or a plugin-declared tier) against the
+    # module-scoped `write_world` -- #476 round-2 blocker 1: a write tool's
+    # case must never be able to leave a mutation for a read tool's case
+    # (in this module, or in test_unscoped_calls.py, which reads through
+    # `world` too) to trip over.
+    _run(world, lambda tier: tier == "read", principal_name, golden, collector)
+    _run(write_world, lambda tier: tier != "read", principal_name, golden, collector)
     if regenerating():
         save(GOLDEN_NAME, golden, principal_scope=principal_name)
     collector.assert_clean()
@@ -158,7 +199,7 @@ def test_surface_counts_are_pinned(world):
     """The number of KB-bearing MCP tools, pinned (#476 blocker 1): a
     change -- growing OR shrinking -- means the surface filter's idea of
     "takes a KB or row resource" changed, and a reviewer should see that as
-    a diff to this constant. REST's count (66... now more, see
+    a diff to this constant. REST's count (74, see
     `test_rest_matrix.py`'s own `PINNED_REST_OPERATION_COUNT`) is pinned
     there, in the module that owns REST's surface.
     """

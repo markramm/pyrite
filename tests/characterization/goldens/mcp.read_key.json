@@ -1,35 +1,35 @@
 {
   "cascade_actors | read_key | missing-kb": {
-    "actors": "<ENUMERATION_CONTENT>",
+    "actors": [],
     "count": "<ENUMERATION_CONTENT>"
   },
   "cascade_actors | read_key | no-default-role-kb": {
-    "actors": "<ENUMERATION_CONTENT>",
+    "actors": [],
     "count": "<ENUMERATION_CONTENT>"
   },
   "cascade_actors | read_key | private-kb": {
-    "actors": "<ENUMERATION_CONTENT>",
+    "actors": [],
     "count": "<ENUMERATION_CONTENT>"
   },
   "cascade_actors | read_key | readable-kb": {
-    "actors": "<ENUMERATION_CONTENT>",
+    "actors": [],
     "count": "<ENUMERATION_CONTENT>"
   },
   "cascade_capture_lanes | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "lanes": "<ENUMERATION_CONTENT>"
+    "lanes": []
   },
   "cascade_capture_lanes | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "lanes": "<ENUMERATION_CONTENT>"
+    "lanes": []
   },
   "cascade_capture_lanes | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "lanes": "<ENUMERATION_CONTENT>"
+    "lanes": []
   },
   "cascade_capture_lanes | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "lanes": "<ENUMERATION_CONTENT>"
+    "lanes": []
   },
   "cascade_network | read_key | missing-kb": {
     "error": "Entry 'characterization-missing-entry' not found"
@@ -81,19 +81,19 @@
   },
   "cascade_timeline | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>"
+    "events": []
   },
   "cascade_timeline | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>"
+    "events": []
   },
   "cascade_timeline | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>"
+    "events": []
   },
   "cascade_timeline | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>"
+    "events": []
   },
   "investigation_bulk_edges | read_key | missing-kb": {
     "created": 0,
@@ -160,22 +160,22 @@
     "skipped": 0
   },
   "investigation_claims | read_key | missing-kb": {
-    "claims": "<ENUMERATION_CONTENT>",
+    "claims": [],
     "count": "<ENUMERATION_CONTENT>",
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_claims | read_key | no-default-role-kb": {
-    "claims": "<ENUMERATION_CONTENT>",
+    "claims": [],
     "count": "<ENUMERATION_CONTENT>",
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_claims | read_key | private-kb": {
-    "claims": "<ENUMERATION_CONTENT>",
+    "claims": [],
     "count": "<ENUMERATION_CONTENT>",
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_claims | read_key | readable-kb": {
-    "claims": "<ENUMERATION_CONTENT>",
+    "claims": [],
     "count": "<ENUMERATION_CONTENT>",
     "summary": "<ENUMERATION_CONTENT>"
   },
@@ -217,22 +217,22 @@
   },
   "investigation_entities | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entities": "<ENUMERATION_CONTENT>",
+    "entities": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_entities | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entities": "<ENUMERATION_CONTENT>",
+    "entities": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_entities | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entities": "<ENUMERATION_CONTENT>",
+    "entities": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_entities | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entities": "<ENUMERATION_CONTENT>",
+    "entities": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_evidence_chain | read_key | missing-kb": {
@@ -264,28 +264,28 @@
     "format": "json"
   },
   "investigation_find_duplicates | read_key | missing-kb": {
-    "duplicates": "<ENUMERATION_CONTENT>"
+    "duplicates": []
   },
   "investigation_find_duplicates | read_key | no-default-role-kb": {
-    "duplicates": "<ENUMERATION_CONTENT>"
+    "duplicates": []
   },
   "investigation_find_duplicates | read_key | private-kb": {
-    "duplicates": "<ENUMERATION_CONTENT>"
+    "duplicates": []
   },
   "investigation_find_duplicates | read_key | readable-kb": {
-    "duplicates": "<ENUMERATION_CONTENT>"
+    "duplicates": []
   },
   "investigation_ftm_export | read_key | missing-kb": {
-    "entities": "<ENUMERATION_CONTENT>"
+    "entities": []
   },
   "investigation_ftm_export | read_key | no-default-role-kb": {
-    "entities": "<ENUMERATION_CONTENT>"
+    "entities": []
   },
   "investigation_ftm_export | read_key | private-kb": {
-    "entities": "<ENUMERATION_CONTENT>"
+    "entities": []
   },
   "investigation_ftm_export | read_key | readable-kb": {
-    "entities": "<ENUMERATION_CONTENT>"
+    "entities": []
   },
   "investigation_ftm_import | read_key | missing-kb": {
     "entries": [],
@@ -471,28 +471,28 @@
     "claims": "<ENUMERATION_CONTENT>",
     "quality_score": "<ENUMERATION_CONTENT>",
     "source_tiers": "<ENUMERATION_CONTENT>",
-    "warnings": "<ENUMERATION_CONTENT>"
+    "warnings": []
   },
   "investigation_qa_report | read_key | no-default-role-kb": {
     "claims": "<ENUMERATION_CONTENT>",
     "quality_score": "<ENUMERATION_CONTENT>",
     "source_tiers": "<ENUMERATION_CONTENT>",
-    "warnings": "<ENUMERATION_CONTENT>"
+    "warnings": []
   },
   "investigation_qa_report | read_key | private-kb": {
     "claims": "<ENUMERATION_CONTENT>",
     "quality_score": "<ENUMERATION_CONTENT>",
     "source_tiers": "<ENUMERATION_CONTENT>",
-    "warnings": "<ENUMERATION_CONTENT>"
+    "warnings": []
   },
   "investigation_qa_report | read_key | readable-kb": {
     "claims": "<ENUMERATION_CONTENT>",
     "quality_score": "<ENUMERATION_CONTENT>",
     "source_tiers": "<ENUMERATION_CONTENT>",
-    "warnings": "<ENUMERATION_CONTENT>"
+    "warnings": []
   },
   "investigation_search_all | read_key | missing-kb": {
-    "groups": "<ENUMERATION_CONTENT>",
+    "groups": [],
     "query": "zebra",
     "total_count": "<ENUMERATION_CONTENT>"
   },
@@ -513,22 +513,22 @@
   },
   "investigation_sources | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "sources": "<ENUMERATION_CONTENT>",
+    "sources": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_sources | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "sources": "<ENUMERATION_CONTENT>",
+    "sources": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_sources | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "sources": "<ENUMERATION_CONTENT>",
+    "sources": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_sources | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "sources": "<ENUMERATION_CONTENT>",
+    "sources": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_start | read_key | missing-kb": {
@@ -555,7 +555,7 @@
     "event_count": "<ENUMERATION_CONTENT>",
     "source_count": "<ENUMERATION_CONTENT>",
     "summary": "<ENUMERATION_CONTENT>",
-    "unverified_claims": "<ENUMERATION_CONTENT>"
+    "unverified_claims": []
   },
   "investigation_status | read_key | no-default-role-kb": {
     "claim_breakdown": "<ENUMERATION_CONTENT>",
@@ -564,7 +564,7 @@
     "event_count": "<ENUMERATION_CONTENT>",
     "source_count": "<ENUMERATION_CONTENT>",
     "summary": "<ENUMERATION_CONTENT>",
-    "unverified_claims": "<ENUMERATION_CONTENT>"
+    "unverified_claims": []
   },
   "investigation_status | read_key | private-kb": {
     "claim_breakdown": "<ENUMERATION_CONTENT>",
@@ -573,7 +573,7 @@
     "event_count": "<ENUMERATION_CONTENT>",
     "source_count": "<ENUMERATION_CONTENT>",
     "summary": "<ENUMERATION_CONTENT>",
-    "unverified_claims": "<ENUMERATION_CONTENT>"
+    "unverified_claims": []
   },
   "investigation_status | read_key | readable-kb": {
     "claim_breakdown": "<ENUMERATION_CONTENT>",
@@ -582,49 +582,49 @@
     "event_count": "<ENUMERATION_CONTENT>",
     "source_count": "<ENUMERATION_CONTENT>",
     "summary": "<ENUMERATION_CONTENT>",
-    "unverified_claims": "<ENUMERATION_CONTENT>"
+    "unverified_claims": []
   },
   "investigation_timeline | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_timeline | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_timeline | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "investigation_timeline | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "kb_backlinks | read_key | missing-kb": {
     "backlink_count": "<ENUMERATION_CONTENT>",
-    "backlinks": "<ENUMERATION_CONTENT>",
+    "backlinks": [],
     "entry_id": "characterization-missing-entry",
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_backlinks | read_key | no-default-role-kb": {
     "backlink_count": "<ENUMERATION_CONTENT>",
-    "backlinks": "<ENUMERATION_CONTENT>",
+    "backlinks": [],
     "entry_id": "no-default-role-note",
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_backlinks | read_key | private-kb": {
     "backlink_count": "<ENUMERATION_CONTENT>",
-    "backlinks": "<ENUMERATION_CONTENT>",
+    "backlinks": [],
     "entry_id": "private-note",
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_backlinks | read_key | readable-kb": {
     "backlink_count": "<ENUMERATION_CONTENT>",
-    "backlinks": "<ENUMERATION_CONTENT>",
+    "backlinks": [],
     "entry_id": "readable-note",
     "has_more": "<ENUMERATION_CONTENT>"
   },
@@ -748,25 +748,25 @@
   },
   "kb_batch_suggest | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "pairs": "<ENUMERATION_CONTENT>",
+    "pairs": [],
     "source_kb": "missing-kb",
     "target_kb": "missing-kb"
   },
   "kb_batch_suggest | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "pairs": "<ENUMERATION_CONTENT>",
+    "pairs": [],
     "source_kb": "no-default-role-kb",
     "target_kb": "no-default-role-kb"
   },
   "kb_batch_suggest | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "pairs": "<ENUMERATION_CONTENT>",
+    "pairs": [],
     "source_kb": "private-kb",
     "target_kb": "private-kb"
   },
   "kb_batch_suggest | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "pairs": "<ENUMERATION_CONTENT>",
+    "pairs": [],
     "source_kb": "readable-kb",
     "target_kb": "readable-kb"
   },
@@ -871,103 +871,103 @@
   },
   "kb_discover_neighbors | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "discoveries": "<ENUMERATION_CONTENT>",
+    "discoveries": [],
     "entry_id": "characterization-missing-entry",
     "kb_name": "missing-kb"
   },
   "kb_discover_neighbors | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "discoveries": "<ENUMERATION_CONTENT>",
+    "discoveries": [],
     "entry_id": "no-default-role-note",
     "kb_name": "no-default-role-kb"
   },
   "kb_discover_neighbors | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "discoveries": "<ENUMERATION_CONTENT>",
+    "discoveries": [],
     "entry_id": "private-note",
     "kb_name": "private-kb"
   },
   "kb_discover_neighbors | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "discoveries": "<ENUMERATION_CONTENT>",
+    "discoveries": [],
     "entry_id": "readable-note",
     "kb_name": "readable-kb"
   },
   "kb_find_by_assignee | read_key | missing-kb": {
     "assignee": "characterization-assignee",
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": []
   },
   "kb_find_by_assignee | read_key | no-default-role-kb": {
     "assignee": "characterization-assignee",
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": []
   },
   "kb_find_by_assignee | read_key | private-kb": {
     "assignee": "characterization-assignee",
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": []
   },
   "kb_find_by_assignee | read_key | readable-kb": {
     "assignee": "characterization-assignee",
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": []
   },
   "kb_find_by_location | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [],
     "location": "characterization-location-kb_find_by_location-read_key-missing-kb"
   },
   "kb_find_by_location | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [],
     "location": "characterization-location-kb_find_by_location-read_key-no-default-role-kb"
   },
   "kb_find_by_location | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [],
     "location": "characterization-location-kb_find_by_location-read_key-private-kb"
   },
   "kb_find_by_location | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [],
     "location": "characterization-location-kb_find_by_location-read_key-readable-kb"
   },
   "kb_find_by_status | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [],
     "status": "open"
   },
   "kb_find_by_status | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [],
     "status": "open"
   },
   "kb_find_by_status | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [],
     "status": "open"
   },
   "kb_find_by_status | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [],
     "status": "open"
   },
   "kb_find_overdue | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": []
   },
   "kb_find_overdue | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": []
   },
   "kb_find_overdue | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": []
   },
   "kb_find_overdue | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": []
   },
   "kb_get | read_key | missing-kb": {
     "error": "Entry 'characterization-missing-entry' not found",
@@ -1123,59 +1123,106 @@
   },
   "kb_list | read_key | missing-kb": {
     "knowledge_bases": [
-      "no-default-role-kb",
-      "private-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "name": "no-default-role-kb"
+      },
+      {
+        "name": "private-kb"
+      },
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
     ]
   },
   "kb_list | read_key | no-default-role-kb": {
     "knowledge_bases": [
-      "no-default-role-kb",
-      "private-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "name": "no-default-role-kb"
+      },
+      {
+        "name": "private-kb"
+      },
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
     ]
   },
   "kb_list | read_key | private-kb": {
     "knowledge_bases": [
-      "no-default-role-kb",
-      "private-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "name": "no-default-role-kb"
+      },
+      {
+        "name": "private-kb"
+      },
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
     ]
   },
   "kb_list | read_key | readable-kb": {
     "knowledge_bases": [
-      "no-default-role-kb",
-      "private-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "name": "no-default-role-kb"
+      },
+      {
+        "name": "private-kb"
+      },
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
     ]
   },
   "kb_list_entries | read_key | missing-kb": {
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [],
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
     "offset": 0,
     "total": "<ENUMERATION_CONTENT>"
   },
   "kb_list_entries | read_key | no-default-role-kb": {
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      }
+    ],
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
     "offset": 0,
     "total": "<ENUMERATION_CONTENT>"
   },
   "kb_list_entries | read_key | private-kb": {
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      }
+    ],
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
     "offset": 0,
     "total": "<ENUMERATION_CONTENT>"
   },
   "kb_list_entries | read_key | readable-kb": {
-    "entries": "<ENUMERATION_CONTENT>",
+    "entries": [
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
+    ],
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
     "offset": 0,
@@ -1536,7 +1583,7 @@
         }
       }
     },
-    "top_tags": "<ENUMERATION_CONTENT>",
+    "top_tags": [],
     "total_entries": "<ENUMERATION_CONTENT>",
     "types": "<ENUMERATION_CONTENT>"
   },
@@ -1873,7 +1920,7 @@
         }
       }
     },
-    "top_tags": "<ENUMERATION_CONTENT>",
+    "top_tags": [],
     "total_entries": "<ENUMERATION_CONTENT>",
     "types": "<ENUMERATION_CONTENT>"
   },
@@ -2210,7 +2257,7 @@
         }
       }
     },
-    "top_tags": "<ENUMERATION_CONTENT>",
+    "top_tags": [],
     "total_entries": "<ENUMERATION_CONTENT>",
     "types": "<ENUMERATION_CONTENT>"
   },
@@ -2237,7 +2284,7 @@
   "kb_qa_assess | read_key | missing-kb": {
     "assessed": "<ENUMERATION_CONTENT>",
     "kb_name": "missing-kb",
-    "results": "<ENUMERATION_CONTENT>",
+    "results": [],
     "skipped": "<ENUMERATION_CONTENT>"
   },
   "kb_qa_assess | read_key | no-default-role-kb": {
@@ -2288,7 +2335,7 @@
   },
   "kb_qa_validate | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "issues": "<ENUMERATION_CONTENT>",
+    "issues": [],
     "truncated": "<ENUMERATION_CONTENT>"
   },
   "kb_qa_validate | read_key | no-default-role-kb": {
@@ -2335,19 +2382,34 @@
   },
   "kb_recent | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": []
   },
   "kb_recent | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": [
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      }
+    ]
   },
   "kb_recent | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": [
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      }
+    ]
   },
   "kb_recent | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "entries": "<ENUMERATION_CONTENT>"
+    "entries": [
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
+    ]
   },
   "kb_schema | read_key | missing-kb": {
     "error": "KB 'missing-kb' not found",
@@ -3300,25 +3362,40 @@
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "query": "zebra",
-    "results": "<ENUMERATION_CONTENT>"
+    "results": []
   },
   "kb_search | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "query": "zebra",
-    "results": "<ENUMERATION_CONTENT>"
+    "results": [
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      }
+    ]
   },
   "kb_search | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "query": "zebra",
-    "results": "<ENUMERATION_CONTENT>"
+    "results": [
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      }
+    ]
   },
   "kb_search | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "query": "zebra",
-    "results": "<ENUMERATION_CONTENT>"
+    "results": [
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
+    ]
   },
   "kb_stats | read_key | missing-kb": {
     "kbs": "<ENUMERATION_CONTENT>",
@@ -3351,41 +3428,41 @@
   "kb_tags | read_key | missing-kb": {
     "has_more": "<ENUMERATION_CONTENT>",
     "tag_count": "<ENUMERATION_CONTENT>",
-    "tags": "<ENUMERATION_CONTENT>"
+    "tags": []
   },
   "kb_tags | read_key | no-default-role-kb": {
     "has_more": "<ENUMERATION_CONTENT>",
     "tag_count": "<ENUMERATION_CONTENT>",
-    "tags": "<ENUMERATION_CONTENT>"
+    "tags": []
   },
   "kb_tags | read_key | private-kb": {
     "has_more": "<ENUMERATION_CONTENT>",
     "tag_count": "<ENUMERATION_CONTENT>",
-    "tags": "<ENUMERATION_CONTENT>"
+    "tags": []
   },
   "kb_tags | read_key | readable-kb": {
     "has_more": "<ENUMERATION_CONTENT>",
     "tag_count": "<ENUMERATION_CONTENT>",
-    "tags": "<ENUMERATION_CONTENT>"
+    "tags": []
   },
   "kb_timeline | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_timeline | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_timeline | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_timeline | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>",
+    "events": [],
     "has_more": "<ENUMERATION_CONTENT>"
   },
   "kb_update | read_key | missing-kb": {
@@ -3426,22 +3503,23 @@
   },
   "social_newest | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "newest": "<ENUMERATION_CONTENT>"
+    "newest": []
   },
   "social_newest | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "newest": "<ENUMERATION_CONTENT>"
+    "newest": []
   },
   "social_newest | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "newest": "<ENUMERATION_CONTENT>"
+    "newest": []
   },
   "social_newest | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "newest": "<ENUMERATION_CONTENT>"
+    "newest": []
   },
   "social_post | read_key | missing-kb": {
-    "error": "KB 'missing-kb' not found"
+    "error": "KB 'missing-kb' not found",
+    "error_code": "KB_NOT_FOUND"
   },
   "social_post | read_key | no-default-role-kb": {
     "created": true,
@@ -3460,19 +3538,19 @@
   },
   "social_top | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "top": "<ENUMERATION_CONTENT>"
+    "top": []
   },
   "social_top | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "top": "<ENUMERATION_CONTENT>"
+    "top": []
   },
   "social_top | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "top": "<ENUMERATION_CONTENT>"
+    "top": []
   },
   "social_top | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "top": "<ENUMERATION_CONTENT>"
+    "top": []
   },
   "social_vote | read_key | missing-kb": {
     "entry_id": "characterization-missing-entry",
@@ -3512,22 +3590,22 @@
   },
   "solidarity_timeline | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>"
+    "events": []
   },
   "solidarity_timeline | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>"
+    "events": []
   },
   "solidarity_timeline | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>"
+    "events": []
   },
   "solidarity_timeline | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "events": "<ENUMERATION_CONTENT>"
+    "events": []
   },
   "sw_adrs | read_key | missing-kb": {
-    "adrs": "<ENUMERATION_CONTENT>",
+    "adrs": [],
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
@@ -3535,7 +3613,7 @@
     "total": "<ENUMERATION_CONTENT>"
   },
   "sw_adrs | read_key | no-default-role-kb": {
-    "adrs": "<ENUMERATION_CONTENT>",
+    "adrs": [],
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
@@ -3543,7 +3621,7 @@
     "total": "<ENUMERATION_CONTENT>"
   },
   "sw_adrs | read_key | private-kb": {
-    "adrs": "<ENUMERATION_CONTENT>",
+    "adrs": [],
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
@@ -3551,7 +3629,7 @@
     "total": "<ENUMERATION_CONTENT>"
   },
   "sw_adrs | read_key | readable-kb": {
-    "adrs": "<ENUMERATION_CONTENT>",
+    "adrs": [],
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
@@ -3561,7 +3639,7 @@
   "sw_backlog | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "limit": 50,
     "offset": 0,
     "total": "<ENUMERATION_CONTENT>"
@@ -3569,7 +3647,7 @@
   "sw_backlog | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "limit": 50,
     "offset": 0,
     "total": "<ENUMERATION_CONTENT>"
@@ -3577,7 +3655,7 @@
   "sw_backlog | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "limit": 50,
     "offset": 0,
     "total": "<ENUMERATION_CONTENT>"
@@ -3585,25 +3663,89 @@
   "sw_backlog | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "limit": 50,
     "offset": 0,
     "total": "<ENUMERATION_CONTENT>"
   },
   "sw_board | read_key | missing-kb": {
-    "lanes": "<ENUMERATION_CONTENT>",
+    "lanes": [
+      {
+        "name": "Backlog"
+      },
+      {
+        "name": "Done"
+      },
+      {
+        "name": "In Progress"
+      },
+      {
+        "name": "Ready"
+      },
+      {
+        "name": "Review"
+      }
+    ],
     "wip_policy": "warn"
   },
   "sw_board | read_key | no-default-role-kb": {
-    "lanes": "<ENUMERATION_CONTENT>",
+    "lanes": [
+      {
+        "name": "Backlog"
+      },
+      {
+        "name": "Done"
+      },
+      {
+        "name": "In Progress"
+      },
+      {
+        "name": "Ready"
+      },
+      {
+        "name": "Review"
+      }
+    ],
     "wip_policy": "warn"
   },
   "sw_board | read_key | private-kb": {
-    "lanes": "<ENUMERATION_CONTENT>",
+    "lanes": [
+      {
+        "name": "Backlog"
+      },
+      {
+        "name": "Done"
+      },
+      {
+        "name": "In Progress"
+      },
+      {
+        "name": "Ready"
+      },
+      {
+        "name": "Review"
+      }
+    ],
     "wip_policy": "warn"
   },
   "sw_board | read_key | readable-kb": {
-    "lanes": "<ENUMERATION_CONTENT>",
+    "lanes": [
+      {
+        "name": "Backlog"
+      },
+      {
+        "name": "Done"
+      },
+      {
+        "name": "In Progress"
+      },
+      {
+        "name": "Ready"
+      },
+      {
+        "name": "Review"
+      }
+    ],
     "wip_policy": "warn"
   },
   "sw_check_ready | read_key | missing-kb": {
@@ -3635,7 +3777,7 @@
     "error": "Backlog item 'characterization-placeholder-id-sw_claim-read_key-readable-kb' not found in KB 'readable-kb'"
   },
   "sw_component | read_key | missing-kb": {
-    "components": "<ENUMERATION_CONTENT>",
+    "components": [],
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
@@ -3643,7 +3785,7 @@
     "total": "<ENUMERATION_CONTENT>"
   },
   "sw_component | read_key | no-default-role-kb": {
-    "components": "<ENUMERATION_CONTENT>",
+    "components": [],
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
@@ -3651,7 +3793,7 @@
     "total": "<ENUMERATION_CONTENT>"
   },
   "sw_component | read_key | private-kb": {
-    "components": "<ENUMERATION_CONTENT>",
+    "components": [],
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
@@ -3659,7 +3801,7 @@
     "total": "<ENUMERATION_CONTENT>"
   },
   "sw_component | read_key | readable-kb": {
-    "components": "<ENUMERATION_CONTENT>",
+    "components": [],
     "count": "<ENUMERATION_CONTENT>",
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 50,
@@ -3764,19 +3906,19 @@
   },
   "sw_epics | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "epics": "<ENUMERATION_CONTENT>"
+    "epics": []
   },
   "sw_epics | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "epics": "<ENUMERATION_CONTENT>"
+    "epics": []
   },
   "sw_epics | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "epics": "<ENUMERATION_CONTENT>"
+    "epics": []
   },
   "sw_epics | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "epics": "<ENUMERATION_CONTENT>"
+    "epics": []
   },
   "sw_log | read_key | missing-kb": {
     "created": false,
@@ -3796,19 +3938,19 @@
   },
   "sw_milestones | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "milestones": "<ENUMERATION_CONTENT>"
+    "milestones": []
   },
   "sw_milestones | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "milestones": "<ENUMERATION_CONTENT>"
+    "milestones": []
   },
   "sw_milestones | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "milestones": "<ENUMERATION_CONTENT>"
+    "milestones": []
   },
   "sw_milestones | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "milestones": "<ENUMERATION_CONTENT>"
+    "milestones": []
   },
   "sw_prioritize | read_key | missing-kb": {
     "error": "Provide either item_ids (batch) or item_id with after/before"
@@ -3843,19 +3985,19 @@
     "wip_status": "<ENUMERATION_CONTENT>"
   },
   "sw_refine | read_key | missing-kb": {
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "sw_refine | read_key | no-default-role-kb": {
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "sw_refine | read_key | private-kb": {
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "sw_refine | read_key | readable-kb": {
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "summary": "<ENUMERATION_CONTENT>"
   },
   "sw_review | read_key | missing-kb": {
@@ -3876,25 +4018,25 @@
   },
   "sw_review_queue | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "over_limit": "<ENUMERATION_CONTENT>",
     "wip_limit": 3
   },
   "sw_review_queue | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "over_limit": "<ENUMERATION_CONTENT>",
     "wip_limit": 3
   },
   "sw_review_queue | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "over_limit": "<ENUMERATION_CONTENT>",
     "wip_limit": 3
   },
   "sw_review_queue | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "items": "<ENUMERATION_CONTENT>",
+    "items": [],
     "over_limit": "<ENUMERATION_CONTENT>",
     "wip_limit": 3
   },
@@ -4131,19 +4273,19 @@
   },
   "task_list | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "tasks": "<ENUMERATION_CONTENT>"
+    "tasks": []
   },
   "task_list | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "tasks": "<ENUMERATION_CONTENT>"
+    "tasks": []
   },
   "task_list | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "tasks": "<ENUMERATION_CONTENT>"
+    "tasks": []
   },
   "task_list | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "tasks": "<ENUMERATION_CONTENT>"
+    "tasks": []
   },
   "task_status | read_key | missing-kb": {
     "error": "Task 'characterization-placeholder-id-task_status-read_key-missing-kb' not found",
@@ -4255,35 +4397,35 @@
   },
   "wiki_review_queue | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "queue": "<ENUMERATION_CONTENT>"
+    "queue": []
   },
   "wiki_review_queue | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "queue": "<ENUMERATION_CONTENT>"
+    "queue": []
   },
   "wiki_review_queue | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "queue": "<ENUMERATION_CONTENT>"
+    "queue": []
   },
   "wiki_review_queue | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "queue": "<ENUMERATION_CONTENT>"
+    "queue": []
   },
   "wiki_stubs | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "stubs": "<ENUMERATION_CONTENT>"
+    "stubs": []
   },
   "wiki_stubs | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "stubs": "<ENUMERATION_CONTENT>"
+    "stubs": []
   },
   "wiki_stubs | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "stubs": "<ENUMERATION_CONTENT>"
+    "stubs": []
   },
   "wiki_stubs | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "stubs": "<ENUMERATION_CONTENT>"
+    "stubs": []
   },
   "wiki_submit_review | read_key | missing-kb": {
     "action": "add",
@@ -4334,18 +4476,18 @@
   },
   "zettel_inbox | read_key | missing-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "inbox": "<ENUMERATION_CONTENT>"
+    "inbox": []
   },
   "zettel_inbox | read_key | no-default-role-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "inbox": "<ENUMERATION_CONTENT>"
+    "inbox": []
   },
   "zettel_inbox | read_key | private-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "inbox": "<ENUMERATION_CONTENT>"
+    "inbox": []
   },
   "zettel_inbox | read_key | readable-kb": {
     "count": "<ENUMERATION_CONTENT>",
-    "inbox": "<ENUMERATION_CONTENT>"
+    "inbox": []
   }
 }

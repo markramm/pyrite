@@ -53,18 +53,8 @@ def test_unscoped_rest_search_and_entries(world):
     for principal_name in PRINCIPAL_NAMES:
         principal = world.principals[principal_name]
         for method, path, params in (
-            ("GET", "/api/search", {"q": "zebra", "limit": 100}),  # route's cap (le=100)
-            # A high limit: the shared world accumulates rows in READABLE/
-            # PRIVATE/NO_DEFAULT_ROLE from every write-tool case across the
-            # whole matrix (world.py's own perf tradeoff), so a low default
-            # page size can push READ_ONLY's one fixed entry (or another
-            # sparse KB) off the first page depending on how much noise
-            # already piled up elsewhere -- not a scoping question, just
-            # pagination interacting with accumulated content. A high limit
-            # keeps every KB represented regardless of that noise; which KBs
-            # appear at all (normalize.py's identity projection) is what
-            # this test characterizes, not how many rows are in each.
-            ("GET", "/api/entries", {"limit": 200}),
+            ("GET", "/api/search", {"q": "zebra"}),
+            ("GET", "/api/entries", {}),
         ):
             key = f"{method} {path} UNSCOPED | {principal_name}"
             resp = world.client.request(
@@ -78,9 +68,7 @@ def test_unscoped_rest_search_and_entries(world):
                 body = resp.json()
             except ValueError:
                 body = resp.text
-            normalised_body = normalize_rest_body(
-                method, path, body, tmpdir=str(world.tmpdir), unscoped=True
-            )
+            normalised_body = normalize_rest_body(method, path, body, tmpdir=str(world.tmpdir))
             actual = {"status": resp.status_code, "body": normalised_body}
             collector.check(GOLDEN_NAME, key, actual, golden)
     if regenerating():
@@ -93,6 +81,16 @@ def test_unscoped_mcp_search_and_list_entries(world):
     collector = MismatchCollector()
     for principal_name in PRINCIPAL_NAMES:
         principal = world.principals[principal_name]
+        # `world.resolve_readable_writable`, NOT `principal.readable_kbs`/
+        # `writable_kbs` (#476 round-2 blocker 4): those fields are a
+        # SNAPSHOT `world.py` computed once, at construction time, by
+        # calling the same resolution function this line calls again --
+        # trusting the snapshot would let a real bug in the resolution path
+        # itself go undetected (the fixture and the assertion would both be
+        # wrong the same way). Calling it fresh, per case, is what actually
+        # characterizes the server's OWN resolution, the way a real MCP
+        # connection resolves it per `mcp_routes._authenticate`.
+        readable, writable = world.resolve_readable_writable(principal)
         for tool_name, arguments in (
             ("kb_search", {"query": "zebra", "limit": 200}),
             # A high limit -- see the REST test's identical comment: keeps
@@ -101,20 +99,14 @@ def test_unscoped_mcp_search_and_list_entries(world):
             ("kb_list_entries", {"limit": 200}),
         ):
             key = f"{tool_name} UNSCOPED | {principal_name}"
-            result = world.mcp_server._dispatch_tool(
+            result = world.dispatch_tool(
                 tool_name,
                 dict(arguments),
                 client_id=f"unscoped-{tool_name}-{principal_name}",
-                readable_kbs=set(principal.readable_kbs)
-                if principal.readable_kbs is not None
-                else None,
-                writable_kbs=set(principal.writable_kbs)
-                if principal.writable_kbs is not None
-                else None,
+                readable_kbs=readable,
+                writable_kbs=writable,
             )
-            actual = normalize_mcp_result(
-                tool_name, result, tmpdir=str(world.tmpdir), unscoped=True
-            )
+            actual = normalize_mcp_result(tool_name, result, tmpdir=str(world.tmpdir))
             collector.check(GOLDEN_NAME, key, actual, golden)
     if regenerating():
         save(GOLDEN_NAME, golden)

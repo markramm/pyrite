@@ -195,50 +195,38 @@ _ENTRY_IDENTITY_KEYS = ("kb_name", "id")
 
 def _project_identity_only(items: list) -> list | None:
     """If `items` is a list of dicts that share an identity shape (every
-    item has a `name` key -- a KB listing -- or every item has `kb_name` --
-    an entry/row listing), return the sorted list of distinct KB NAMES
-    present, dropping every row's own id. Returns None if `items` isn't
-    shaped like either (a list of scalars, or dicts with neither shape), so
-    the caller falls back to blanking it wholesale -- still better than
-    silently keeping volatile junk, but this is the common case.
+    item has both `kb_name` and `id` -- an entry/row listing -- or every
+    item has a `name` -- a KB listing), return the sorted list of THOSE
+    identity keys only (dropping every other, volatile per-item field --
+    a timestamp, a rank, a body). Returns None if `items` isn't shaped like
+    either (a list of scalars, or dicts with neither shape), so the caller
+    falls back to blanking it wholesale.
 
-    Row-level identity (the individual `id` inside a KB) is deliberately
-    NOT kept, unlike an earlier version of this function: the shared,
-    session-scoped world (`world.py`'s own perf tradeoff) means every
-    write-tool case across every principal keeps adding rows to the same
-    handful of fixture KBs for the rest of the process, so the exact ROW
-    SET inside an already-authorized KB is accumulated, order-dependent
-    content-state -- not an authorization signal -- and pinning it byte for
-    byte reintroduced the exact cross-worker nondeterminism this harness
-    spent most of its build eliminating (found live: `kb_discover_neighbors`
-    and `GET /api/entries` failing under `-n4` with a different row count
-    per worker, while the SET OF KBS involved was always correct). Which
-    KBS a caller's listing touches AT ALL is the real scoping question --
-    exactly what a private KB's row leaking into a caller's results would
-    change -- and that stays fully deterministic regardless of how many
-    disposable rows accumulate inside a KB the caller may already see.
+    An EMPTY list stays `[]` here, not None (#476 round-2 blocker 1): an
+    earlier version of this harness special-cased emptiness to "blank it"
+    because a SHARED, session-scoped world made a KB's row count itself
+    accumulated, order-dependent noise across write-tool cases (a listing
+    that was empty when one worker built its world and non-empty in
+    another's was indistinguishable from a real scoping difference). Round
+    2 splits read cases onto their own world that no write case ever
+    touches (`conftest.py`'s `world` fixture, `write_world` for writes), so
+    a read case's listing is now a pure, deterministic function of what
+    `world.py` seeded plus that ONE case's own scoping -- "zero rows here"
+    is real, stable information again, and keeping it as `[]` is what lets
+    a private ENTRY (not just a private KB) leaking into an otherwise-
+    correct, non-empty-by-seeding listing still show up as a mismatch.
     """
-    if not items or not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
-        # An empty list is deliberately NOT special-cased to "stays []":
-        # from an empty list ALONE there is no way to tell "this would have
-        # been a KB-name/entry-id list with zero items right now" apart from
-        # "this is a bare-scalar aggregate list (kb_orient's top_tags,
-        # ['qa', 'qa-warn']) that happens to blank to the same marker either
-        # way" -- and the two must not disagree on whether emptiness itself
-        # gets projected or blanked, or the SAME field flips between a
-        # `[]` result and a `<ENUMERATION_CONTENT>` result purely on how much
-        # unrelated content another case already accumulated in the shared
-        # world (found live: kb_orient's `top_tags` and `GET /api/collections`
-        # both failing under `-n4`, alternating between the two shapes for
-        # the exact same, correctly-scoped call). Blanking every case
-        # uniformly costs the "definitely zero, not merely blanked" distinction
-        # but keeps the golden a pure function of (tool/route, principal,
-        # kb_state) again, which is the harder requirement.
+    if not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
         return None
-    if all("kb_name" in i for i in items):
-        return sorted({i["kb_name"] for i in items})
+    if not items:
+        return []
+    if all("kb_name" in i and "id" in i for i in items):
+        return sorted(
+            ({"kb_name": i["kb_name"], "id": i["id"]} for i in items),
+            key=lambda i: (i["kb_name"], i["id"]),
+        )
     if all("name" in i for i in items):
-        return sorted({i["name"] for i in items})
+        return sorted(({"name": i["name"]} for i in items), key=lambda i: i["name"])
     return None
 
 
@@ -319,62 +307,33 @@ ENUMERATION_SENSITIVE_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 
-# Tools/routes whose enumeration field gets real KB-name identity
-# projection (`_project_identity_only`), not wholesale blanking. Narrow and
-# explicit on purpose: the main per-KB matrix (`test_rest_matrix.py`/
-# `test_mcp_matrix.py`) targets ONE named KB per case, so its filtered/
-# derived listings (`kb_find_by_status`, `kb_batch_suggest`'s pairs,
-# `kb_tags`, `task_list`, ...) have a PRESENCE, not just a count, that
-# depends on whether some OTHER write-tool case already created matching
-# content in the SAME shared KB -- found live: `kb_find_by_status` flipping
-# between `['readable-kb']` and `[]` across xdist runs, an empty-vs-nonempty
-# flip with no authorization meaning, not a stable identity to pin. Only the
-# CROSS-KB "which KBs do I see at all" tools/routes are stable regardless of
-# per-KB content noise (every KB with ANY content appears, so filtered-away
-# noise doesn't change which KBs show up) -- those get the real projection;
-# everything else in ENUMERATION_SENSITIVE_FIELDS/REST_ENUMERATION_SENSITIVE_
-# FIELDS falls back to the fixed marker, same as before blocker 2's fix,
-# because for a single named KB, presence-of-content is exactly the kind of
-# accumulated, order-dependent state this harness normalises away elsewhere.
-# `kb_search`/`kb_list_entries` (MCP) and `GET /api/search`/`GET
-# `kb_list`/`GET /api/kbs` always get real KB-name identity projection --
-# they NEVER take a target KB argument at all (there is no "per-KB" call
-# shape for them to be unstable in), so they are unconditionally safe.
-# Every OTHER enumeration-sensitive tool/route (`kb_search`,
-# `kb_list_entries`, `GET /api/search`, `GET /api/entries`, ...) is only
-# safe to identity-project when the CALL ITSELF is unscoped (no KB named,
-# so it spans every KB the caller may read) -- called against one named
-# target KB (what the main per-KB matrix, `test_rest_matrix.py`/
-# `test_mcp_matrix.py`, always does), the same field's PRESENCE, not just
-# its count, depends on whether some other write-tool case already put
-# matching content in that shared KB, which is accumulated, order-dependent
-# noise, not an authorization signal (found live: `kb_find_by_status`,
-# `kb_tags`, `GET /api/entries` itself all flipping between an empty and a
-# non-empty projection across xdist runs for the SAME, correctly-scoped
-# call). So `normalize_mcp_result`/`normalize_rest_body` take an explicit
-# `unscoped` flag from the CALLER (who knows which shape it used, since the
-# body alone cannot always tell the two apart) rather than inferring it from
-# the tool/route name -- `tests/characterization/test_unscoped_calls.py`
-# passes `unscoped=True`; the main matrix leaves it at its default, False.
-_ALWAYS_IDENTITY_PROJECTED_MCP_TOOLS = {"kb_list"}
-_ALWAYS_IDENTITY_PROJECTED_REST_ROUTES = {("GET", "/api/kbs")}
+def _blank_enumeration_field(value: Any) -> Any:
+    """A list field is projected to identity-only (sorted KB names, or
+    sorted (kb_name, id) pairs); anything else (a bare count, or a list
+    whose shape `_project_identity_only` doesn't recognise) is blanked to
+    the fixed marker.
 
-
-def _blank_enumeration_field(value: Any, *, project_identity: bool) -> Any:
-    """A list field is projected to identity-only (sorted KB names) when
-    `project_identity` is True; anything else (a bare count, an
-    unrecognised list shape, or `project_identity=False`) is blanked to the
-    fixed marker."""
-    if project_identity and isinstance(value, list):
+    ALWAYS tries to project now (#476 round-2 blocker 1) -- there is no
+    more `unscoped`/`project_identity` conditional. That conditional
+    existed only because a per-KB read case's listing, run against the
+    SAME shared world every write-tool case also mutated, had a row
+    presence/count that was accumulated, order-dependent noise, not a
+    stable authorization fact. With read cases isolated onto their own,
+    never-written-to `world` (see `conftest.py`), that is no longer true:
+    every read case's listing is now a pure function of what `world.py`
+    seeded plus that principal's own scoping, so identity projection is
+    always safe, and skipping it for a per-KB call (as round 1 did) was
+    exactly what let mutation 6 (a search naming one KB but returning every
+    KB's rows) pass silently.
+    """
+    if isinstance(value, list):
         projected = _project_identity_only(value)
         if projected is not None:
             return projected
     return NORMALISED_ENUMERATION_CONTENT
 
 
-def _project_enumeration_fields(
-    body: Any, fields: tuple[str, ...] | None, *, project_identity: bool
-) -> Any:
+def _project_enumeration_fields(body: Any, fields: tuple[str, ...] | None) -> Any:
     """Replace each of `fields` (a top-level key of `body`, if `body` is a
     dict) with its identity-only projection or blanked marker -- run on the
     RAW body, before `normalize()` ever sees it. Order matters (#476 blocker
@@ -388,13 +347,11 @@ def _project_enumeration_fields(
     out = dict(body)
     for field in fields:
         if field in out:
-            out[field] = _blank_enumeration_field(out[field], project_identity=project_identity)
+            out[field] = _blank_enumeration_field(out[field])
     return out
 
 
-def normalize_mcp_result(
-    tool_name: str, result: Any, *, tmpdir: str, unscoped: bool = False
-) -> Any:
+def normalize_mcp_result(tool_name: str, result: Any, *, tmpdir: str) -> Any:
     """For a tool in `ENUMERATION_SENSITIVE_FIELDS`, each listed top-level
     field is projected to identity-only (a list) or blanked (a scalar
     count) FIRST, against the raw result -- then `normalize()` runs over
@@ -403,12 +360,6 @@ def normalize_mcp_result(
     would destroy a list, but the ORDER is still the fix for #476 blocker
     2's root cause, and future-proofs against a new global rule being added
     to `normalize()` without checking whether it runs before or after this.
-
-    `unscoped=True` (pass this only from `test_unscoped_calls.py`, whose
-    calls never name a target KB) additionally identity-projects every
-    OTHER enumeration field, not just `kb_list`'s -- see
-    `_ALWAYS_IDENTITY_PROJECTED_MCP_TOOLS`'s comment for why this must be
-    the caller's explicit choice, not inferred from the tool name.
 
     Only touches a SUCCESS body: a refusal (`_dispatch_tool`'s
     `error`/`error_code`/`retryable`/`suggestion` envelope) never has any of
@@ -419,8 +370,7 @@ def normalize_mcp_result(
     fields = ENUMERATION_SENSITIVE_FIELDS.get(tool_name)
     if fields and isinstance(result, dict) and "error" in result:
         fields = None  # a refusal envelope: nothing to project
-    project_identity = unscoped or tool_name in _ALWAYS_IDENTITY_PROJECTED_MCP_TOOLS
-    projected = _project_enumeration_fields(result, fields, project_identity=project_identity)
+    projected = _project_enumeration_fields(result, fields)
     return normalize(projected, tmpdir=tmpdir)
 
 
@@ -528,31 +478,27 @@ def _kbs_route_identity_only(kbs: Any) -> Any:
     )
 
 
-def _blank_rest_field(
-    method: str, path: str, field: str, value: Any, *, project_identity: bool
-) -> Any:
+def _blank_rest_field(method: str, path: str, field: str, value: Any) -> Any:
     if (method, path) == ("GET", "/api/kbs") and field == "kbs":
         return _kbs_route_identity_only(value)
-    return _blank_enumeration_field(value, project_identity=project_identity)
+    return _blank_enumeration_field(value)
 
 
-def normalize_rest_body(
-    method: str, path: str, body: Any, *, tmpdir: str, unscoped: bool = False
-) -> Any:
+def normalize_rest_body(method: str, path: str, body: Any, *, tmpdir: str) -> Any:
     """For `(method, path)` in `REST_ENUMERATION_SENSITIVE_FIELDS`, each
     listed top-level field is projected to identity-only (a list of KB
-    names) or blanked (a scalar count) FIRST, against the raw body -- then
-    `normalize()` runs over what's left (timestamps, generated ids, paths,
-    scores). Projecting first is the fix for #476 blocker 2: `normalize()`
-    used to run first and destroy a list field via a global, key-name-only
-    rule before this projection ever saw it (see the module and
-    `normalize()` docstrings).
+    names, or (kb_name, id) pairs) or blanked (a scalar count) FIRST,
+    against the raw body -- then `normalize()` runs over what's left
+    (timestamps, generated ids, paths, scores). Projecting first is the
+    fix for #476 blocker 2: `normalize()` used to run first and destroy a
+    list field via a global, key-name-only rule before this projection
+    ever saw it (see the module and `normalize()` docstrings).
 
-    `unscoped=True` (pass this only from `test_unscoped_calls.py`, whose
-    calls never name a target KB) additionally identity-projects every
-    OTHER enumeration field, not just `GET /api/kbs`'s -- see
-    `_ALWAYS_IDENTITY_PROJECTED_REST_ROUTES`'s comment for why this must be
-    the caller's explicit choice, not inferred from the route.
+    ALWAYS projects now (#476 round-2 blocker 1) -- see
+    `_blank_enumeration_field`'s docstring for why the old
+    `unscoped`/`project_identity` conditional is gone: read cases run
+    against their own, never-written-to world now, so every listing's row
+    presence is a stable fact, not accumulated noise.
 
     Only touches a body that is not a refusal shape. A refusal is
     `{"detail": ...}` (`HTTPException`) or `{"code", "message"}` (the
@@ -562,7 +508,6 @@ def normalize_rest_body(
     to tell the two apart without a second lookup table.
     """
     fields = REST_ENUMERATION_SENSITIVE_FIELDS.get((method, path))
-    project_identity = unscoped or (method, path) in _ALWAYS_IDENTITY_PROJECTED_REST_ROUTES
     if (
         fields
         and isinstance(body, dict)
@@ -572,9 +517,7 @@ def normalize_rest_body(
         projected = dict(body)
         for field in fields:
             if field in projected:
-                projected[field] = _blank_rest_field(
-                    method, path, field, projected[field], project_identity=project_identity
-                )
+                projected[field] = _blank_rest_field(method, path, field, projected[field])
     else:
         projected = body
     return normalize(projected, tmpdir=tmpdir)

@@ -1,7 +1,7 @@
 """One request-call spec per KB-bearing REST route (ADR-0037 theme 0).
 
 `kb_bearing_rest_operations()` (tests/characterization/surfaces.py) enumerates
-the 66 routes structurally. This module says, for each one, how to build a
+the 74 routes structurally. This module says, for each one, how to build a
 real HTTP call against a given target KB name -- substituting the KB into
 whichever path/query/body location that particular route actually reads it
 from (routes disagree: some use `{kb_name}` in the path, some `kb` or
@@ -9,7 +9,7 @@ from (routes disagree: some use `{kb_name}` in the path, some `kb` or
 required field with a fixed, harmless placeholder so the call reaches the
 authorization layer rather than failing to parse.
 
-Every one of the 66 routes has an entry -- deliberately, so a route added to
+Every one of the 74 routes has an entry -- deliberately, so a route added to
 `kb_bearing_rest_operations()`'s output with no spec here is a loud
 `KeyError`, not a silently-skipped case. A route whose resource this world
 does not model (a repo, a review row, a collection, a starred entry, a task)
@@ -728,6 +728,44 @@ _register(
         "url": _url("/api/repos/{name}/pr", name=kb),
         "json": {"title": "characterization PR"},
     },
+)
+
+
+# ---------------------------------------------------------------------------
+# Worktree + entries/types routes (#476 round-2 issue 2/3): newly
+# characterized via INLINE_ACCESS_DECIDING_ROUTES, none of them had a spec
+# before this round.
+# ---------------------------------------------------------------------------
+
+_register(
+    "GET",
+    "/api/worktree/status",
+    lambda w, kb, ck: {"url": "/api/worktree/status", "params": {"kb": kb}},
+)
+_register(
+    "GET",
+    "/api/worktree/changes",
+    lambda w, kb, ck: {"url": "/api/worktree/changes", "params": {"kb": kb}},
+)
+_register(
+    "POST",
+    "/api/worktree/submit",
+    lambda w, kb, ck: {"url": "/api/worktree/submit", "json": {"kb": kb}},
+)
+_register(
+    "POST",
+    "/api/worktree/reset",
+    lambda w, kb, ck: {"url": "/api/worktree/reset", "json": {"kb": kb}},
+)
+_register(
+    "GET",
+    "/api/entries/types",
+    lambda w, kb, ck: {"url": "/api/entries/types", "params": {"kb": kb}},
+)
+_register(
+    "GET",
+    "/api/entries/type-schemas",
+    lambda w, kb, ck: {"url": "/api/entries/type-schemas", "params": {"kb": kb}},
 )
 
 

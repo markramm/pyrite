@@ -1,4 +1,5 @@
-"""The one shared world every characterization case runs against (ADR-0037 theme 0).
+"""Build one identically-shaped world -- KBs, principals, seeded content --
+however many times a test module needs one (ADR-0037 theme 0).
 
 One `PyriteConfig`, one `create_app()`, the ADR §5 KB axis -- readable,
 private, a missing one that is simply never registered, and `NO_DEFAULT_ROLE`
@@ -6,11 +7,25 @@ private, a missing one that is simply never registered, and `NO_DEFAULT_ROLE`
 access and a local user's genuinely diverge, see below) -- plus one extra KB
 the main matrix does not target (`READ_ONLY`, used by `test_error_bodies.py`'s
 live cross-check only), and every principal the ADR §5.4 matrix names
-(narrowed to the backlog item's concrete list), built once and shared by
-every test in this package via a session-scoped fixture (`world`, in
-`conftest.py`). Building it once keeps the ~68-operation x ~106-tool x
-7-principal x 4-KB-state matrix inside the pre-push budget: this module does
-the one-time setup, the test modules only read from it.
+(narrowed to the backlog item's concrete list). Every KB is seeded with at
+least one entry (a leak has to have something in it to leak).
+
+**Two worlds, not one (#476 round-2 blocker 1).** A single shared world was
+the round-1 harness's whole determinism problem: a write-tool case (creating
+an entry, starring one, ...) permanently changes a KB's content for the rest
+of the process, so a READ case's own listing depends on which write cases
+already ran before it -- an accumulated-content leak (a private KB's row
+turning up in a readable KB's listing) was therefore indistinguishable from
+ordinary noise, and normalisation had to blank most listings to survive
+`-n4`, which also blanked away the very leaks this harness exists to catch.
+The fix: `conftest.py` provides `world` (session-scoped, built ONCE via
+`build_world`, and used ONLY by read/list/search cases -- nothing that
+writes may touch it) and `write_world` (function-scoped, a FRESH
+`build_world` call per test, used ONLY by write-tool cases, whose content
+mutations therefore never leak into a read case's golden). `build_world`
+itself is unchanged in shape; `label` just lets a caller give its own
+`tmp_path_factory` subdirectory a name, so two worlds built in the same
+process don't collide on disk.
 
 Principals (ADR-0037 §5, narrowed to the backlog item's concrete list):
 
@@ -136,6 +151,95 @@ class World:
         self.mcp_server.close()
         self.db.close()
 
+    def resolve_readable_writable(self, principal: Principal) -> tuple[set | None, set | None]:
+        """The (readable_kbs, writable_kbs) the REAL server would resolve
+        for `principal` RIGHT NOW, calling the exact same functions
+        `mcp_routes._authenticate`/REST's `readable_kbs()` call (#476
+        round-2 blocker 4) -- not the `Principal.readable_kbs`/`writable_kbs`
+        fields, which are a SNAPSHOT computed once when the world was built.
+        For the main per-KB matrix the two never differ (nothing mutates
+        this world's grants after construction), but a test whose whole
+        point is characterizing the SERVER's OWN resolution (this harness's
+        `test_unscoped_calls.py`) must call the server's resolution path
+        itself, not trust a cached value that could paper over a real bug
+        in that path if `world.py`'s own construction-time call and the
+        server's real one ever diverged.
+
+        `scoped` mirrors `api.readable_kbs()`'s own rule exactly:
+        `bool(auth_user or anonymous)` -- a session or an anonymous visitor
+        is scoped; an operator API key (or auth disabled) is not.
+        """
+        scoped = principal.kind in ("session", "anonymous")
+        readable = kbs_for_user_at_tier(
+            self.config,
+            self.db,
+            principal.user_id,
+            self._role_for(principal),
+            "read",
+            scoped=scoped,
+        )
+        writable = kbs_for_user_at_tier(
+            self.config,
+            self.db,
+            principal.user_id,
+            self._role_for(principal),
+            "write",
+            scoped=scoped,
+        )
+        return readable, writable
+
+    def _role_for(self, principal: Principal) -> str | None:
+        """The role `kbs_for_user_at_tier` needs: a session's real DB role,
+        an API key's role (independent of any DB user), or the anonymous
+        ceiling (`None` -- `kbs_for_user_at_tier` special-cases `role=None`
+        as "no global role", which is what an anonymous visitor has)."""
+        if principal.kind == "session":
+            return AuthService(self.db, self.config.settings.auth).get_user(principal.user_id)[
+                "role"
+            ]
+        if principal.kind == "api_key":
+            key_header = principal.rest_headers.get("X-API-Key", "")
+            from pyrite.server.api import resolve_api_key_role
+
+            return resolve_api_key_role(key_header, self.config)
+        return None  # anonymous
+
+    def dispatch_tool(self, name: str, arguments: dict, **kwargs) -> Any:
+        """`self.mcp_server._dispatch_tool(name, arguments, **kwargs)` --
+        still the real chokepoint every transport funnels through (the
+        module docstrings' point), but re-arming the plugin registry's
+        shared context to THIS world first (#476 round-2 blocker 1's second
+        half).
+
+        `pyrite.plugins.registry.get_registry()` is a process-wide lazy
+        singleton, and `PluginRegistry.set_context` mutates each plugin
+        SINGLETON instance's `ctx` in place (`plugin.ctx = ctx`, not
+        anything keyed by which `PyriteMCPServer` is calling). Every
+        `PyriteMCPServer.__init__` calls `set_context` once, at
+        construction -- so building `world` and then `write_world` (this
+        harness's own #476 round-2 blocker-1 fix) leaves the registry
+        pointed at whichever was built LAST, for every later plugin-tool
+        dispatch through EITHER server, regardless of which `.mcp_server`
+        the call is actually made on. A plugin tool (`social_*`, and any
+        other plugin's MCP tools) dispatched through `world` after
+        `write_world` was built silently read and wrote `write_world`'s
+        database instead of `world`'s -- this is exactly how `social_post`
+        (a write tool, run against `write_world`) turned up in
+        `social_newest`/`social_top`'s (read tools, run against `world`)
+        golden: both calls landed in whichever world's `PluginContext` the
+        registry held at the time, not the one each case's own
+        `world`/`write_world` object names.
+
+        Cheap and safe to call before every dispatch (a dict assignment per
+        discovered plugin, no I/O) -- there is no cheaper correct place to
+        put it without changing `pyrite/plugins/registry.py` itself, which
+        is out of this theme's scope (test-only).
+        """
+        from pyrite.plugins import PluginContext, get_registry
+
+        get_registry().set_context(PluginContext(config=self.config, db=self.db))
+        return self.mcp_server._dispatch_tool(name, arguments, **kwargs)
+
     def release_idle_connections(self) -> None:
         """Close and clear this world's DB's per-thread fallback SQLAlchemy
         sessions, releasing their pooled connections without disposing the
@@ -170,8 +274,8 @@ class World:
                 pass
 
 
-def build_world(tmp_path_factory) -> World:
-    tmpdir = Path(tmp_path_factory.mktemp("adr0037-characterization"))
+def build_world(tmp_path_factory, *, label: str = "adr0037-characterization") -> World:
+    tmpdir = Path(tmp_path_factory.mktemp(label))
     for name in (READABLE, PRIVATE, READ_ONLY, NO_DEFAULT_ROLE):
         (tmpdir / name).mkdir()
 

@@ -153,7 +153,7 @@ def test_kb_protected_live_over_rest(world):
     world.mcp_server.registry.seed_from_config()  # source="config" for kb_name, as at real startup
 
     p = world.principals["admin_key"]
-    sync_result = world.mcp_server._dispatch_tool(
+    sync_result = world.dispatch_tool(
         "kb_index_sync",
         {"kb_name": kb_name},
         client_id="characterization-491-repro",

@@ -2,12 +2,24 @@
   "GET /api/entries UNSCOPED | admin_key": {
     "body": {
       "entries": [
-        "no-default-role-kb",
-        "private-kb",
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "no-default-role-note",
+          "kb_name": "no-default-role-kb"
+        },
+        {
+          "id": "private-note",
+          "kb_name": "private-kb"
+        },
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ],
-      "limit": 200,
+      "limit": 50,
       "offset": 0,
       "total": "<ENUMERATION_CONTENT>"
     },
@@ -16,11 +28,20 @@
   "GET /api/entries UNSCOPED | anonymous": {
     "body": {
       "entries": [
-        "no-default-role-kb",
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "no-default-role-note",
+          "kb_name": "no-default-role-kb"
+        },
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ],
-      "limit": 200,
+      "limit": 50,
       "offset": 0,
       "total": "<ENUMERATION_CONTENT>"
     },
@@ -29,11 +50,20 @@
   "GET /api/entries UNSCOPED | global_user": {
     "body": {
       "entries": [
-        "no-default-role-kb",
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "no-default-role-note",
+          "kb_name": "no-default-role-kb"
+        },
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ],
-      "limit": 200,
+      "limit": 50,
       "offset": 0,
       "total": "<ENUMERATION_CONTENT>"
     },
@@ -42,11 +72,20 @@
   "GET /api/entries UNSCOPED | granted_user": {
     "body": {
       "entries": [
-        "private-kb",
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "private-note",
+          "kb_name": "private-kb"
+        },
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ],
-      "limit": 200,
+      "limit": 50,
       "offset": 0,
       "total": "<ENUMERATION_CONTENT>"
     },
@@ -55,10 +94,16 @@
   "GET /api/entries UNSCOPED | local_user": {
     "body": {
       "entries": [
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ],
-      "limit": 200,
+      "limit": 50,
       "offset": 0,
       "total": "<ENUMERATION_CONTENT>"
     },
@@ -67,12 +112,24 @@
   "GET /api/entries UNSCOPED | read_key": {
     "body": {
       "entries": [
-        "no-default-role-kb",
-        "private-kb",
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "no-default-role-note",
+          "kb_name": "no-default-role-kb"
+        },
+        {
+          "id": "private-note",
+          "kb_name": "private-kb"
+        },
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ],
-      "limit": 200,
+      "limit": 50,
       "offset": 0,
       "total": "<ENUMERATION_CONTENT>"
     },
@@ -81,12 +138,24 @@
   "GET /api/entries UNSCOPED | write_key": {
     "body": {
       "entries": [
-        "no-default-role-kb",
-        "private-kb",
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "no-default-role-note",
+          "kb_name": "no-default-role-kb"
+        },
+        {
+          "id": "private-note",
+          "kb_name": "private-kb"
+        },
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ],
-      "limit": 200,
+      "limit": 50,
       "offset": 0,
       "total": "<ENUMERATION_CONTENT>"
     },
@@ -97,10 +166,22 @@
       "count": "<ENUMERATION_CONTENT>",
       "query": "zebra",
       "results": [
-        "no-default-role-kb",
-        "private-kb",
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "no-default-role-note",
+          "kb_name": "no-default-role-kb"
+        },
+        {
+          "id": "private-note",
+          "kb_name": "private-kb"
+        },
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ]
     },
     "status": 200
@@ -110,9 +191,18 @@
       "count": "<ENUMERATION_CONTENT>",
       "query": "zebra",
       "results": [
-        "no-default-role-kb",
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "no-default-role-note",
+          "kb_name": "no-default-role-kb"
+        },
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ]
     },
     "status": 200
@@ -122,9 +212,18 @@
       "count": "<ENUMERATION_CONTENT>",
       "query": "zebra",
       "results": [
-        "no-default-role-kb",
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "no-default-role-note",
+          "kb_name": "no-default-role-kb"
+        },
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ]
     },
     "status": 200
@@ -134,9 +233,18 @@
       "count": "<ENUMERATION_CONTENT>",
       "query": "zebra",
       "results": [
-        "private-kb",
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "private-note",
+          "kb_name": "private-kb"
+        },
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ]
     },
     "status": 200
@@ -146,8 +254,14 @@
       "count": "<ENUMERATION_CONTENT>",
       "query": "zebra",
       "results": [
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ]
     },
     "status": 200
@@ -157,10 +271,22 @@
       "count": "<ENUMERATION_CONTENT>",
       "query": "zebra",
       "results": [
-        "no-default-role-kb",
-        "private-kb",
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "no-default-role-note",
+          "kb_name": "no-default-role-kb"
+        },
+        {
+          "id": "private-note",
+          "kb_name": "private-kb"
+        },
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ]
     },
     "status": 200
@@ -170,20 +296,44 @@
       "count": "<ENUMERATION_CONTENT>",
       "query": "zebra",
       "results": [
-        "no-default-role-kb",
-        "private-kb",
-        "read-only-kb",
-        "readable-kb"
+        {
+          "id": "no-default-role-note",
+          "kb_name": "no-default-role-kb"
+        },
+        {
+          "id": "private-note",
+          "kb_name": "private-kb"
+        },
+        {
+          "id": "read-only-note",
+          "kb_name": "read-only-kb"
+        },
+        {
+          "id": "readable-note",
+          "kb_name": "readable-kb"
+        }
       ]
     },
     "status": 200
   },
   "kb_list_entries UNSCOPED | admin_key": {
     "entries": [
-      "no-default-role-kb",
-      "private-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      },
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      },
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 200,
@@ -192,9 +342,18 @@
   },
   "kb_list_entries UNSCOPED | anonymous": {
     "entries": [
-      "no-default-role-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      },
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 200,
@@ -203,9 +362,18 @@
   },
   "kb_list_entries UNSCOPED | global_user": {
     "entries": [
-      "no-default-role-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      },
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 200,
@@ -214,9 +382,18 @@
   },
   "kb_list_entries UNSCOPED | granted_user": {
     "entries": [
-      "private-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      },
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 200,
@@ -225,8 +402,14 @@
   },
   "kb_list_entries UNSCOPED | local_user": {
     "entries": [
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 200,
@@ -235,10 +418,22 @@
   },
   "kb_list_entries UNSCOPED | read_key": {
     "entries": [
-      "no-default-role-kb",
-      "private-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      },
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      },
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 200,
@@ -247,10 +442,22 @@
   },
   "kb_list_entries UNSCOPED | write_key": {
     "entries": [
-      "no-default-role-kb",
-      "private-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      },
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      },
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "has_more": "<ENUMERATION_CONTENT>",
     "limit": 200,
@@ -262,10 +469,22 @@
     "has_more": "<ENUMERATION_CONTENT>",
     "query": "zebra",
     "results": [
-      "no-default-role-kb",
-      "private-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      },
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      },
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "warnings": [
       "semantic leg skipped: no embeddings exist for this index yet, so only the keyword leg ran; run `pyrite index embed` to build them"
@@ -276,9 +495,18 @@
     "has_more": "<ENUMERATION_CONTENT>",
     "query": "zebra",
     "results": [
-      "no-default-role-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      },
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "warnings": [
       "semantic leg skipped: no embeddings exist for this index yet, so only the keyword leg ran; run `pyrite index embed` to build them"
@@ -289,9 +517,18 @@
     "has_more": "<ENUMERATION_CONTENT>",
     "query": "zebra",
     "results": [
-      "no-default-role-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      },
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "warnings": [
       "semantic leg skipped: no embeddings exist for this index yet, so only the keyword leg ran; run `pyrite index embed` to build them"
@@ -302,9 +539,18 @@
     "has_more": "<ENUMERATION_CONTENT>",
     "query": "zebra",
     "results": [
-      "private-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      },
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "warnings": [
       "semantic leg skipped: no embeddings exist for this index yet, so only the keyword leg ran; run `pyrite index embed` to build them"
@@ -315,8 +561,14 @@
     "has_more": "<ENUMERATION_CONTENT>",
     "query": "zebra",
     "results": [
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "warnings": [
       "semantic leg skipped: no embeddings exist for this index yet, so only the keyword leg ran; run `pyrite index embed` to build them"
@@ -327,10 +579,22 @@
     "has_more": "<ENUMERATION_CONTENT>",
     "query": "zebra",
     "results": [
-      "no-default-role-kb",
-      "private-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      },
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      },
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "warnings": [
       "semantic leg skipped: no embeddings exist for this index yet, so only the keyword leg ran; run `pyrite index embed` to build them"
@@ -341,10 +605,22 @@
     "has_more": "<ENUMERATION_CONTENT>",
     "query": "zebra",
     "results": [
-      "no-default-role-kb",
-      "private-kb",
-      "read-only-kb",
-      "readable-kb"
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      },
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      },
+      {
+        "id": "read-only-note",
+        "kb_name": "read-only-kb"
+      },
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
     ],
     "warnings": [
       "semantic leg skipped: no embeddings exist for this index yet, so only the keyword leg ran; run `pyrite index embed` to build them"

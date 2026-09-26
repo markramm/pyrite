@@ -8,12 +8,15 @@ tests/characterization/test_rest_matrix.py -n4``, then review the diff to
 reviewed change. Never set in CI or the pre-push hook.
 
 **What "every operation" means here.** `surfaces.kb_bearing_rest_operations`
-narrows `tests/_surface_inventory.py`'s 144 REST operations to the 66 that a
-read- or write-scoping dependency actually attaches to (instance
+narrows `tests/_surface_inventory.py`'s 144 REST operations to the 74 that a
+read- or write-scoping dependency (or an explicit, individually-reasoned
+`INLINE_ACCESS_DECIDING_ROUTES` entry) actually attaches to (instance
 administration, `/auth/*`, and static/site routes serve no KB content and
 have no per-KB principal matrix to characterize -- see that module's
 docstring and `REST_ACCESS_EXCLUSIONS` below for the pinned, counted list of
-what is deliberately out). `rest_calls.build_call` supplies one real HTTP
+what is deliberately out, and `test_surface_completeness.py` for the test
+that every one of the 143 distinct (method, path) routes is in one list or
+the other, no third possibility). `rest_calls.build_call` supplies one real HTTP
 call per route, targeting a KB name; a route this harness cannot meaningfully
 drive without new fixture machinery (a registered repo, a review row, ...)
 returns a ``{"skip": reason}`` marker instead of request kwargs, recorded as
@@ -38,7 +41,7 @@ golden recorded" (`assert_matches`, unchanged). A route in `golden` but not
 `live` is the dangerous case: it dropped out of the scoping the ADR-0037
 guard is meant to enforce, and `test_no_golden_key_is_orphaned` fails loudly
 naming it, rather than the matrix quietly running one route fewer. The
-overall counts (66 REST operations, 106 MCP tools) are pinned in
+overall counts (74 REST operations, 106 MCP tools) are pinned in
 `test_surface_counts_are_pinned` below, in this file for REST.
 """
 
@@ -60,7 +63,7 @@ from tests.characterization.world import MISSING, NO_DEFAULT_ROLE, PRIVATE, READ
 
 GOLDEN_NAME = "rest"
 KB_STATES = (READABLE, PRIVATE, MISSING, NO_DEFAULT_ROLE)
-PINNED_REST_OPERATION_COUNT = 68
+PINNED_REST_OPERATION_COUNT = 74
 
 
 def _golden_routes_for(principal_name: str, golden: dict) -> set[tuple[str, str]]:
@@ -77,17 +80,80 @@ def _golden_routes_for(principal_name: str, golden: dict) -> set[tuple[str, str]
     return routes
 
 
+_WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+# A GET route whose handler mutates as a side effect of reading -- HTTP
+# method is otherwise a reliable enough proxy for "runs against `world`
+# unmutated" (#476 round-2 blocker 1's fix), but this one is a documented
+# exception: `GET /api/daily/{date_str}` auto-creates the day's note if it
+# doesn't exist yet (`get_or_create_daily_note`, see rest_calls.py's own
+# comment on `_unique_date`). Routed to `write_world` like any write method,
+# so its creation can never permanently add a `daily-<date>` entry to the
+# read-only world's listings -- which is exactly what happened before this
+# override existed: the golden recorded during a serial regenerate carried
+# every daily-note case's creation forward into every later listing case in
+# the same session, and an `-n4` run (a fresh worker, fewer/different cases
+# landing before a given listing) reproduced a different subset, so the
+# comparison was nondeterministic depending on run order and worker count.
+_MUTATING_GET_ROUTES = {("GET", "/api/daily/{date_str}")}
+
+# The mirror case: a POST (or PUT/PATCH/DELETE) route that never mutates --
+# HTTP method says "write", `_WRITE_METHODS` would route it to `write_world`,
+# but its handler only reads, so it belongs in `world` instead. Each one
+# below was read (not assumed): `preview_collection_query` and
+# `resolve_batch`'s own docstrings/bodies call only read-side service
+# methods, and `render_template` renders a string from existing content with
+# no persistence call anywhere in its body -- none of the three has a write-
+# tier dependency at all (only `requires_kb_read()`), unlike every other
+# POST/PUT/PATCH/DELETE route in this surface, which all also depend on
+# `requires_tier("write")`/`requires_kb_tier("write")`. Keeping these in
+# `write_world` was the second half of the round-2 blocker-1 nondeterminism:
+# a listing-shaped assertion (`entries`, identity-projected) run against a
+# module-scoped world that every OTHER principal's write cases also mutate,
+# in whatever order xdist happens to schedule them, can never be a stable
+# golden -- moving these three back to the unmutated `world` is what makes
+# them stable, the same as any other read case.
+_NON_MUTATING_WRITE_METHOD_ROUTES = {
+    ("POST", "/api/collections/query-preview"),
+    ("POST", "/api/entries/resolve-batch"),
+    ("POST", "/api/kbs/{kb_name}/templates/{template_name}/render"),
+}
+
+
 class TestRestPrincipalMatrix:
     """One test per principal keeps a failure's pytest id naming exactly
     who was refused (or let through) wrongly, without a huge parametrize id
     blowing up -- each principal's test parametrizes over routes x KB state
-    only."""
+    only.
+
+    **Read cases run against `world`; write cases run against `write_world`**
+    (#476 round-2 blocker 1): a GET route only ever reads, so it is safe
+    against the shared, session-scoped, never-mutated `world` fixture,
+    where every KB's content is exactly what `world.py` seeded and NOTHING
+    else -- which is what lets `normalize_rest_body` keep a listing's real
+    `(kb_name, id)` identity instead of blanking it (a leaked private-KB row
+    now shows up as a real mismatch, not laundered into the same
+    `<ENUMERATION_CONTENT>` marker every case produces). A POST/PUT/PATCH/
+    DELETE route mutates content, so it runs against `write_world` instead,
+    a SEPARATE, module-scoped world write cases share with each other
+    (round 1's per-case identity uniqueness already keeps them from
+    colliding) but never with `world`. One GET route is an exception to the
+    method-based split: `_MUTATING_GET_ROUTES` names it explicitly and
+    routes it to `write_world` too, because HTTP method alone is not a safe
+    proxy for "this route never mutates" -- see that constant's comment.
+    """
 
     @staticmethod
-    def _run(world, principal_name, golden, collector):
+    def _run(world, route_filter, principal_name, golden, collector):
         principal = world.principals[principal_name]
-        live_routes = {(op.method, op.path) for op in kb_bearing_rest_operations(world.app)}
-        golden_routes = _golden_routes_for(principal_name, golden)
+        live_routes = {
+            (op.method, op.path)
+            for op in kb_bearing_rest_operations(world.app)
+            if route_filter((op.method, op.path))
+        }
+        golden_routes = {
+            (m, p) for m, p in _golden_routes_for(principal_name, golden) if route_filter((m, p))
+        }
         # The union, not just `live_routes`: a route only in `golden_routes`
         # dropped out of today's scoping (a renamed dependency, say) and
         # MUST still be driven -- that is exactly the case #476 blocker 1
@@ -118,7 +184,7 @@ class TestRestPrincipalMatrix:
                 except KeyError:
                     # A route with no REST_CALL_SPECS entry at all (should
                     # not happen for a live route -- rest_calls.py's own
-                    # docstring says every one of the 66 gets an entry --
+                    # docstring says every one of the 74 gets an entry --
                     # but a golden-only, dropped route's PATH may no longer
                     # resolve to anything rest_calls.py recognises if the
                     # route itself was removed, not just re-scoped). Record
@@ -182,10 +248,29 @@ class TestRestPrincipalMatrix:
             "granted_user",
         ],
     )
-    def test_principal(self, world, principal_name):
+    def test_principal(self, world, write_world, principal_name):
         golden = load(GOLDEN_NAME)
         collector = MismatchCollector()
-        skipped = self._run(world, principal_name, golden, collector)
+        skipped = self._run(
+            world,
+            lambda route: (
+                (route[0] == "GET" and route not in _MUTATING_GET_ROUTES)
+                or route in _NON_MUTATING_WRITE_METHOD_ROUTES
+            ),
+            principal_name,
+            golden,
+            collector,
+        )
+        skipped += self._run(
+            write_world,
+            lambda route: (
+                (route[0] in _WRITE_METHODS or route in _MUTATING_GET_ROUTES)
+                and route not in _NON_MUTATING_WRITE_METHOD_ROUTES
+            ),
+            principal_name,
+            golden,
+            collector,
+        )
         if regenerating():
             save(GOLDEN_NAME, golden, principal_scope=principal_name)
         # Recorded via a module-level accumulator so the report's skip list
@@ -198,19 +283,29 @@ class TestRestPrincipalMatrix:
 _SKIPPED: dict[str, str] = {}
 
 
-def test_skip_list_is_reported(world):
+def test_skip_list_is_reported(world, write_world):
     """Not a golden assertion: prints the skip list to the pytest report
     (`-s` or a failure) so a human reads it, per the theme's "list and skip
     with a reason" acceptance. Runs last (name sorts after test_principal's
     module, and pytest here runs classes before a trailing module-level
     def in source order) -- if this shows 0 the matrix test above did not
     run first; check test order.
+
+    Probes write routes against `write_world`, not `world`: `build_call`
+    itself can have side effects for a write spec (creating a disposable
+    entry via `_writable_target`), and this probe must never touch the
+    read-only world even when it isn't making a real HTTP request.
     """
     ops = kb_bearing_rest_operations(world.app)
     reasons: dict[str, str] = {}
     for op in ops:
+        route = (op.method, op.path)
+        is_write = (
+            op.method in _WRITE_METHODS or route in _MUTATING_GET_ROUTES
+        ) and route not in _NON_MUTATING_WRITE_METHOD_ROUTES
+        target = write_world if is_write else world
         for kb_state in KB_STATES:
-            kwargs = build_call(world, op.method, op.path, kb_state)
+            kwargs = build_call(target, op.method, op.path, kb_state)
             if "skip" in kwargs:
                 reasons[f"{op.method} {op.path}"] = kwargs["skip"]
     print(f"\n{len(reasons)} REST route(s) skipped (not driven by this harness):")
