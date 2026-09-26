@@ -2269,17 +2269,42 @@ class TestTransactionMode:
         finally:
             db.session.rollback()
 
-    def test_busy_timeout_is_set_explicitly(self, db):
-        """An explicit busy timeout, in one place, on every connection the
-        pool hands out (#440) -- not pysqlite's own unstated default."""
-        from pyrite.storage.connection import SQLITE_BUSY_TIMEOUT_MS
-
-        cursor = self._dbapi_conn(db).cursor()
+    @staticmethod
+    def _busy_timeout_ms(db: PyriteDB) -> int:
+        cursor = TestTransactionMode._dbapi_conn(db).cursor()
         cursor.execute("PRAGMA busy_timeout")
         (timeout_ms,) = cursor.fetchone()
         cursor.close()
-        assert timeout_ms == SQLITE_BUSY_TIMEOUT_MS
-        assert timeout_ms > 0, "busy_timeout=0 means a contended write fails instantly"
+        return timeout_ms
+
+    def test_busy_timeout_default_is_5000ms(self, db):
+        """The shipped value: unchanged from pysqlite's own previous
+        default, just no longer merely implicit (#440)."""
+        from pyrite.storage import connection as connection_module
+
+        assert connection_module.SQLITE_BUSY_TIMEOUT_MS == 5000
+        assert self._busy_timeout_ms(db) == 5000
+
+    def test_busy_timeout_reads_this_module_constant(self, tmp_path, monkeypatch):
+        """`set_sqlite_pragma` (`pyrite/storage/connection.py`) reads
+        ``SQLITE_BUSY_TIMEOUT_MS`` at each connection's ``connect`` event, so
+        this module -- not pysqlite's own default -- decides the value.
+        Pinned by monkeypatching the constant to a sentinel unrelated to any
+        real default and building a fresh ``PyriteDB``, rather than by
+        asserting a value pysqlite could produce on its own (#440 round 1:
+        the previous version of this test compared against a deliberately
+        different number, 4000ms, for the same reason, but that meant
+        shipping a shorter write-lock tolerance than intended just so the
+        test could tell the two sources apart)."""
+        from pyrite.storage import connection as connection_module
+
+        sentinel_ms = 1234
+        monkeypatch.setattr(connection_module, "SQLITE_BUSY_TIMEOUT_MS", sentinel_ms)
+        db = PyriteDB(tmp_path / "sentinel.db")
+        try:
+            assert self._busy_timeout_ms(db) == sentinel_ms
+        finally:
+            db.close()
 
 
 if __name__ == "__main__":
