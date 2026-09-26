@@ -2,7 +2,7 @@
   "AccessDenied": {
     "cli": {
       "error": "characterization message for AccessDenied",
-      "error_code": "INTERNAL_ERROR",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
@@ -23,8 +23,8 @@
   },
   "BrandingInvalidError": {
     "cli": {
-      "error": "The server's branding configuration is invalid and could not be loaded. An administrator needs to fix branding.yaml; the server log names the file and the problem.",
-      "error_code": "BRANDING_INVALID",
+      "error": "characterization message for BrandingInvalidError",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
@@ -46,7 +46,7 @@
   "ClipperBlockedHostError": {
     "cli": {
       "error": "characterization message for ClipperBlockedHostError",
-      "error_code": "CLIPPER_BLOCKED_HOST",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
@@ -68,11 +68,11 @@
   "ConfigError": {
     "cli": {
       "error": "characterization message for ConfigError",
-      "error_code": "CONFIG_CONFLICT",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
-      "error": "characterization message for ConfigError",
+      "error": "The configuration is invalid. An administrator needs to check the server log for the file and the problem.",
       "error_code": "CONFIG_CONFLICT",
       "legacy_error_code": "CONFIG_ERROR",
       "retryable": false
@@ -81,7 +81,7 @@
       "body": {
         "detail": {
           "code": "CONFIG_CONFLICT",
-          "message": "characterization message for ConfigError",
+          "message": "The configuration is invalid. An administrator needs to check the server log for the file and the problem.",
           "retryable": false
         }
       },
@@ -90,8 +90,8 @@
   },
   "ConfigFileUnreadableError": {
     "cli": {
-      "error": "The configuration was not saved: the config file on the server could not be read. An administrator needs to fix or move config.yaml; the server log names the file and the problem.",
-      "error_code": "CONFIG_SAVE_REFUSED",
+      "error": "config file unreadable",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
@@ -113,8 +113,8 @@
   },
   "ConfigSaveRefusedError": {
     "cli": {
-      "error": "The configuration was not saved: the config file changed since the server loaded it. Restart the server so it reads the current file, then re-run the request; the server log names the file and the knowledge bases.",
-      "error_code": "CONFIG_SAVE_REFUSED",
+      "error": "config changed on disk",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
@@ -159,7 +159,7 @@
   "EntryNotFoundError": {
     "cli": {
       "error": "characterization message for EntryNotFoundError",
-      "error_code": "ENTRY_NOT_FOUND",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
@@ -182,7 +182,7 @@
   "Forbidden": {
     "cli": {
       "error": "characterization message for Forbidden",
-      "error_code": "FORBIDDEN",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
@@ -249,7 +249,7 @@
   "KBNotFoundError": {
     "cli": {
       "error": "characterization message for KBNotFoundError",
-      "error_code": "KB_NOT_FOUND",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
@@ -272,7 +272,7 @@
   "KBProtectedError": {
     "cli": {
       "error": "characterization message for KBProtectedError",
-      "error_code": "KB_PROTECTED",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
@@ -294,7 +294,7 @@
   "KBReadOnlyError": {
     "cli": {
       "error": "characterization message for KBReadOnlyError",
-      "error_code": "KB_READ_ONLY",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
@@ -339,7 +339,7 @@
   "NotAuthenticated": {
     "cli": {
       "error": "characterization message for NotAuthenticated",
-      "error_code": "UNAUTHENTICATED",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
@@ -361,11 +361,11 @@
   "PluginError": {
     "cli": {
       "error": "characterization message for PluginError",
-      "error_code": "PLUGIN_ERROR",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
-      "error": "characterization message for PluginError",
+      "error": "A plugin operation failed. An administrator needs to check the server log for which plugin and why.",
       "error_code": "PLUGIN_ERROR",
       "legacy_error_code": "REQUEST_REFUSED",
       "retryable": false
@@ -374,7 +374,7 @@
       "body": {
         "detail": {
           "code": "PLUGIN_ERROR",
-          "message": "characterization message for PluginError",
+          "message": "A plugin operation failed. An administrator needs to check the server log for which plugin and why.",
           "retryable": false
         }
       },
@@ -384,7 +384,7 @@
   "QuerySyntaxError": {
     "cli": {
       "error": "characterization message for QuerySyntaxError",
-      "error_code": "QUERY_SYNTAX",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
@@ -450,11 +450,11 @@
   "StorageBusyError": {
     "cli": {
       "error": "characterization message for StorageBusyError",
-      "error_code": "STORAGE_ERROR",
-      "retryable": true
+      "error_code": "ERROR",
+      "retryable": false
     },
     "mcp": {
-      "error": "characterization message for StorageBusyError",
+      "error": "A storage operation failed. An administrator needs to check the server log for the underlying error.",
       "error_code": "STORAGE_ERROR",
       "legacy_error_code": "REQUEST_REFUSED",
       "retryable": true
@@ -463,7 +463,7 @@
       "body": {
         "detail": {
           "code": "STORAGE_ERROR",
-          "message": "characterization message for StorageBusyError",
+          "message": "A storage operation failed. An administrator needs to check the server log for the underlying error.",
           "retryable": true
         }
       },
@@ -473,11 +473,11 @@
   "StorageError": {
     "cli": {
       "error": "characterization message for StorageError",
-      "error_code": "STORAGE_ERROR",
+      "error_code": "ERROR",
       "retryable": false
     },
     "mcp": {
-      "error": "characterization message for StorageError",
+      "error": "A storage operation failed. An administrator needs to check the server log for the underlying error.",
       "error_code": "STORAGE_ERROR",
       "legacy_error_code": "REQUEST_REFUSED",
       "retryable": false
@@ -486,7 +486,7 @@
       "body": {
         "detail": {
           "code": "STORAGE_ERROR",
-          "message": "characterization message for StorageError",
+          "message": "A storage operation failed. An administrator needs to check the server log for the underlying error.",
           "retryable": false
         }
       },
@@ -496,21 +496,20 @@
   "TruncatedBodyError": {
     "cli": {
       "error": "body was truncated",
-      "error_code": "VALIDATION_ERROR",
+      "error_code": "VALIDATION_FAILED",
       "retryable": false,
       "suggestion": "fetch the full body and retry"
     },
     "mcp": {
       "error": "body was truncated",
-      "error_code": "VALIDATION_ERROR",
-      "legacy_error_code": "VALIDATION_FAILED",
+      "error_code": "VALIDATION_FAILED",
       "retryable": false,
       "suggestion": "fetch the full body and retry"
     },
     "rest": {
       "body": {
         "detail": {
-          "code": "VALIDATION_ERROR",
+          "code": "VALIDATION_FAILED",
           "hint": "fetch the full body and retry",
           "message": "body was truncated",
           "retryable": false
@@ -523,7 +522,8 @@
     "cli": {
       "error": "type 'x' is not declared",
       "error_code": "UNDECLARED_TYPE",
-      "retryable": false
+      "retryable": false,
+      "suggestion": "Use `pyrite kb schema show <kb>` to inspect the declared types, or pass --allow-undeclared to override."
     },
     "mcp": {
       "declared_types": [
@@ -549,19 +549,18 @@
   "ValidationError": {
     "cli": {
       "error": "characterization message for ValidationError",
-      "error_code": "VALIDATION_ERROR",
+      "error_code": "VALIDATION_FAILED",
       "retryable": false
     },
     "mcp": {
       "error": "characterization message for ValidationError",
-      "error_code": "VALIDATION_ERROR",
-      "legacy_error_code": "VALIDATION_FAILED",
+      "error_code": "VALIDATION_FAILED",
       "retryable": false
     },
     "rest": {
       "body": {
         "detail": {
-          "code": "VALIDATION_ERROR",
+          "code": "VALIDATION_FAILED",
           "message": "characterization message for ValidationError",
           "retryable": false
         }

@@ -160,7 +160,7 @@ class TestCentralExceptionHandler:
             ("kb_not_found", 404, "KB_NOT_FOUND"),
             ("protected", 403, "KB_PROTECTED"),
             ("frontmatter", 422, "INVALID_FRONTMATTER"),
-            ("validation", 422, "VALIDATION_ERROR"),
+            ("validation", 422, "VALIDATION_FAILED"),
             ("last_admin", 409, "LAST_ADMIN"),
             ("config", 409, "CONFIG_CONFLICT"),
             ("plugin", 502, "PLUGIN_ERROR"),
@@ -178,6 +178,54 @@ class TestCentralExceptionHandler:
         assert detail["retryable"] is False
         # No traceback / internals leaked
         assert "Traceback" not in detail["message"]
+
+    def test_an_unlisted_validation_subclass_falls_back_to_the_base_status(self):
+        """Item 6 (conductor cold read of #501): a future ValidationError
+        subclass that narrows its own error_code, without anyone adding a row
+        to server/errors.py's _STATUS_BY_CODE, must still answer 422 like its
+        base -- not a silent 500. Exercises a throwaway subclass, not one of
+        the real ones (which do have rows, for speed and clarity)."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.exceptions import ValidationError
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        class _HypotheticalFutureValidationError(ValidationError):
+            error_code = "SOME_CODE_NOBODY_ADDED_TO_THE_TABLE_YET"
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            raise _HypotheticalFutureValidationError("not in the table")
+
+        app.add_api_route("/probe/unlisted-validation", _route, methods=["GET"])
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/probe/unlisted-validation")
+        assert resp.status_code == 422, resp.json()
+        assert resp.json()["detail"]["code"] == "SOME_CODE_NOBODY_ADDED_TO_THE_TABLE_YET"
+
+    def test_an_unlisted_config_subclass_falls_back_to_the_base_status(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.exceptions import ConfigError
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        class _HypotheticalFutureConfigError(ConfigError):
+            error_code = "ANOTHER_CODE_NOBODY_ADDED"
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            raise _HypotheticalFutureConfigError("not in the table")
+
+        app.add_api_route("/probe/unlisted-config", _route, methods=["GET"])
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/probe/unlisted-config")
+        assert resp.status_code == 409, resp.json()
 
     def test_body_has_no_top_level_code_or_message(self, error_client):
         """The old flat shape is gone: everything lives under detail."""

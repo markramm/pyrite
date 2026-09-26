@@ -574,10 +574,19 @@ class TestRestContract:
         resp = self._get(rest_api_env, caplog)
         assert resp.status_code == 500
         assert resp.json()["detail"]["code"] == "STORAGE_ERROR"
-        assert "file is not a database" in resp.json()["detail"]["message"]
+        # ADR-0037 theme 2 fix round 1: StorageError has a fixed, safe
+        # public_message now (ADR §3) -- the real detail ("file is not a
+        # database", which could be considered server-internal) no longer
+        # reaches the response body; it still reaches the server log below,
+        # with a traceback.
+        assert resp.json()["detail"]["message"] == (
+            "A storage operation failed. An administrator needs to check the "
+            "server log for the underlying error."
+        )
         records = _error_records(caplog)
         assert len(records) == 1, [r.getMessage() for r in records]
         assert records[0].exc_info and records[0].exc_info[0] is not None
+        assert "file is not a database" in records[0].getMessage()
 
     def test_a_semantic_leg_failure_is_a_json_500_logged_with_a_traceback(
         self, rest_api_env, monkeypatch, caplog
@@ -634,7 +643,18 @@ class TestMcpContract:
         assert result["error_code"] == "STORAGE_ERROR", result
         assert result["legacy_error_code"] == "REQUEST_REFUSED", result
         assert result["retryable"] is False
-        assert "no such table" in result["error"]
+        # ADR-0037 theme 2 fix round 1: StorageError has a fixed, safe
+        # public_message now (ADR §3) -- the real detail ("no such table")
+        # no longer reaches the MCP envelope; it still reaches the server
+        # log (checked below), with a traceback.
+        assert result["error"] == (
+            "A storage operation failed. An administrator needs to check the "
+            "server log for the underlying error."
+        )
+        records = _error_records(caplog)
+        assert any("no such table" in r.getMessage() for r in records), [
+            r.getMessage() for r in records
+        ]
 
     @pytest.mark.parametrize(
         ("query", "code"),

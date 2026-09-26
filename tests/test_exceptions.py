@@ -102,8 +102,14 @@ class TestEveryPyriteErrorHasAClassCode:
         never on the exception class."""
         assert exc_class.error_code == code
 
-    def test_base_validation_error_code_is_rests(self):
-        assert ValidationError.error_code == "VALIDATION_ERROR"
+    def test_base_validation_error_code_is_the_documented_write_pipeline_code(self):
+        """Conductor decision (fix round 1, cold read of #501): unlike the
+        other three disagreements, REST itself said two different things for
+        a bare ValidationError before this theme (the central handler's
+        table: VALIDATION_ERROR; the write pipeline, which
+        docs/json-contracts.md and docs/agent-write-path.md document:
+        VALIDATION_FAILED). The documented code wins."""
+        assert ValidationError.error_code == "VALIDATION_FAILED"
 
     def test_base_config_error_code_is_rests(self):
         assert ConfigError.error_code == "CONFIG_CONFLICT"
@@ -118,6 +124,53 @@ class TestEveryPyriteErrorHasAClassCode:
 
     def test_base_pyrite_error_code_is_internal_error(self):
         assert PyriteError.error_code == "INTERNAL_ERROR"
+
+
+class TestServerSideDetailClassesHaveAFixedPublicMessage:
+    """ADR-0037 §3: 'a fixed per-code sentence for everything that can carry
+    server-side detail: StorageError, PluginError, ConfigError.'
+
+    Some raise sites of these three classes already write a safe message
+    (an env var name, a `pip install` hint); others embed real operator
+    detail (`postgres_backend.py`'s `{e}`, `config.py::refuse_outside_tree`'s
+    real filesystem paths). Because a class cannot tell which raise site
+    built it, the ADR's rule is per-class, not per-site: str(exc) always
+    goes to the server log, and callers get the fixed sentence -- conductor
+    fix round 1 (cold read of #501): these three previously left
+    public_message=None, so str(exc) reached every transport unfiltered.
+    """
+
+    def test_storage_error_has_a_fixed_public_message(self):
+        exc = StorageError("Failed to materialize query result: driver detail (dsn=...)")
+        assert exc.public_message is not None
+        assert "driver detail" not in exc.public_message
+        assert "dsn" not in exc.public_message
+
+    def test_plugin_error_has_a_fixed_public_message(self):
+        exc = PluginError("Failed to load plugin acme_kb: ImportError at /real/path/plugin.py")
+        assert exc.public_message is not None
+        assert "/real/path/plugin.py" not in exc.public_message
+
+    def test_config_error_has_a_fixed_public_message(self):
+        exc = ConfigError("Refusing write: /real/secret/path is outside /real/confine/root")
+        assert exc.public_message is not None
+        assert "/real/secret/path" not in exc.public_message
+        assert "/real/confine/root" not in exc.public_message
+
+    def test_storage_busy_error_keeps_storage_errors_public_message(self):
+        """A subclass with no public_message of its own inherits the base's."""
+        from pyrite.exceptions import StorageBusyError
+
+        exc = StorageBusyError("database is locked")
+        assert exc.public_message == StorageError("x").public_message
+
+    def test_config_save_refused_keeps_its_own_more_specific_message(self):
+        """A ConfigError subclass that already sets its own public_message
+        (#377) is not overridden by the base ConfigError's new default."""
+        from pyrite.exceptions import ConfigSaveRefusedError
+
+        exc = ConfigSaveRefusedError("real path leaked", config_file="/x", dropped=[])
+        assert exc.public_message != ConfigError("x").public_message
 
 
 class TestAccessDeniedFamily:

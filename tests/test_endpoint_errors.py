@@ -49,9 +49,7 @@ class TestEntryEndpointErrors:
         data = resp.json()
         # The model's own validation is a refusal with a stable code, the same
         # on every surface (#378); it used to be the catch-all CREATE_FAILED.
-        # ADR-0037 theme 2: the base ValidationError's code is VALIDATION_ERROR
-        # (REST's long-standing spelling), not the old VALIDATION_FAILED.
-        assert data["detail"]["code"] == "VALIDATION_ERROR"
+        assert data["detail"]["code"] == "VALIDATION_FAILED"
         assert "date" in data["detail"]["message"].lower()
 
     def test_update_entry_not_found(self, rest_api_env):

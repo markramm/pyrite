@@ -17,11 +17,29 @@ runs it through each transport's own, real, unmodified mapping function:
   instead of keeping a parallel copy of it in sync by hand).
 - MCP: `pyrite.server.mcp_server._refusal(exc)`, called directly -- the
   exact function `_dispatch_tool` calls on every refusal.
-- CLI: `pyrite.utils.errors.cli_error_from`'s payload, built the same way
-  `cli_error_from` builds it (``exc.public_message or str(exc)``,
-  ``exc.error_code`` -- no `legacy_error_code`, which is MCP-only) via
-  `build_error`, so this is the exact CLI body without spawning a process
-  per class or invoking `typer.Exit`.
+- CLI: what `pyrite/cli/entry_commands.py`'s real write commands (`create`,
+  `add`, `update`, `delete`, `link`) actually dispatch to today -- NOT
+  `pyrite.utils.errors.cli_error_from` (ADR-0037 theme 2 added that
+  function, but no CLI call site has adopted it yet; characterizing it
+  here would pin aspirational behaviour, not the real CLI -- exactly the
+  mistake the conductor's cold read of #501 caught). Every one of these
+  commands catches `ValidationError` first and routes it to
+  `_refusal_exit` (`exc.error_code`, a `declared_types`-aware suggestion
+  swap), then falls through to a bare
+  `except (PyriteError, ValueError) as e: _cli_error(str(e), "rich")` for
+  everything else -- which does NOT read `error_code` (defaults to the
+  literal `"ERROR"`) and does NOT read `public_message` (uses `str(e)`
+  directly). `cli_body` below replicates that two-branch dispatch by
+  class, not `cli_error_from`'s uniform mapping.
+
+  `EntryNotFoundError`/`KBNotFoundError` are a partial, in-flight
+  exception: PR #502 (open, not merged as of this theme) adds explicit
+  catches for those two ahead of the generic one, emitting hardcoded
+  `"NOT_FOUND"`/`"KB_NOT_FOUND"` literals -- not `exc.error_code` either.
+  This harness characterizes current `dev` (#502 unmerged), so those two
+  classes still fall through the generic branch here; when #502 merges,
+  `_CLI_DISPATCH`'s comment below says what to add, and the goldens need a
+  reviewed update, not a silent regenerate.
 """
 
 from __future__ import annotations
@@ -31,7 +49,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pyrite.exceptions as exc_module
-from pyrite.exceptions import PyriteError
+from pyrite.exceptions import PyriteError, ValidationError
 from pyrite.server.errors import error_response
 from pyrite.server.mcp_server import _refusal
 from pyrite.utils.errors import build_error
@@ -95,21 +113,36 @@ def mcp_body(exc: PyriteError) -> dict[str, Any]:
 
 
 def cli_body(exc: PyriteError) -> dict[str, Any]:
-    """The `--format json` payload `cli_error_from` echoes.
+    """The `--format json` payload `pyrite create`/`add`/`update`/`delete`/
+    `link` actually print today, replicated by class -- not `cli_error_from`
+    (module docstring above explains why: no call site uses it yet).
 
-    ADR-0037 theme 2: computed directly from `exc` the same way
-    `cli_error_from` does (`exc.public_message or str(exc)`,
-    `exc.error_code`), not derived from `mcp_body` -- the CLI carries no
-    `legacy_error_code` (that field is MCP-only, for one release, per the
-    maintainer's decision of 2026-09-25), so CLI and MCP can now genuinely
-    differ in shape for the same exception."""
-    message = exc.public_message or str(exc)
-    return build_error(
-        message,
-        exc.error_code,
-        suggestion=getattr(exc, "suggestion", None),
-        retryable=bool(getattr(exc, "retryable", False)),
-    )
+    Two branches, matching `entry_commands.py`'s real `try/except` order:
+
+    - `ValidationError` (and every subclass) -> `_refusal_exit`'s shape:
+      `exc.error_code` (never the `"VALIDATION_FAILED"` literal fallback in
+      its source -- that fallback is unreachable now that every class has
+      its own code, but kept there for a non-`PyriteError` caller), and a
+      `declared_types`-aware suggestion swap (`UndeclaredTypeError` only).
+    - Everything else -> the generic `except (PyriteError, ValueError) as e:
+      _cli_error(str(e), "rich")`: code `"ERROR"` (the literal default,
+      `error_code` never passed), message `str(e)` (`public_message` is
+      never consulted at this site), no suggestion, not retryable.
+    """
+    if isinstance(exc, ValidationError):
+        suggestion = getattr(exc, "suggestion", None)
+        if getattr(exc, "declared_types", None) is not None:
+            suggestion = (
+                "Use `pyrite kb schema show <kb>` to inspect the declared types, or pass "
+                "--allow-undeclared to override."
+            )
+        return build_error(
+            str(exc),
+            exc.error_code,
+            suggestion=suggestion,
+            retryable=False,
+        )
+    return build_error(str(exc), "ERROR")
 
 
 @dataclass(frozen=True)

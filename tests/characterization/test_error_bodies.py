@@ -7,23 +7,31 @@ own reviewed change (never in the same commit as a behaviour change --
 ADR-0037's migration rule). Never set in CI or the pre-push hook.
 
 What this pins: `pyrite.server.errors.error_response`'s REST classification
-and public-message rule, `pyrite.server.mcp_server._refusal` and
-`pyrite.utils.errors.cli_error_from`'s payload -- for one instance of every
-concrete `PyriteError` subclass (`tests/characterization/error_bodies.py`
-builds them; see its docstring for why this is a direct-construction pin
-rather than a live multi-step scenario per class). A handful of REST-natural
-classes are cross-checked here by a real HTTP call too, so the
-direct-construction path is not the harness's only line of evidence for at
-least some classes.
+and public-message rule, `pyrite.server.mcp_server._refusal`, and the real
+CLI dispatch `pyrite/cli/entry_commands.py`'s write commands use today
+(`_refusal_exit` for `ValidationError`, the generic `_cli_error(str(e),
+"rich")` for everything else -- NOT `cli_error_from`, which no CLI call
+site has adopted yet; see `error_bodies.py`'s module docstring) -- for one
+instance of every concrete `PyriteError` subclass
+(`tests/characterization/error_bodies.py` builds them; see its docstring
+for why this is a direct-construction pin rather than a live multi-step
+scenario per class). A handful of REST-natural classes are cross-checked
+here by a real HTTP call too, so the direct-construction path is not the
+harness's only line of evidence for at least some classes.
 
 ADR-0037 theme 2 (2026-09-25) moved the REST classification table from
 `pyrite.server.api` to `pyrite.server.errors`, unified the central handler's
 body into `{"detail": {...}}` (dropping the old flat `{"code","message"}`
 shape), and gave every `PyriteError` class its own `error_code` -- MCP's
 `_refusal` now reads that directly and adds a transitional
-`legacy_error_code` where its old code disagreed with REST's. Every golden
-whose `error_code`/`legacy_error_code` changed as a result was regenerated
-in the same commit as that code change (not a later, unreviewed drift).
+`legacy_error_code` where its old code disagreed with REST's. The base
+`ValidationError`'s code is `VALIDATION_FAILED` (conductor decision, fix
+round 1 of #501's cold read: the write pipeline's long-documented spelling
+wins over the central handler's own, separate, less-visited
+`VALIDATION_ERROR`), so REST, MCP and the CLI already agreed on that one
+and it carries no `legacy_error_code`. Every golden whose `error_code`/
+`legacy_error_code` changed as a result was regenerated in the same commit
+as that code change (not a later, unreviewed drift).
 """
 
 from __future__ import annotations

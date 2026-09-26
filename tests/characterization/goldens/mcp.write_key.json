@@ -782,7 +782,7 @@
       {
         "created": false,
         "error": "title is required",
-        "error_code": "VALIDATION_ERROR"
+        "error_code": "VALIDATION_FAILED"
       }
     ],
     "total": 1
@@ -794,7 +794,7 @@
       {
         "created": false,
         "error": "title is required",
-        "error_code": "VALIDATION_ERROR"
+        "error_code": "VALIDATION_FAILED"
       }
     ],
     "total": 1
@@ -806,7 +806,7 @@
       {
         "created": false,
         "error": "title is required",
-        "error_code": "VALIDATION_ERROR"
+        "error_code": "VALIDATION_FAILED"
       }
     ],
     "total": 1

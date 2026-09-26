@@ -175,13 +175,20 @@ def _refusal(exc: PyriteError) -> dict:
     """Map a service refusal to the MCP envelope.
 
     The code is the exception class's own (``exc.error_code`` -- every
-    ``PyriteError`` carries one; see ``pyrite.exceptions``), which is now
-    REST's spelling. Where that differs from what MCP used to report for
-    this class (``_LEGACY_MCP_ERROR_CODES``), the old code is carried one
-    more release in ``legacy_error_code`` so an existing MCP caller matching
-    on the old string is not broken outright (ADR-0037 theme 2, maintainer
-    decision 2026-09-25). A class MCP and REST already agreed on gets no
-    ``legacy_error_code`` key at all -- there is nothing legacy to report.
+    ``PyriteError`` carries one; see ``pyrite.exceptions``) -- REST's more
+    specific spelling where REST and MCP used to disagree (``ENTRY_NOT_FOUND``
+    replacing ``NOT_FOUND``, etc.), or the one spelling REST, MCP and the CLI
+    already agreed on where they did not (the base ``ValidationError``:
+    conductor decision, fix round 1 -- the write pipeline's documented
+    ``VALIDATION_FAILED`` wins over the central handler's less-visited
+    ``VALIDATION_ERROR``). Where the class's code differs from what MCP used
+    to report for this class (``_legacy_mcp_code``, replaying the old
+    ``_LEGACY_DOMAIN_ERROR_CODES``/``_LEGACY_OWN_ERROR_CODE`` lookup), the old
+    code is carried one more release in ``legacy_error_code`` so an existing
+    MCP caller matching on the old string is not broken outright (ADR-0037
+    theme 2, maintainer decision 2026-09-25). A class MCP and REST already
+    agreed on gets no ``legacy_error_code`` key at all -- there is nothing
+    legacy to report.
 
     Not retryable -- the same call fails the same way -- except a
     ``StorageError`` that says otherwise: a locked or busy database

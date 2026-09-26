@@ -78,13 +78,14 @@ def _stored_body(server, entry_id):
 def _assert_refusal(res):
     """The MCP flat error envelope for a refused truncated write.
 
-    ADR-0037 theme 2: MCP's code is now the class's (REST's spelling,
-    VALIDATION_ERROR for the base ValidationError family); the old MCP
-    spelling (VALIDATION_FAILED) is carried for one release in
+    TruncatedBodyError inherits the base ValidationError's code, which is
+    VALIDATION_FAILED (conductor decision, ADR-0037 theme 2 fix round 1: the
+    documented write-pipeline spelling, not the central handler's
+    under-visited VALIDATION_ERROR) -- unchanged from dev, no
     legacy_error_code.
     """
-    assert res.get("error_code") == "VALIDATION_ERROR", res
-    assert res.get("legacy_error_code") == "VALIDATION_FAILED", res
+    assert res.get("error_code") == "VALIDATION_FAILED", res
+    assert "legacy_error_code" not in res, res
     assert res.get("retryable") is False, res
     msg = f"{res.get('error', '')} {res.get('suggestion', '')}"
     assert "body_truncated" in msg, msg
@@ -467,7 +468,7 @@ def test_mcp_read_tools_are_not_guarded():
 def _rest_refusal(resp):
     assert resp.status_code == 400, resp.text
     detail = resp.json()["detail"]
-    assert detail["code"] == "VALIDATION_ERROR", detail
+    assert detail["code"] == "VALIDATION_FAILED", detail
     msg = f"{detail.get('message', '')} {detail.get('hint', '')}"
     assert "body_truncated" in msg, msg
     assert "body_offset" in msg or "kb_read_body" in msg, msg

@@ -93,17 +93,21 @@ class TestCliErrorFrom:
         parsed = json.loads(capsys.readouterr().out)
         assert parsed["error_code"] == "ENTRY_NOT_FOUND"
 
-    def test_base_validation_error_is_rests_code_not_the_old_mcp_one(self, capsys):
-        """The old _cli_err hardcoded VALIDATION_FAILED for any ValidationError;
-        cli_error_from reads the class code, REST's spelling, with no
-        legacy_error_code -- that concept is MCP-only per the maintainer's
-        decision (2026-09-25)."""
+    def test_base_validation_error_reads_the_class_code(self, capsys):
+        """The old _cli_err hardcoded VALIDATION_FAILED for any ValidationError
+        via an isinstance chain; cli_error_from reads the class's own code
+        instead -- which happens to be the same string here (conductor
+        decision, ADR-0037 theme 2 fix round 1: the base ValidationError code
+        is VALIDATION_FAILED, the write pipeline's documented spelling), so
+        this is not a change in what the CLI reports, only in how it is
+        derived. No legacy_error_code -- that concept is MCP-only per the
+        maintainer's decision (2026-09-25)."""
         from pyrite.exceptions import ValidationError
 
         with pytest.raises(typer.Exit):
             cli_error_from(ValidationError("bad field"), output_format="json")
         parsed = json.loads(capsys.readouterr().out)
-        assert parsed["error_code"] == "VALIDATION_ERROR"
+        assert parsed["error_code"] == "VALIDATION_FAILED"
         assert "legacy_error_code" not in parsed
 
     def test_a_class_the_old_isinstance_chain_did_not_know_about(self, capsys):

@@ -45,13 +45,16 @@ that every command gives you the option.
 **MCP only, for one release: `legacy_error_code`.** Where a class's code
 changed on MCP because REST's more specific code won (ADR-0037 theme 2:
 `ENTRY_NOT_FOUND`/`KB_NOT_FOUND` replacing `NOT_FOUND`, `KB_READ_ONLY`
-replacing `READ_ONLY`, `VALIDATION_ERROR` replacing `VALIDATION_FAILED`,
-`CONFIG_CONFLICT` replacing `CONFIG_ERROR`, `STORAGE_ERROR` replacing
-`REQUEST_REFUSED`, and others), the MCP tool response carries the *old* code
-one more release in `legacy_error_code`, alongside the new `error_code`. A
-class whose REST and MCP codes already agreed gets no `legacy_error_code`
-key at all. The CLI has no such transition field — `cli_error_from` reports
-the class code directly.
+replacing `READ_ONLY`, `INVALID_FRONTMATTER` replacing `VALIDATION_FAILED`
+for `FrontmatterError` specifically, `CONFIG_CONFLICT`/`CONFIG_SAVE_REFUSED`
+replacing `CONFIG_ERROR`, `STORAGE_ERROR`/`PLUGIN_ERROR` replacing
+`REQUEST_REFUSED`, and others), the MCP tool response carries the *old*
+code one more release in `legacy_error_code`, alongside the new
+`error_code`. A class whose REST and MCP codes already agreed gets no
+`legacy_error_code` key at all — that includes the base `ValidationError`
+itself: its code is `VALIDATION_FAILED` on every transport, unchanged (see
+"Write refusals" below). The CLI has no transition field, and no CLI write
+command has adopted the new class-level codes yet — see "Write refusals".
 
 **REST** answers a domain refusal as `{"detail": {"code", "message",
 "retryable", "hint"?}}` — the web client already speaks this shape
@@ -91,7 +94,7 @@ so the same entry is refused with the same `error_code` on every surface:
 | `UNDECLARED_TYPE` | the KB's `kb.yaml` declares types and this is not one of them. Core types (`note`, `person`, …) are **not** exempt. Override with `allow_undeclared` (MCP, REST body or import query) / `--allow-undeclared` (CLI). The error carries `declared_types` on MCP and REST. |
 | `ENTRY_EXISTS` | the id (given, or derived from the title) already exists. Create never replaces; use update. REST answers `409`. |
 | `SCHEMA_VIOLATION` | the KB schema (with `validation.enforce`) or a plugin validator rejected a field: enum, required, range, format. |
-| `VALIDATION_ERROR` | anything else the entry model refuses (an event without a date, a missing title), and the ADR-0034 truncated-body refusal below. Was `VALIDATION_FAILED` on MCP before ADR-0037 theme 2 (2026-09-25); an MCP caller sees the old code for one release in `legacy_error_code`. |
+| `VALIDATION_FAILED` | anything else the entry model refuses (an event without a date, a missing title), and the ADR-0034 truncated-body refusal below. Unchanged by ADR-0037 theme 2 (2026-09-25): REST, MCP and the CLI already agreed on this code before that theme, and continue to — no `legacy_error_code`. |
 
 All are `retryable: false`. REST reports them as
 `{"detail": {"code", "message", "retryable": false, "hint"?, "declared_types"?}}`
@@ -127,7 +130,7 @@ an update: `id`, `file_path`, `kb_name`, `links`, `sources`, `provenance`,
 plus a type's own `managed_fields` (a task's `status_change_log`,
 `evidence`, `agent_context`, `assigned_at`; an ADR's `adr_number`). REST
 `PUT`/`PATCH` and `pyrite update --field` refuse them with
-`VALIDATION_ERROR`; MCP `kb_update` ignores them, and also ignores
+`VALIDATION_FAILED`; MCP `kb_update` ignores them, and also ignores
 `created_at`/`updated_at`, so a read result echoed back cannot rewrite them.
 A body marked `body_truncated` is refused at any depth of the request on
 every update surface.
@@ -313,7 +316,7 @@ Every write path that can receive a body — MCP (`kb_create`, `kb_update`,
 `kb_bulk_create`, `task_create`, …), REST (`POST`/`PUT`/`PATCH
 /api/entries`, `POST /api/entries/import`) and the CLI (`pyrite create`,
 `pyrite update`, `pyrite import`) — refuses a request carrying a truthy
-`body_truncated` alongside a `body`, with `VALIDATION_ERROR` and
+`body_truncated` alongside a `body`, with `VALIDATION_FAILED` and
 `retryable: false`. Writing back what a bounded read returned would
 replace the whole stored body with the chunk you were given.
 

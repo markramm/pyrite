@@ -102,7 +102,7 @@ CASES = [
             "role": "author",
             "body_truncated": True,
         },
-        "VALIDATION_ERROR",
+        "VALIDATION_FAILED",
         "parity-truncated",
     ),
     (

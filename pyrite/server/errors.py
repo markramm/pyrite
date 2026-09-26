@@ -14,11 +14,16 @@ module only unifies the *central* handler that used to answer a third, flat
 shape (``{"code", "message"}``, no ``detail`` wrapper, no ``retryable``).
 
 The code comes from the raised exception's class (``exc.error_code``,
-ADR-0037 §3: "codes live on exception classes") -- this module's only table
-maps that code string to an HTTP status, replacing the old table keyed by
+ADR-0037 §3: "codes live on exception classes") -- this module's table maps
+that code string to an HTTP status, replacing the old table keyed by
 exception *type*. A status is still one per code, decided here, not on the
 exception class: the same domain condition can map to different statuses on
 different transports (REST's status codes have no MCP or CLI equivalent).
+A code the table does not list (a subclass that narrows its own error_code
+without a row being added here) falls back to its nearest listed *base*
+class's status via ``isinstance`` -- ``_BASE_CLASS_FALLBACK`` -- rather than
+a blind 500; the table is the fast, common-case path, and the fallback is
+the safety net for the class this table hasn't caught up with yet.
 """
 
 import logging
@@ -26,7 +31,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from ..exceptions import PyriteError
+from ..exceptions import ConfigError, PyriteError, StorageError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -47,13 +52,16 @@ _STATUS_BY_CODE: dict[str, int] = {
     # catches it itself and re-raises as HTTPException, so this row is never
     # reached from there -- kept for any future caller that lets it propagate.
     "LAST_ADMIN": 409,
-    "VALIDATION_ERROR": 422,
+    # The base ValidationError's code (conductor decision, fix round 1: the
+    # write pipeline's documented VALIDATION_FAILED wins over the central
+    # handler's old, less-visited VALIDATION_ERROR spelling).
+    "VALIDATION_FAILED": 422,
     # The old table matched every ValidationError subclass on isinstance, so
     # a subclass with its own error_code (#378's family) still got 422 from
-    # the ValidationError row. Codes are exact-match now, so each of those
-    # subclasses needs its own row here to keep the same status it always
-    # had -- a class list, not a fallback, so a class this list omits is a
-    # gap to fill, not a silently-inherited 422.
+    # the ValidationError row. Listed explicitly for clarity and speed (the
+    # common case never falls through to _BASE_CLASS_FALLBACK below), but a
+    # code missing from this dict is no longer a silent 500: see
+    # _status_for's isinstance fallback for the base classes below.
     "UNDECLARED_TYPE": 422,
     "ENTRY_EXISTS": 422,
     "SCHEMA_VIOLATION": 422,
@@ -83,8 +91,28 @@ _STATUS_BY_CODE: dict[str, int] = {
 }
 
 
-def _status_for(code: str) -> int:
-    return _STATUS_BY_CODE.get(code, 500)
+#: A code this dict does not know falls back to its exception's *base*
+#: class's status, walked most-specific-first, rather than a blind 500.
+#: Guards against exactly the bug this list fixed once already: a
+#: ValidationError/ConfigError/StorageError subclass that narrows its own
+#: error_code (#378's family, and any future one) but whose code nobody
+#: added to _STATUS_BY_CODE above -- a silent 500 for a request the caller
+#: got right, instead of the 4xx its base answers for the same condition.
+_BASE_CLASS_FALLBACK: tuple[tuple[type[PyriteError], int], ...] = (
+    (ValidationError, 422),
+    (ConfigError, 409),
+    (StorageError, 500),
+)
+
+
+def _status_for(exc: PyriteError) -> int:
+    code = exc.error_code
+    if code in _STATUS_BY_CODE:
+        return _STATUS_BY_CODE[code]
+    for base, status in _BASE_CLASS_FALLBACK:
+        if isinstance(exc, base):
+            return status
+    return 500
 
 
 def _retryable(exc: PyriteError) -> bool:
@@ -106,7 +134,7 @@ def error_response(exc: PyriteError) -> tuple[int, dict]:
     directly instead of keeping a parallel copy of it in sync by hand.
     """
     code = exc.error_code
-    status_code = _status_for(code)
+    status_code = _status_for(exc)
     if status_code >= 500:
         # The exception itself, not True: outside an except frame,
         # sys.exc_info() is empty and exc_info=True logs no traceback (#431).

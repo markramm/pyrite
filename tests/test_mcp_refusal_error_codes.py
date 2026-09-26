@@ -32,12 +32,19 @@ from pyrite.server.mcp_server import _refusal
 
 
 class TestCodesThatChanged:
-    """These four disagreed between REST and MCP before this theme (ADR-0037:
-    'REST says ENTRY_NOT_FOUND / KB_NOT_FOUND / KB_READ_ONLY / VALIDATION_ERROR
-    where MCP says NOT_FOUND / NOT_FOUND / READ_ONLY / VALIDATION_FAILED'), plus
-    ConfigError (REST CONFIG_CONFLICT vs MCP CONFIG_ERROR, same disagreement
-    shape though not named in that exact sentence). REST's code wins; MCP's old
-    code moves to legacy_error_code.
+    """These disagreed between REST and MCP before this theme: ADR-0037's
+    'REST says ENTRY_NOT_FOUND / KB_NOT_FOUND / KB_READ_ONLY where MCP says
+    NOT_FOUND / NOT_FOUND / READ_ONLY', plus ConfigError (REST CONFIG_CONFLICT
+    vs MCP CONFIG_ERROR, same shape though not named in that exact sentence).
+    REST's code wins; MCP's old code moves to legacy_error_code.
+
+    The base ValidationError is NOT here (conductor decision, fix round 1):
+    REST itself used two spellings for that one class before this theme (the
+    central handler's table said VALIDATION_ERROR; the write pipeline, which
+    docs/json-contracts.md documents, said VALIDATION_FAILED, matching what
+    MCP already said) -- the documented code wins, so the base class does not
+    disagree with MCP and needs no legacy_error_code. See
+    TestCodesThatAlreadyAgreed::test_truncated_body_error.
     """
 
     def test_entry_not_found(self):
@@ -55,11 +62,6 @@ class TestCodesThatChanged:
         assert out["error_code"] == "KB_READ_ONLY"
         assert out["legacy_error_code"] == "READ_ONLY"
 
-    def test_base_validation_error(self):
-        out = _refusal(ValidationError("bad field"))
-        assert out["error_code"] == "VALIDATION_ERROR"
-        assert out["legacy_error_code"] == "VALIDATION_FAILED"
-
     def test_base_config_error(self):
         out = _refusal(ConfigError("dup kb"))
         assert out["error_code"] == "CONFIG_CONFLICT"
@@ -73,11 +75,6 @@ class TestCodesThatChanged:
         entry for this specific case."""
         out = _refusal(FrontmatterError("bad yaml"))
         assert out["error_code"] == "INVALID_FRONTMATTER"
-        assert out["legacy_error_code"] == "VALIDATION_FAILED"
-
-    def test_truncated_body_error(self):
-        out = _refusal(TruncatedBodyError("body_truncated marker on write"))
-        assert out["error_code"] == "VALIDATION_ERROR"
         assert out["legacy_error_code"] == "VALIDATION_FAILED"
 
     def test_plugin_error(self):
@@ -169,6 +166,16 @@ class TestCodesThatAlreadyAgreed:
     def test_branding_invalid_no_legacy_code(self):
         out = _refusal(BrandingInvalidError("bad branding.yaml"))
         assert out["error_code"] == "BRANDING_INVALID"
+        assert "legacy_error_code" not in out
+
+    @pytest.mark.control(
+        reason="the base ValidationError's code is VALIDATION_FAILED (conductor decision, "
+        "fix round 1) -- what MCP already said on dev, so TruncatedBodyError (which inherits "
+        "that code) already agreed too"
+    )
+    def test_truncated_body_error(self):
+        out = _refusal(TruncatedBodyError("body_truncated marker on write"))
+        assert out["error_code"] == "VALIDATION_FAILED"
         assert "legacy_error_code" not in out
 
 
