@@ -3,7 +3,7 @@ id: adr-0039
 title: Extensions live out of tree; the plugin contract is the public API
 type: adr
 importance: 5
-adr_number: 39
+adr_number: 40
 status: proposed
 date: '2026-09-26'
 tags: [architecture, plugins, extensions, api, compatibility, testing]
@@ -25,7 +25,7 @@ links:
   kb: pyrite
 ---
 
-# ADR-0039: Extensions live out of tree; the plugin contract is the public API
+# ADR-0040: Extensions live out of tree; the plugin contract is the public API
 
 > **Proposed** (spike, 2026-09-26). The maintainer accepts or rejects it. The
 > direction is already set: journalism-investigation moves out first, then

@@ -56,14 +56,14 @@ symbol. The headline numbers:
 The themes are in dispatch order. Themes 1–4 are core prerequisites, and
 nothing leaves the tree until they are done. Themes 2 and 3 already exist as
 issues; the criteria listed here are what this spike adds to them. The
-maintainer accepts ADR-0039, and settles its open decisions 1 (the façade)
+maintainer accepts ADR-0040, and settles its open decisions 1 (the façade)
 and 7 (contract versioning), before theme 1 is dispatched.
 
 ### 1. The plugin API façade, the snapshot, and public `Entry` helpers (Opus, M)
 
 - **Acceptance:**
   1. `pyrite/plugin_api.py` re-exports exactly the contract listed in
-     ADR-0039 §2 and defines `PLUGIN_API_VERSION`. It also has `TypedDict`s for
+     ADR-0040 §2 and defines `PLUGIN_API_VERSION`. It also has `TypedDict`s for
      the dict shapes: preset, type metadata, field schema, relationship type,
      workflow, DB table, migration and MCP tool.
   2. `tests/test_plugin_api_snapshot.py` pins the façade's names and
@@ -108,7 +108,7 @@ and 7 (contract versioning), before theme 1 is dispatched.
 - **Acceptance:**
   1. `pyrite.plugins.testing` provides `assert_plugin_conforms(plugin,
      runtime)` and the fixtures `pyrite_runtime`, `scoped_mcp` and
-     `cli_runner`. It covers the seven checks in ADR-0039 §6, which are
+     `cli_runner`. It covers the seven checks in ADR-0040 §6, which are
      generalised from `tests/test_plugin_contract.py`.
   2. `tests/fixtures/example_plugin/` has a cross-KB `kb_names` read tool, a
      per-KB read, a write, a hook and a validator, and it passes the kit.
@@ -150,7 +150,7 @@ and 7 (contract versioning), before theme 1 is dispatched.
 ### 6. Extract journalism-investigation (Sonnet, S–M; the maintainer creates the repo and PyPI project)
 
 - **Acceptance:**
-  1. A new repo built from the template (ADR-0039 §8) carries the extension's
+  1. A new repo built from the template (ADR-0040 §8) carries the extension's
      history, extracted with `git filter-repo --subdirectory-filter
      extensions/journalism-investigation`. Its CI runs Python 3.11–3.13
      against pyrite at the floor version, at the latest release, and at `dev`
@@ -178,7 +178,7 @@ and 7 (contract versioning), before theme 1 is dispatched.
 Each extension repeats themes 5 and 6 as its own pair. The site counts are
 cascade 17, social 31, encyclopedia 19 and zettelkasten 13.
 
-- **cascade** depends on ADR-0039 decision 2. If the answer is delete, the
+- **cascade** depends on ADR-0040 decision 2. If the answer is delete, the
   work is `kb/notes/remove-cascade-plugin.md` and its three
   `ji-absorb-cascade-*` subtasks, done before theme 6.
 - **social** needs `ctx.plugin_db` inside hook context, because its hooks
