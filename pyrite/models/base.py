@@ -679,23 +679,73 @@ class Entry(ABC):
         entry.file_path = path
         return entry
 
+    @staticmethod
+    def _publish_exclusive(tmp: str, path: Path) -> None:
+        """Publish ``tmp`` to ``path``, refusing if ``path`` already exists.
+
+        Tries, in order, the first mechanism this filesystem supports:
+
+        1. ``os.link`` -- atomic, and leaves ``tmp`` a second name for the
+           same inode, unlinked below once ``path`` is published.
+        2. ``os.link`` raises ``OSError`` other than ``FileExistsError`` on a
+           filesystem with no hard-link support (FAT/exFAT, some SMB/FUSE
+           mounts) -- every create would fail there, not just a colliding
+           one (#391 cold read round 3). Fall back to claiming the NAME
+           exclusively (``O_CREAT | O_EXCL``, which every filesystem that
+           can create files at all supports), then ``os.replace`` the
+           already-fully-written temp file over it: the claim is what is
+           exclusive, and the replace that follows only ever targets a path
+           this call itself just created, so it cannot overwrite a
+           concurrent winner.
+        3. If ``O_EXCL`` itself is unsupported (not ``FileExistsError``),
+           there is no atomic mechanism left on this filesystem: fall back
+           to an ordinary ``os.replace``, guarded only by the write
+           pipeline's own ``exists()`` check, same as before this method
+           existed.
+
+        Raises ``FileExistsError`` whenever any step finds ``path`` already
+        taken; never silently overwrites it. Always consumes ``tmp`` --
+        either as the second name ``os.link`` gave it (unlinked here so only
+        ``path`` remains), or by moving it via ``os.replace`` -- so the
+        caller never has its own cleanup to do on a successful return.
+        """
+        import os
+
+        try:
+            os.link(tmp, path)
+            os.unlink(tmp)
+            return
+        except FileExistsError:
+            raise
+        except OSError:
+            pass
+
+        try:
+            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        except FileExistsError:
+            raise
+        except OSError:
+            pass
+
+        os.replace(tmp, path)
+
     def save(self, path: Path | None = None, *, exclusive: bool = False) -> Path:
         """Save entry to file.
 
         Args:
             path: Target path; defaults to ``self.file_path``.
-            exclusive: ``True`` publishes the write with ``os.link`` instead
-                of ``os.replace`` -- it fails with ``FileExistsError`` if
-                ``path`` already exists, instead of silently overwriting it.
-                For the create path only (#391 cold read round 2): the
-                write-pipeline's own `resolved_path.exists()` check and this
-                publish step are two different moments, so two truly
-                concurrent creates can both pass the check before either
-                publishes. This closes that window at the one place a
-                filesystem call can enforce it atomically; it does not
-                replace the check (which gives the friendlier error message
-                and DB-index-consistency path in the common, non-racing
-                case).
+            exclusive: ``True`` publishes exclusively (see
+                :meth:`_publish_exclusive`) instead of with ``os.replace`` --
+                it raises ``FileExistsError`` if ``path`` already exists,
+                instead of silently overwriting it. For the create path only
+                (#391 cold read round 2): the write-pipeline's own
+                `resolved_path.exists()` check and this publish step are two
+                different moments, so two truly concurrent creates can both
+                pass the check before either publishes. This closes that
+                window at the one place a filesystem call can enforce it
+                atomically; it does not replace the check (which gives the
+                friendlier error message and DB-index-consistency path in
+                the common, non-racing case).
         """
         if path is None:
             path = self.file_path
@@ -724,11 +774,7 @@ class Entry(ABC):
                 mode = 0o666 & ~umask
             os.chmod(tmp, mode)
             if exclusive:
-                # os.link fails with FileExistsError if `path` already
-                # exists, atomically -- unlike os.replace, which always
-                # succeeds. The temp file becomes a second name for the same
-                # inode; unlinking it after is bookkeeping, not the publish.
-                os.link(tmp, path)
+                self._publish_exclusive(tmp, path)
             else:
                 os.replace(tmp, path)
         except BaseException:
@@ -737,9 +783,6 @@ class Entry(ABC):
             except OSError:
                 pass
             raise
-        else:
-            if exclusive:
-                os.unlink(tmp)
         self.file_path = path
         return path
 

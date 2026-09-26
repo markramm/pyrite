@@ -1097,9 +1097,25 @@ class IndexManager:
                                 # a stale duplicate row pointing at the same
                                 # (now-renamed) file. Retire it explicitly and
                                 # mark the entry's ACTUAL (current) id seen.
+                                #
+                                # #391 cold read round 3: retiring `entry_id`
+                                # unconditionally could delete a ROW THAT IS
+                                # NO LONGER STALE -- e.g. two files SWAP ids
+                                # in one pass (a.md: x->y, b.md: y->x). By the
+                                # time b.md is processed, `entry_id` (y, the
+                                # id b.md held before) may already have been
+                                # rewritten by a.md's own processing to point
+                                # at a.md -- removing it here would undo that
+                                # correct write. Read the row live and only
+                                # retire it if it still points at THIS file:
+                                # if some other file already re-claimed the
+                                # id this pass, that write wins, not this
+                                # cleanup.
                                 if entry.id != entry_id:
-                                    self.remove_entry(entry_id, kb.name)
-                                    results["removed"] += 1
+                                    current = self.db.get_entry(entry_id, kb.name)
+                                    if current and current.get("file_path") == fp_str:
+                                        self.remove_entry(entry_id, kb.name)
+                                        results["removed"] += 1
                                     seen_ids.add(entry.id)
                         except FrontmatterError as e:
                             # Malformed frontmatter is content drift, not a

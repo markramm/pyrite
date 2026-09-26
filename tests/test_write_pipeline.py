@@ -906,7 +906,7 @@ def test_rename_an_adr_keeps_its_file_and_survives_index_verification(software_e
         assert result.get("index_verified") is True, result
         assert original_file.exists(), "the file must survive the rename"
         assert "id: adr-y" in original_file.read_text()
-        assert len(list(software_env["kb_path"].rglob("*.md"))) >= 1
+        assert len(list(software_env["kb_path"].rglob("*.md"))) == 1
         assert db.get_entry("adr-y", "sw") is not None
         assert db.get_entry("adr-x", "sw") is None
     finally:
