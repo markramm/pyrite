@@ -4,6 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
+from click import unstyle
 import pytest
 from typer.testing import CliRunner
 
@@ -81,6 +82,44 @@ def asym_env():
         # One-directional link A→B only (SHOULD appear as asymmetric)
         svc.add_link("feedback-a", "kb-a", "feedback-b", target_kb="kb-b", relation="related_to")
 
+        # Intra-KB links exercise the single-KB mode: one missing backlink and
+        # one pair that is already bidirectional.
+        svc.create_entry(
+            "kb-a",
+            "hub",
+            "Hub",
+            body="Links to a spoke.",
+            entry_type="concept",
+            tags=["links"],
+        )
+        svc.create_entry(
+            "kb-a",
+            "spoke",
+            "Spoke",
+            body="No backlink.",
+            entry_type="concept",
+            tags=["links"],
+        )
+        svc.create_entry(
+            "kb-a",
+            "pair-a",
+            "Pair A",
+            body="Bidirectional pair.",
+            entry_type="concept",
+            tags=["links"],
+        )
+        svc.create_entry(
+            "kb-a",
+            "pair-b",
+            "Pair B",
+            body="Bidirectional pair.",
+            entry_type="concept",
+            tags=["links"],
+        )
+        svc.add_link("hub", "kb-a", "spoke", target_kb="kb-a", relation="wikilink")
+        svc.add_link("pair-a", "kb-a", "pair-b", target_kb="kb-a", relation="wikilink")
+        svc.add_link("pair-b", "kb-a", "pair-a", target_kb="kb-a", relation="wikilink")
+
         yield {"config": config, "db": db, "svc": svc}
         db.close()
 
@@ -138,20 +177,77 @@ class TestFindAsymmetricLinks:
         for r in results:
             assert r["source_id"] != "trust-a" or r["target_id"] != "trust-b"
 
+    def test_same_kb_reports_each_missing_backlink_once(self, asym_env):
+        results = _find_asymmetric_links(
+            kb_a="kb-a",
+            kb_b="kb-a",
+            config=asym_env["config"],
+            db=asym_env["db"],
+        )
+
+        assert [
+            (r["source_id"], r["target_id"], r["direction"], r["relation"]) for r in results
+        ] == [("hub", "spoke", "kb-a → kb-a", "wikilink")]
+
 
 class TestAsymmetricCLI:
-    def test_cli_json_output(self, asym_env, monkeypatch):
+    def _invoke(self, asym_env, monkeypatch, args):
         monkeypatch.setattr(
             "pyrite.cli.link_commands.get_config_and_db",
             lambda: (asym_env["config"], asym_env["db"]),
         )
-        asym_env["db"].close = lambda: None
+        monkeypatch.setattr(asym_env["db"], "close", lambda: None)
+        return runner.invoke(app, ["links", "asymmetric", *args, "--format", "json"])
 
-        result = runner.invoke(
-            app, ["links", "asymmetric", "--kb-a", "kb-a", "--kb-b", "kb-b", "--format", "json"]
-        )
+    def test_cli_json_output(self, asym_env, monkeypatch):
+        result = self._invoke(asym_env, monkeypatch, ["--kb-a", "kb-a", "--kb-b", "kb-b"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "asymmetric_links" in data
         assert data["kb_a"] == "kb-a"
         assert data["kb_b"] == "kb-b"
+
+    def test_single_kb_and_same_kb_pair_return_the_same_json(self, asym_env, monkeypatch):
+        single = self._invoke(asym_env, monkeypatch, ["-k", "kb-a"])
+        assert single.exit_code == 0, single.output
+        single_data = json.loads(single.output)
+
+        pair = self._invoke(asym_env, monkeypatch, ["--kb-a", "kb-a", "--kb-b", "kb-a"])
+        assert pair.exit_code == 0, pair.output
+        pair_data = json.loads(pair.output)
+
+        assert single_data == pair_data
+        assert single_data["kb_a"] == single_data["kb_b"] == "kb-a"
+        assert single_data["count"] == 1
+        assert len(single_data["asymmetric_links"]) == 1
+        assert single_data["asymmetric_links"][0]["source_id"] == "hub"
+        assert single_data["asymmetric_links"][0]["target_id"] == "spoke"
+
+    @pytest.mark.parametrize(
+        "args",
+        [
+            [],
+            ["-k", "kb-a", "--kb-a", "kb-a"],
+            ["-k", "kb-a", "--kb-b", "kb-a"],
+            ["-k", "kb-a", "--kb-a", "kb-a", "--kb-b", "kb-a"],
+            ["--kb-a", "kb-a"],
+            ["--kb-b", "kb-a"],
+        ],
+    )
+    def test_cli_rejects_conflicting_or_incomplete_kb_options(self, asym_env, monkeypatch, args):
+        result = self._invoke(asym_env, monkeypatch, args)
+
+        assert result.exit_code != 0
+        message = result.output.strip()
+        assert "Use" in message
+        assert "-k/--kb" in message
+        assert "--kb-a" in message and "--kb-b" in message
+        assert "\n" not in message
+
+    def test_help_shows_single_kb_example(self):
+        result = runner.invoke(app, ["links", "asymmetric", "--help"])
+
+        assert result.exit_code == 0
+        help_text = unstyle(result.output)
+        assert "-k" in help_text
+        assert "--kb linkkb" in help_text
