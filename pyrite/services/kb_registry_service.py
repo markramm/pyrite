@@ -30,8 +30,9 @@ class KBRegistryService:
     def is_registered(self, name: str) -> bool:
         """Does the index registry hold a KB called `name`?
 
-        A plain read of the `kb` table, never the ORM identity map, so a row
-        added or removed through another handle is seen at once.
+        A plain read of the `kb` table through this service's session, never
+        the ORM identity map: committed rows are seen at once; a row written but
+        not yet committed on another connection is not.
         """
         return bool(self.db.execute_sql("SELECT 1 FROM kb WHERE name = :name", {"name": name}))
 
