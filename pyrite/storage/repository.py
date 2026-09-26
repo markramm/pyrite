@@ -21,7 +21,7 @@ from ..exceptions import (
 from ..migrations import get_migration_registry, load_plugin_migrations
 from ..models import Entry, EventEntry
 from ..models.collection import CollectionEntry
-from ..models.core_types import entry_from_frontmatter, read_entry_id
+from ..models.core_types import entry_from_frontmatter, explicit_entry_id, read_entry_id
 from ..schema import CORE_TYPES
 from ..utils.yaml import load_yaml_file
 
@@ -356,18 +356,78 @@ class KBRepository:
                 return md_file
         return None
 
-    def find_files(self, entry_id: str) -> list[Path]:
-        """Every file that holds ``entry_id`` (normally one; more when a file
-        was copied by hand). Always a full walk, so for delete, not lookup."""
+    def _holds(self, file_path: Path, entry_id: str) -> str | None:
+        """How ``file_path`` holds ``entry_id``: ``"explicit"`` (its ``id:``
+        says so), ``"derived"`` (the id comes from its title), or None."""
+        if not file_path.is_file() or self.id_of_file(file_path) != entry_id:
+            return None
+        if file_path.name == "__collection.yaml":
+            return "explicit"  # named by its folder, or its own ``id:``
+        try:
+            stated = explicit_entry_id(file_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        return "explicit" if stated == entry_id else "derived"
+
+    def files_to_delete(self, entry_id: str, indexed_path: Path | None = None) -> list[Path]:
+        """The files ``delete(entry_id)`` removes: only files certain to BE
+        the entry (ADR-0038 I7).
+
+        First the cheap candidates -- the index row's file and the files named
+        like the id -- each verified. If one of them states the id in its
+        ``id:``, every candidate stating it is removed, and nothing else is
+        read: a copy elsewhere in the KB is reported by the reconcile (step 2,
+        #494), not found by walking the KB on every delete.
+
+        Otherwise the id is derived from a title (or not found cheaply), so
+        the whole KB is walked. One file holding it is removed. Several files
+        holding it, any of them by derivation (two notes titled "Draft", or
+        untitled notes that all derive one id), cannot be told apart: the
+        delete is refused with their paths, and an ``id:`` line settles it.
+        """
         if not isinstance(entry_id, str) or not entry_id:
             return []
-        found = [f for f in self.list_files() if self.id_of_file(f) == entry_id]
-        if not found:
-            # A collection's __collection.yaml is not in list_files.
-            one = self.find_file(entry_id)
-            if one is not None:
-                found = [one]
-        return found
+        candidates: list[Path] = []
+        if indexed_path is not None and self._lexically_inside(indexed_path):
+            candidates.append(indexed_path)
+        try:
+            self._validate_entry_id(entry_id)
+            candidates.extend(self._filename_candidates(entry_id))
+        except ValidationError:
+            pass
+        held = {c: self._holds(c, entry_id) for c in dict.fromkeys(candidates)}
+        explicit = [c for c, how in held.items() if how == "explicit"]
+        if explicit:
+            return explicit
+
+        held = {f: self._holds(f, entry_id) for f in self.list_files()}
+        held = {f: how for f, how in held.items() if how}
+        if len(held) > 1 and "derived" in held.values():
+            paths = ", ".join(str(f.relative_to(self.path)) for f in sorted(held))
+            raise ValidationError(
+                f"Refusing to delete '{entry_id}': {len(held)} files hold it and at least "
+                f"one derives it from its title, so which is the entry is not certain "
+                f"({paths}). Add an `id:` line to the one to delete, or remove it by hand."
+            )
+        return list(held)
+
+    def not_found_hint(self, entry_id: str) -> str:
+        """Why a lookup by a filename found nothing: the file named like the
+        id holds another id. Empty when there is no such file."""
+        try:
+            self._validate_entry_id(entry_id)
+        except ValidationError:
+            return ""
+        for candidate in self._filename_candidates(entry_id):
+            held = self.id_of_file(candidate)
+            if held and held != entry_id:
+                rel = candidate.relative_to(self.path)
+                return (
+                    f"; no file holds id '{entry_id}', but {rel} holds '{held}' (its id "
+                    f"comes from its title unless it has an `id:` line). Use '{held}', "
+                    f"or add `id: {entry_id}` to the file"
+                )
+        return ""
 
     def load(self, entry_id: str) -> Entry | None:
         """Load an entry by ID."""
@@ -455,15 +515,14 @@ class KBRepository:
 
         return file_path
 
-    def delete(self, entry_id: str) -> bool:
-        """Delete every file that holds ``entry_id``. Returns True if any was deleted."""
+    def delete(self, entry_id: str, *, indexed_path: Path | None = None) -> bool:
+        """Delete the files that are certainly ``entry_id`` (``files_to_delete``;
+        refuses when that is not certain). Returns True if any was deleted.
+        ``indexed_path`` is the index row's file, a candidate checked first."""
         if self.config.read_only:
             raise KBReadOnlyError(f"KB '{self.name}' is read-only")
 
-        # Every file holding the id, and only those (ADR-0038 §2, I7): a second
-        # file holding it would otherwise survive with no index row and come
-        # back on the next sync (#494).
-        files = self.find_files(entry_id)
+        files = self.files_to_delete(entry_id, indexed_path)
         for file_path in files:
             file_path.unlink(missing_ok=True)
         return bool(files)
@@ -525,7 +584,9 @@ class KBRepository:
 
         src = self.find_file(old_id)
         if not src or not src.exists():
-            raise EntryNotFoundError(f"Entry '{old_id}' not found in KB '{self.name}'")
+            raise EntryNotFoundError(
+                f"Entry '{old_id}' not found in KB '{self.name}'{self.not_found_hint(old_id)}"
+            )
 
         if self.find_file(new_id):
             raise ValidationError(

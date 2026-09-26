@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from pyrite.config import KBConfig, PyriteConfig, Settings
-from pyrite.exceptions import EntryExistsError
+from pyrite.exceptions import EntryExistsError, ValidationError
 from pyrite.models.core_types import entry_id_from_markdown
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
@@ -161,11 +161,13 @@ def test_484_entry_id_from_markdown_is_the_loaders_id(kb):
 # -- #494: delete removes every file holding the id, and only those ----------
 
 
-def test_494_delete_removes_every_file_holding_the_id(kb):
+def test_494_delete_removes_explicit_duplicates_it_meets(kb):
+    """The index row's file and the filename hit both hold the id explicitly:
+    both go. (A copy elsewhere in the KB is step 2's reconcile, #494.)"""
     kb_path, svc, _repo, db = kb
     svc.create(KB, {"entry_type": "note", "title": "Gamma", "body": "b"})
     created = kb_path / "notes" / "gamma.md"
-    dup = _write(kb_path / "x.md", id="gamma", title="Alpha")
+    dup = _write(kb_path / "gamma.md", id="gamma", title="Alpha")
     other = _write(kb_path / "gamma-notes.md", id="delta", title="Delta")
 
     assert svc.delete_entry("gamma", KB)
@@ -174,6 +176,97 @@ def test_494_delete_removes_every_file_holding_the_id(kb):
     assert not dup.exists(), "a second file holding 'gamma' survived its delete"
     assert other.exists()
     assert db.get_entry("gamma", KB) is None
+
+
+# -- delete is certain or refuses (cold read of #497) --------------------------
+
+
+def _vault(kb_path: Path, files: dict[str, str]) -> list[Path]:
+    """Obsidian-style notes: frontmatter without an ``id:`` line."""
+    out = []
+    for name, fm in files.items():
+        f = kb_path / name
+        f.write_text(f"---\n{fm}---\n\nbody of {name}\n")
+        out.append(f)
+    return out
+
+
+def _index(svc, db) -> None:
+    from pyrite.storage.index import IndexManager
+
+    IndexManager(db, svc.config).index_kb(KB)
+
+
+def test_delete_refuses_a_derived_id_two_same_title_notes_share(kb):
+    kb_path, svc, _repo, db = kb
+    note = "type: note\ntitle: Draft\n"
+    files = _vault(kb_path, {"a.md": note, "b.md": note})
+    _index(svc, db)
+
+    with pytest.raises(ValidationError) as refused:
+        svc.delete_entry("draft", KB)
+
+    assert all(f.exists() for f in files), "delete removed a note it could not be sure of"
+    assert "a.md" in str(refused.value) and "b.md" in str(refused.value)
+
+
+def test_delete_refuses_the_id_untitled_notes_all_derive(kb):
+    kb_path, svc, _repo, db = kb
+    files = _vault(kb_path, {f"n{i}.md": "tags: [x]\n" for i in range(3)})
+    _index(svc, db)
+    shared = entry_id_from_markdown(files[0].read_text())
+    assert shared and all(entry_id_from_markdown(f.read_text()) == shared for f in files)
+
+    with pytest.raises(ValidationError):
+        svc.delete_entry(shared, KB)
+
+    assert all(f.exists() for f in files)
+
+
+def test_delete_removes_the_one_note_that_derives_the_id(kb):
+    kb_path, svc, _repo, db = kb
+    (only,) = _vault(kb_path, {"beta.md": "type: note\ntitle: Alpha\n"})
+    _index(svc, db)
+
+    assert svc.delete_entry("alpha", KB)
+    assert not only.exists()
+    assert db.get_entry("alpha", KB) is None
+
+
+# -- the id reader stringifies a scalar id exactly as the index stores it ------
+
+
+@pytest.mark.parametrize(
+    ("raw", "spelled"),
+    # The spelling SQLite's TEXT column gave these before the shared helper,
+    # so an existing index keeps its rows.
+    [("true", "1"), ("123", "123"), ("1.50", "1.5"), ("2026-01-01", "2026-01-01")],
+)
+def test_a_scalar_id_reads_as_the_index_stores_it(kb, raw, spelled):
+    kb_path, svc, repo, db = kb
+    f = kb_path / "scalar.md"
+    f.write_text(f"---\nid: {raw}\ntype: note\ntitle: Scalar\n---\n\nb\n")
+    _index(svc, db)
+    (row_id,) = [r["id"] for r in db.list_entries(kb_name=KB)]
+
+    assert row_id == spelled
+    assert repo.id_of_file(f) == row_id
+    assert repo.find_file(row_id) == f
+
+
+# -- a rejected filename hit says which id the file holds ----------------------
+
+
+def test_not_found_names_the_file_a_filename_hit_holds(kb):
+    from pyrite.exceptions import EntryNotFoundError
+
+    kb_path, svc, _repo, _db = kb
+    _vault(kb_path, {"alpha.md": "type: note\ntitle: Beta\n"})
+
+    with pytest.raises(EntryNotFoundError) as missing:
+        svc.update("alpha", KB, {"body": "x"})
+
+    assert "alpha.md" in str(missing.value) and "'beta'" in str(missing.value)
 
 
 @pytest.mark.control(

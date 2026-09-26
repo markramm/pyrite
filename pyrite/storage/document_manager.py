@@ -184,7 +184,12 @@ class DocumentManager:
             True if the file was deleted, False if not found.
         """
         repo = KBRepository(kb_config)
-        file_deleted = repo.delete(entry_id)
+        # The index row's file is a candidate the repository verifies before
+        # it walks the KB (ADR-0038 step 1): a delete by an explicit id reads
+        # a file or two, not every file.
+        row = self._db.get_entry(entry_id, kb_name)
+        indexed = Path(row["file_path"]) if row and row.get("file_path") else None
+        file_deleted = repo.delete(entry_id, indexed_path=indexed)
         self._db.delete_entry(entry_id, kb_name)
         return file_deleted
 

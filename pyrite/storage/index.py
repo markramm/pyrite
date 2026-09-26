@@ -16,6 +16,7 @@ from typing import Any
 from ..config import KBConfig, PyriteConfig, load_config
 from ..exceptions import FrontmatterError
 from ..models import Entry
+from ..models.core_types import id_text
 from ..models.protocols import (
     PROTOCOL_COLUMN_KEYS,
     Assignable,
@@ -170,7 +171,7 @@ class IndexManager:
     def _entry_to_dict(self, entry: Entry, kb_name: str, file_path: Path) -> dict[str, Any]:
         """Convert an Entry to a dict for database storage."""
         data = {
-            "id": entry.id,
+            "id": id_text(entry.id),
             "kb_name": kb_name,
             "entry_type": entry.entry_type,
             "title": entry.title,

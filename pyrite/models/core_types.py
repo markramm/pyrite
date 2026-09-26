@@ -9,6 +9,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from typing import Any
 
 from ..schema import (
@@ -466,6 +467,23 @@ def _frontmatter_of(text: str) -> tuple[dict, str] | None:
     return meta, parts[1].strip()
 
 
+def id_text(value: Any) -> str | None:
+    """An entry id as text, the one way the index stores it and lookup
+    compares it. A YAML scalar id (``id: true``, ``id: 123``, ``id: 1.50``,
+    ``id: 2026-01-01``) loads as a bool, number or date; this spells it as
+    SQLite's TEXT column always did (``true`` -> ``'1'``), so an id read from
+    a file matches its index row. None for no id."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, datetime):
+        return value.isoformat(" ")
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)
+
+
 def read_entry_id(
     text: str, migrate: Callable[[dict[str, Any]], dict[str, Any]] | None = None
 ) -> str | None:
@@ -491,8 +509,12 @@ def read_entry_id(
     meta, body = parsed
     if migrate is not None:
         meta = migrate(meta)
-    entry_id = entry_from_frontmatter(meta, body).id
-    return str(entry_id) if entry_id not in (None, "") else None
+    if meta.get("id"):
+        # Every entry class takes a truthy `id:` as is (`Entry._base_kwargs`),
+        # so building the entry only to read it back costs a KB walk its
+        # largest share for nothing.
+        return id_text(meta["id"])
+    return id_text(entry_from_frontmatter(meta, body).id)
 
 
 def entry_id_from_markdown(text: str) -> str | None:
@@ -518,7 +540,6 @@ def explicit_entry_id(text: str) -> str | None:
         parsed = _frontmatter_of(text)
         if parsed is None:
             return None
-        value = parsed[0].get("id")
-        return str(value) if value not in (None, "") else None
+        return id_text(parsed[0].get("id"))
     except Exception:
         return None
