@@ -46,19 +46,32 @@ def write_world(tmp_path_factory) -> World:
 
 
 def _world_kb_names(world: World) -> set[str]:
-    """The KB names `world` currently carries, in both places a test could
+    """The KB names `world` currently carries, in every place a test could
     leave one behind: `PyriteConfig`'s own list (what `AccessPolicy.kbs_at_tier`
     walks -- #491's repro test leaked here, invisible to any check that only
-    reads the DB `kb` table) and the registry/DB rows `seed_from_config` and a
-    sync create. Read together so a leak in either place is caught, not just
-    the one #491's repro happened to leave self-cleaning (its DB row: the very
-    bug it pins flips the row's `source` to "user", so the repro's own
-    `DELETE` -- expected to 403, and asserted as much by its `xfail` -- actually
-    succeeds and removes the DB row as a side effect; `world.config`'s list and
+    reads the DB `kb` table), the registry/DB rows `seed_from_config` and a
+    sync create, and `PyriteConfig._db_kb_cache` (#509 round 2 cold read: a
+    THIRD place, populated by `KBRegistryService.add_kb`'s call to
+    `config.register_db_kbs` -- `get_kb()`/`all_kbs()`/`AccessPolicy.kbs_at_tier`
+    all read it too, but it is neither `knowledge_bases` nor a DB row a plain
+    `SELECT * FROM kb` sees. A test that registers a KB through
+    `KBRegistryService.add_kb` -- REST's `POST /api/kbs`, MCP's
+    `kb_registry_add` -- and cleans up only the DB row (`world.db.unregister_kb`)
+    leaves this cache populated forever, invisible to this function until this
+    fix, so `_world_is_immutable` below never saw the leak: the guard's
+    before/after snapshots were identical because neither one ever read this
+    cache, not because nothing changed).
+
+    Read together so a leak in any one place is caught, not just the one
+    #491's repro happened to leave self-cleaning (its DB row: the very bug it
+    pins flips the row's `source` to "user", so the repro's own `DELETE` --
+    expected to 403, and asserted as much by its `xfail` -- actually succeeds
+    and removes the DB row as a side effect; `world.config`'s list and
     `_kb_by_name` cache are untouched by that DELETE and keep the KB)."""
     config_names = {kb.name for kb in world.config.knowledge_bases}
     db_names = {row["name"] for row in world.db.execute_sql("SELECT name FROM kb")}
-    return config_names | db_names
+    db_kb_cache_names = set(world.config._db_kb_cache)
+    return config_names | db_names | db_kb_cache_names
 
 
 # (nodeid, kb-names-snapshot-BEFORE-it-ran) of the most recent test that
