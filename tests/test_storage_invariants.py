@@ -514,8 +514,7 @@ def test_i8_derived_id_is_not_findable():
     _run("I8", [("ext_write", {"name": "beta.md", "id": None, "t": "Alpha"})], check_lookup=True)
 
 
-@_violates("I9", "#493", "rename(x, x) succeeds and leaves no row")
-def test_i9_rename_to_same_id_leaves_no_row():
+def test_i9_rename_to_same_id_is_refused():
     steps = [("ext_write", {"name": "alpha.md", "id": None, "t": "Alpha"})]
     _run("I9", [*steps, ("rename", {"old": "alpha", "new": "alpha"})])
 
