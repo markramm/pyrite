@@ -48,6 +48,16 @@ _STATUS_BY_CODE: dict[str, int] = {
     # reached from there -- kept for any future caller that lets it propagate.
     "LAST_ADMIN": 409,
     "VALIDATION_ERROR": 422,
+    # The old table matched every ValidationError subclass on isinstance, so
+    # a subclass with its own error_code (#378's family) still got 422 from
+    # the ValidationError row. Codes are exact-match now, so each of those
+    # subclasses needs its own row here to keep the same status it always
+    # had -- a class list, not a fallback, so a class this list omits is a
+    # gap to fill, not a silently-inherited 422.
+    "UNDECLARED_TYPE": 422,
+    "ENTRY_EXISTS": 422,
+    "SCHEMA_VIOLATION": 422,
+    "INVALID_REF": 422,
     "CONFIG_SAVE_REFUSED": 409,
     "CONFIG_CONFLICT": 409,
     "PLUGIN_ERROR": 502,
@@ -60,6 +70,11 @@ _STATUS_BY_CODE: dict[str, int] = {
     # itself before this handler ever sees it and answers 409 (#408); this
     # row is unreached from that path.
     "BRANDING_INVALID": 500,
+    # ClipperBlockedHostError had no row in the old isinstance table either
+    # (it is a direct PyriteError, not a ValidationError), so it already fell
+    # through to 500 INTERNAL_ERROR -- this keeps that status, now under its
+    # own code instead of the generic one.
+    "CLIPPER_BLOCKED_HOST": 500,
     "INTERNAL_ERROR": 500,
     # AccessDenied family (ADR-0037 §3). Not raised by any surface yet
     # (theme 1/3b's job) -- listed so the mapping is ready when they are.
@@ -70,6 +85,51 @@ _STATUS_BY_CODE: dict[str, int] = {
 
 def _status_for(code: str) -> int:
     return _STATUS_BY_CODE.get(code, 500)
+
+
+def _retryable(exc: PyriteError) -> bool:
+    """Whether the same call could succeed if made again unchanged.
+
+    Only ``StorageBusyError`` says yes (a locked/busy database can succeed
+    once the lock is released, #431); every other domain refusal is
+    deterministic. Reads the instance attribute set by ``StorageError`` and
+    its subclasses, defaulting to ``False`` for any class that has none.
+    """
+    return bool(getattr(exc, "retryable", False))
+
+
+def error_response(exc: PyriteError) -> tuple[int, dict]:
+    """The real (status, ``{"detail": {...}}``) pair this module answers for
+    ``exc`` -- the exact classification and body-shaping logic the registered
+    handler uses, factored out so a caller (the characterization harness,
+    ``tests/characterization/error_bodies.py``) can read the real mapping
+    directly instead of keeping a parallel copy of it in sync by hand.
+    """
+    code = exc.error_code
+    status_code = _status_for(code)
+    if status_code >= 500:
+        # The exception itself, not True: outside an except frame,
+        # sys.exc_info() is empty and exc_info=True logs no traceback (#431).
+        logger.error("Unhandled %s: %s", type(exc).__name__, exc, exc_info=exc)
+    message = str(exc)
+    public_message = exc.public_message
+    if public_message is not None:
+        # str(exc) may name a real filesystem path or other operator detail
+        # unsafe to return over HTTP (#377's ConfigSaveRefusedError pattern,
+        # extended to any PyriteError subclass that sets a public_message --
+        # e.g. BrandingInvalidError, #445's cold read). A 5xx already logged
+        # the detail above (with exc_info); logging it again here would
+        # double it on every request -- the #445 delta cold read's second
+        # finding. Only a sub-500 refusal needs this line, since nothing else
+        # logs it.
+        if status_code < 500:
+            logger.warning("%s", exc)
+        message = public_message
+    detail: dict = {"code": code, "message": message, "retryable": _retryable(exc)}
+    suggestion = getattr(exc, "suggestion", None)
+    if suggestion:
+        detail["hint"] = suggestion
+    return status_code, {"detail": detail}
 
 
 def register_pyrite_exception_handler(app: FastAPI) -> None:
@@ -85,42 +145,7 @@ def register_pyrite_exception_handler(app: FastAPI) -> None:
     """
 
     def _handler(request: Request, exc: PyriteError) -> JSONResponse:
-        code = exc.error_code
-        status_code = _status_for(code)
-        if status_code >= 500:
-            # The exception itself, not True: this handler runs outside the
-            # except frame, so sys.exc_info() is empty here and exc_info=True
-            # logged no traceback (#431).
-            logger.error("Unhandled %s: %s", type(exc).__name__, exc, exc_info=exc)
-        message = str(exc)
-        public_message = exc.public_message
-        if public_message is not None:
-            # str(exc) may name a real filesystem path or other operator
-            # detail unsafe to return over HTTP (#377's ConfigSaveRefusedError
-            # pattern, extended to any PyriteError subclass that sets a
-            # public_message -- e.g. BrandingInvalidError, #445's cold read).
-            # A 5xx already logged the detail above (with exc_info); logging
-            # it again here would double it on every request -- the #445
-            # delta cold read's second finding. Only a sub-500 refusal needs
-            # this line, since nothing else logs it.
-            if status_code < 500:
-                logger.warning("%s", exc)
-            message = public_message
-        detail: dict = {"code": code, "message": message, "retryable": _retryable(exc)}
-        suggestion = getattr(exc, "suggestion", None)
-        if suggestion:
-            detail["hint"] = suggestion
-        return JSONResponse(status_code=status_code, content={"detail": detail})
+        status_code, content = error_response(exc)
+        return JSONResponse(status_code=status_code, content=content)
 
     app.add_exception_handler(PyriteError, _handler)
-
-
-def _retryable(exc: PyriteError) -> bool:
-    """Whether the same call could succeed if made again unchanged.
-
-    Only ``StorageBusyError`` says yes (a locked/busy database can succeed
-    once the lock is released, #431); every other domain refusal is
-    deterministic. Reads the instance attribute set by ``StorageError`` and
-    its subclasses, defaulting to ``False`` for any class that has none.
-    """
-    return bool(getattr(exc, "retryable", False))

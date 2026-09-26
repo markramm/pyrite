@@ -782,7 +782,7 @@
       {
         "created": false,
         "error": "title is required",
-        "error_code": "VALIDATION_FAILED"
+        "error_code": "VALIDATION_ERROR"
       }
     ],
     "total": 1
@@ -794,7 +794,7 @@
       {
         "created": false,
         "error": "title is required",
-        "error_code": "VALIDATION_FAILED"
+        "error_code": "VALIDATION_ERROR"
       }
     ],
     "total": 1
@@ -806,7 +806,7 @@
       {
         "created": false,
         "error": "title is required",
-        "error_code": "VALIDATION_FAILED"
+        "error_code": "VALIDATION_ERROR"
       }
     ],
     "total": 1
@@ -4198,7 +4198,8 @@
   },
   "task_create | write_key | missing-kb": {
     "error": "KB not found: missing-kb",
-    "error_code": "NOT_FOUND",
+    "error_code": "KB_NOT_FOUND",
+    "legacy_error_code": "NOT_FOUND",
     "retryable": false
   },
   "task_create | write_key | no-default-role-kb": {

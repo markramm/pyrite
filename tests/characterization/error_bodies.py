@@ -10,19 +10,18 @@ lives in `test_error_bodies.py`'s handful of live-request cross-checks
 instead). So this module builds one instance of each class directly and
 runs it through each transport's own, real, unmodified mapping function:
 
-- REST: `pyrite.server.api._PYRITE_ERROR_STATUS` (the same table the
-  registered exception handler walks) plus the same public-message logic
-  `register_pyrite_exception_handler`'s `_handler` uses -- reimplemented
-  here read-only over the table and the class, not copied by hand, so a
-  change to the real handler's classification is what the golden pins, not
-  a parallel copy of it.
+- REST: `pyrite.server.errors.error_response(exc)` -- the exact
+  (status, ``{"detail": {...}}``) pair the registered exception handler
+  returns (ADR-0037 theme 2 factored the handler's body out into this
+  function precisely so a characterization can call the real logic
+  instead of keeping a parallel copy of it in sync by hand).
 - MCP: `pyrite.server.mcp_server._refusal(exc)`, called directly -- the
   exact function `_dispatch_tool` calls on every refusal.
-- CLI: `pyrite.utils.errors.build_error(message, error_code, ...)`, with the
-  same `(message, code, suggestion, retryable)` `_refusal` computed --
-  `cli_error`'s JSON-format payload is `build_error`'s return value
-  unchanged (see `cli_error`'s source), so this is the exact CLI body
-  without spawning a process per class.
+- CLI: `pyrite.utils.errors.cli_error_from`'s payload, built the same way
+  `cli_error_from` builds it (``exc.public_message or str(exc)``,
+  ``exc.error_code`` -- no `legacy_error_code`, which is MCP-only) via
+  `build_error`, so this is the exact CLI body without spawning a process
+  per class or invoking `typer.Exit`.
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ from typing import Any
 
 import pyrite.exceptions as exc_module
 from pyrite.exceptions import PyriteError
-from pyrite.server.api import _PYRITE_ERROR_STATUS
+from pyrite.server.errors import error_response
 from pyrite.server.mcp_server import _refusal
 from pyrite.utils.errors import build_error
 
@@ -78,19 +77,16 @@ def build_instance(cls: type[PyriteError]) -> PyriteError:
 
 
 def rest_body(exc: PyriteError) -> dict[str, Any]:
-    """What `register_pyrite_exception_handler`'s `_handler` returns for
-    `exc` -- reads the same `_PYRITE_ERROR_STATUS` table and the same
-    `public_message` rule, so it tracks the real handler exactly."""
-    status_code, code = 500, "INTERNAL_ERROR"
-    for exc_type, sc, c in _PYRITE_ERROR_STATUS:
-        if isinstance(exc, exc_type):
-            status_code, code = sc, c
-            break
-    message = str(exc)
-    public_message = getattr(exc, "public_message", None)
-    if public_message is not None:
-        message = public_message
-    return {"status": status_code, "body": {"code": code, "message": message}}
+    """What the registered exception handler answers for `exc` --
+    `pyrite.server.errors.error_response`, the same function
+    `register_pyrite_exception_handler`'s handler calls, so this tracks the
+    real handler exactly rather than a parallel copy of its table.
+
+    ADR-0037 theme 2: the body is now `{"detail": {"code", "message",
+    "retryable", "hint"?}}`, not the old flat `{"code", "message"}` --
+    the same wrapper `HTTPException(detail={...})` sites already answered."""
+    status_code, content = error_response(exc)
+    return {"status": status_code, "body": content}
 
 
 def mcp_body(exc: PyriteError) -> dict[str, Any]:
@@ -99,17 +95,20 @@ def mcp_body(exc: PyriteError) -> dict[str, Any]:
 
 
 def cli_body(exc: PyriteError) -> dict[str, Any]:
-    """The `--format json` payload `cli_error` echoes -- `build_error` with
-    the same (message, code, suggestion, retryable) `_refusal` computes, so
-    CLI and MCP are characterized from one shared computation, matching
-    `pyrite/utils/errors.py`'s documented intent ("errors look the same
-    whether they come from the CLI [or] MCP")."""
-    mcp = mcp_body(exc)
+    """The `--format json` payload `cli_error_from` echoes.
+
+    ADR-0037 theme 2: computed directly from `exc` the same way
+    `cli_error_from` does (`exc.public_message or str(exc)`,
+    `exc.error_code`), not derived from `mcp_body` -- the CLI carries no
+    `legacy_error_code` (that field is MCP-only, for one release, per the
+    maintainer's decision of 2026-09-25), so CLI and MCP can now genuinely
+    differ in shape for the same exception."""
+    message = exc.public_message or str(exc)
     return build_error(
-        mcp["error"],
-        mcp["error_code"],
-        suggestion=mcp.get("suggestion"),
-        retryable=mcp.get("retryable", False),
+        message,
+        exc.error_code,
+        suggestion=getattr(exc, "suggestion", None),
+        retryable=bool(getattr(exc, "retryable", False)),
     )
 
 
