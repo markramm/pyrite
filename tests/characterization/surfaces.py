@@ -336,6 +336,76 @@ MCP_ACCESS_EXCLUSIONS: dict[str, str] = {
 }
 MCP_ACCESS_EXCLUSIONS_COUNT = len(MCP_ACCESS_EXCLUSIONS)
 
+# Every route `create_app()` mounts that is NOT an `APIRoute` -- a Starlette
+# `Route`/`Mount` (the `/mcp` transport) or an `APIWebSocketRoute` (`/ws`) --
+# so `test_every_rest_route_is_covered`'s `APIRoute`-only walk cannot see it
+# at all, and it was silently absent from both `kb_bearing_rest_operations`
+# and `REST_ACCESS_EXCLUSIONS` (#498). Each is COVERED, not excluded: its
+# connection-level auth is pinned directly by
+# `tests/characterization/test_mcp_transport_auth.py` (`_resolve_bearer_auth`
+# / `_authenticate` for `/mcp/sse` and `/mcp/info`; `/mcp/messages/` shares
+# the SAME per-connection ctx the SSE handshake already resolved -- the SDK
+# transport relays JSON-RPC over an established session, it does not
+# authenticate a second time) and by `tests/test_websocket_scoping.py`
+# (`/ws`'s own `resolve_socket_scope`, built on the identical
+# `mcp_routes._resolve_credential` + `AccessPolicy`). Named here, with a
+# reason, so `test_every_rest_route_is_covered`'s walk (extended to include
+# these) can report them "covered by name" the same way an `APIRoute` is
+# covered by appearing in `kb_bearing_rest_operations`.
+TRANSPORT_ROUTE_EXCLUSIONS: dict[str, str] = {
+    "GET /mcp/sse": (
+        "Starlette Route, not an APIRoute -- negotiates the long-lived SSE "
+        "transport. Its connection-level auth (_resolve_bearer_auth via "
+        "_authenticate) is pinned directly by test_mcp_transport_auth.py."
+    ),
+    "GET /mcp/info": (
+        "Starlette Route, not an APIRoute -- connection metadata for "
+        "frontends. Calls the identical _authenticate as /mcp/sse; pinned "
+        "by test_mcp_transport_auth.py's TestClient case."
+    ),
+    "POST /mcp/messages/": (
+        "A Starlette Mount (sse_transport.handle_post_message), not an "
+        "APIRoute -- relays JSON-RPC over a session /mcp/sse already "
+        "authenticated; it does not resolve a credential of its own."
+    ),
+    "WS /ws": (
+        "APIWebSocketRoute, not an APIRoute -- its handshake auth "
+        "(resolve_socket_scope, built on the same mcp_routes._resolve_credential "
+        "+ AccessPolicy) is pinned by tests/test_websocket_scoping.py."
+    ),
+}
+TRANSPORT_ROUTE_EXCLUSIONS_COUNT = len(TRANSPORT_ROUTE_EXCLUSIONS)
+
+
+def non_apiroute_transport_routes(app) -> set[str]:
+    """Every top-level transport route of `app` that is not an `APIRoute`:
+    the `/mcp` Mount's own routes (`GET /sse`, `GET /info`, the `/messages/`
+    Mount) and `/ws` (an `APIWebSocketRoute`). Named the same
+    ``"{METHOD} {path}"``/``"WS {path}"`` shape `TRANSPORT_ROUTE_EXCLUSIONS``
+    uses, so the completeness test can diff one set against the other.
+    """
+    from fastapi.routing import APIRoute, APIWebSocketRoute
+    from starlette.routing import Mount
+
+    out: set[str] = set()
+    for route in app.routes:
+        if isinstance(route, APIWebSocketRoute):
+            out.add(f"WS {route.path}")
+        elif isinstance(route, Mount) and route.path == "/mcp":
+            for sub in route.routes:
+                full_path = route.path + sub.path
+                if isinstance(sub, Mount):
+                    # sse_transport.handle_post_message: a raw ASGI app, not
+                    # a Route, so it carries no `.methods` -- the transport
+                    # is POST-only per mcp_routes.py's own docstring.
+                    out.add(f"POST {full_path}/")
+                else:
+                    for method in sorted(getattr(sub, "methods", None) or ()):
+                        if method in ("HEAD", "OPTIONS"):
+                            continue
+                        out.add(f"{method} {full_path}")
+    return out
+
 
 def _dependency_names(dependant) -> set[str]:
     names: set[str] = set()

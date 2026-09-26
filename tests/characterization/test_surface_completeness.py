@@ -28,8 +28,11 @@ from tests.characterization.surfaces import (
     MCP_ACCESS_EXCLUSIONS_COUNT,
     REST_ACCESS_EXCLUSIONS,
     REST_ACCESS_EXCLUSIONS_COUNT,
+    TRANSPORT_ROUTE_EXCLUSIONS,
+    TRANSPORT_ROUTE_EXCLUSIONS_COUNT,
     kb_bearing_mcp_tool_names,
     kb_bearing_rest_operations,
+    non_apiroute_transport_routes,
 )
 
 PINNED_REST_TOTAL_ROUTE_COUNT = 143
@@ -63,6 +66,34 @@ def test_every_rest_route_is_covered(world):
     )
 
 
+def test_every_transport_route_is_covered(world):
+    """The non-`APIRoute` twin of `test_every_rest_route_is_covered` (#498):
+    `_all_rest_routes` only walks `APIRoute`s, so `/mcp/sse`, `/mcp/info`,
+    `/mcp/messages/` (a Starlette `Route`/`Mount` under the `/mcp` Mount) and
+    `/ws` (an `APIWebSocketRoute`) never entered that walk, or either of its
+    two sets, at all -- silently uncovered rather than failing loudly, #498's
+    own finding. `TRANSPORT_ROUTE_EXCLUSIONS` names each one covered, by a
+    real golden elsewhere (`test_mcp_transport_auth.py`,
+    `test_websocket_scoping.py`), not by a structural dependency shape;
+    `non_apiroute_transport_routes` must produce EXACTLY that set, so a fifth
+    transport route arriving later fails here instead of vanishing the same
+    way these four did.
+    """
+    live = non_apiroute_transport_routes(world.app)
+    excluded = set(TRANSPORT_ROUTE_EXCLUSIONS.keys())
+    uncovered = sorted(live - excluded)
+    assert not uncovered, (
+        f"{len(uncovered)} non-APIRoute transport route(s) are not named in "
+        f"TRANSPORT_ROUTE_EXCLUSIONS -- add each, with a reason naming what "
+        f"golden pins its auth: {uncovered}"
+    )
+    stale = sorted(excluded - live)
+    assert not stale, (
+        f"TRANSPORT_ROUTE_EXCLUSIONS names route(s) create_app() no longer "
+        f"mounts -- remove them: {stale}"
+    )
+
+
 def test_every_mcp_tool_is_covered(world):
     """The MCP twin of `test_every_rest_route_is_covered`."""
     all_tools = set(world.mcp_server.tools.keys())
@@ -92,6 +123,11 @@ def test_exclusion_counts_are_pinned():
     assert MCP_ACCESS_EXCLUSIONS_COUNT == len(MCP_ACCESS_EXCLUSIONS) == 6, (
         f"MCP_ACCESS_EXCLUSIONS now has {len(MCP_ACCESS_EXCLUSIONS)} entries, "
         f"pinned at 6 -- update this assert deliberately, with a reason, rather "
+        f"than letting it drift."
+    )
+    assert TRANSPORT_ROUTE_EXCLUSIONS_COUNT == len(TRANSPORT_ROUTE_EXCLUSIONS) == 4, (
+        f"TRANSPORT_ROUTE_EXCLUSIONS now has {len(TRANSPORT_ROUTE_EXCLUSIONS)} entries, "
+        f"pinned at 4 -- update this assert deliberately, with a reason, rather "
         f"than letting it drift."
     )
 
