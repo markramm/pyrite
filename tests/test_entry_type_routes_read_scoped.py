@@ -122,25 +122,57 @@ class TestNamedPrivateKBIs404:
             f"  private: {private.text[:200]}\n  missing: {missing.text[:200]}"
         )
 
-    @pytest.mark.parametrize("who", ["anon", "peer"])
-    def test_no_private_content_in_the_body(self, env, who, route):
-        body = env[who].get(route.format(kb=PRIVATE)).text
-        assert PRIVATE_ONLY_TYPE not in body, f"{route} leaked {PRIVATE_ONLY_TYPE}: {body[:300]}"
-
+    @pytest.mark.control(
+        reason="proves scoping is not a wall for a caller who may read the KB -- "
+        "with no auth dependency at all, this route never 404ed anyone, so it "
+        "passes both before and after the fix"
+    )
     def test_a_reader_with_access_gets_200(self, env, route):
         _grant_peer_read_on_private(env)
         r = env["peer"].get(route.format(kb=PRIVATE))
         assert r.status_code == 200, f"{route}: {r.status_code} {r.text[:300]}"
 
+    @pytest.mark.control(
+        reason="a readable KB was never 404ed even with no auth dependency; pins "
+        "that adding requires_kb_read() does not start 404ing it"
+    )
     def test_readable_kb_is_never_404ed(self, env, route):
         assert env["peer"].get(route.format(kb=PUBLIC)).status_code == 200
         assert env["anon"].get(route.format(kb=PUBLIC)).status_code == 200
 
+    @pytest.mark.control(
+        reason="a global admin was never 404ed by these routes before the fix "
+        "either; pins that requires_kb_read() does not start walling them off"
+    )
     def test_a_global_admin_is_never_404ed(self, env, route):
         r = env["admin"].get(route.format(kb=PRIVATE))
         assert r.status_code != 404 or "KB_NOT_FOUND" not in r.text, (
             f"{route}: scoping 404'd a global admin -- {r.text[:200]}"
         )
+
+
+@pytest.mark.parametrize("who", ["anon", "peer"])
+def test_named_private_kb_types_do_not_leak_before_the_404(env, who):
+    """`/api/entries/types?kb=<private>` must never answer with the private
+    KB's distinct types -- the 404 from `requires_kb_read()` is what stops
+    the body from ever being built from that KB's rows."""
+    body = env[who].get(f"/api/entries/types?kb={PRIVATE}").text
+    assert PRIVATE_ONLY_TYPE not in body, f"leaked {PRIVATE_ONLY_TYPE}: {body[:300]}"
+
+
+@pytest.mark.control(
+    reason="/api/entries/type-schemas builds its body from CORE_TYPES, plugin "
+    "presets and (only when kb is given) that KB's kb.yaml -- never from "
+    "DB-indexed entry types -- so a type that exists only as an indexed entry "
+    "(PRIVATE_ONLY_TYPE) was never in this route's body even before the fix. "
+    "The defect this route has is the missing 404 (test_private_kb_is_404_not_403 "
+    "above), not a types leak; this pins that the body stays clean once the "
+    "guard also lets a granted caller through."
+)
+@pytest.mark.parametrize("who", ["anon", "peer"])
+def test_named_private_kb_type_schemas_never_carried_the_leak(env, who):
+    body = env[who].get(f"/api/entries/type-schemas?kb={PRIVATE}").text
+    assert PRIVATE_ONLY_TYPE not in body, f"leaked {PRIVATE_ONLY_TYPE}: {body[:300]}"
 
 
 # =============================================================================
@@ -157,6 +189,11 @@ def test_types_with_no_kb_excludes_private_only_type(env, who):
     assert "note" in types
 
 
+@pytest.mark.control(
+    reason="proves the aggregate scoping follows the grant rather than walling "
+    "the KB off entirely; before the fix this route had no scoping at all, so "
+    "a granted peer already saw every type"
+)
 def test_types_with_no_kb_includes_private_type_once_granted(env):
     _grant_peer_read_on_private(env)
     r = env["peer"].get("/api/entries/types")
@@ -164,6 +201,10 @@ def test_types_with_no_kb_includes_private_type_once_granted(env):
     assert PRIVATE_ONLY_TYPE in set(r.json()["types"])
 
 
+@pytest.mark.control(
+    reason="an unscoped admin always saw every KB's types; pins that pushing "
+    "kb_names=readable does not change that for a caller readable=None covers"
+)
 def test_types_with_no_kb_admin_sees_everything(env):
     r = env["admin"].get("/api/entries/types")
     assert r.status_code == 200, r.text
