@@ -127,6 +127,16 @@ not add ceremony.
    root cause is "the spec did not say" is a `dispatch.md` change; "no
    test could have caught it" is a test-layer change (ADR-0032 §3a);
    "the worker could not know" is a skill or gotcha change.
+   **Do not stop at the process.** A cause that is a missing step in the
+   loop ("the fix round added a mechanism", "the brief did not say") is
+   usually a symptom. Keep asking why until you reach the code: *why is the
+   code shaped so this keeps happening? what single definition, invariant or
+   owner is missing?* Several failures in one subsystem in one window point
+   at architecture, not process. The remedy is then a design record (an ADR)
+   and a test of the invariant, not a rule about rounds (maintainer,
+   2026-09-25: retro 13 proposed "fix rounds never add core mechanisms" and it
+   was withdrawn as surface-level; the root cause was that Pyrite had no
+   single definition of entry identity and no invariant tests for storage).
 4. **Name the constraint** — one lane, with the number that shows it. If
    the constraint is the maintainer's desk, say so plainly; the remedy is
    then to reduce what reaches it (better specs, better cold reads), not to
