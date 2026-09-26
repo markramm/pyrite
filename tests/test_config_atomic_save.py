@@ -324,6 +324,7 @@ def test_a_symlinked_config_stays_a_symlink_and_its_target_is_replaced_atomicall
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.control(reason="dev never fsynced; red against this branch's first writer (ff98c1ca)")
 def test_a_directory_fsync_that_fails_does_not_fail_a_save_already_renamed(
     cfg_dir, tmp_path, monkeypatch, caplog
 ):
@@ -346,6 +347,7 @@ def test_a_directory_fsync_that_fails_does_not_fail_a_save_already_renamed(
     assert _leftovers(cfg_dir) == []
 
 
+@pytest.mark.control(reason="dev's open(path, 'w') refused it; red against ff98c1ca's rename")
 @pytest.mark.skipif(os.geteuid() == 0, reason="root may write a 0o444 file")
 def test_a_read_only_file_in_a_writable_directory_is_still_refused(cfg_dir, tmp_path):
     """open(path, "w") raised PermissionError on a 0o444 config.yaml; a rename
