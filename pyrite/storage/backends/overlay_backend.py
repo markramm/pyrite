@@ -150,9 +150,13 @@ class OverlaySearchBackend:
         new_in_diff = sum(1 for e in diff_entries if (e["id"], e["kb_name"]) not in main_ids)
         return main_count + new_in_diff
 
-    def get_distinct_types(self, kb_name: str | None = None) -> list[str]:
-        main_types = set(self._main.get_distinct_types(kb_name))
-        diff_types = set(self._diff.get_distinct_types(kb_name))
+    def get_distinct_types(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[str]:
+        main_types = set(self._main.get_distinct_types(kb_name, kb_names))
+        diff_types = set(self._diff.get_distinct_types(kb_name, kb_names))
         return sorted(main_types | diff_types)
 
     def get_entries_for_indexing(self, kb_name: str) -> list[dict[str, Any]]:

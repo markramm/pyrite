@@ -515,10 +515,16 @@ class BaseBackend(ABC):
             query = query.filter(Entry.importance >= min_importance)
         return query.scalar() or 0
 
-    def get_distinct_types(self, kb_name: str | None = None) -> list[str]:
+    def get_distinct_types(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[str]:
         query = (
             self._session.query(Entry.entry_type).filter(Entry.entry_type.isnot(None)).distinct()
         )
+        if kb_names is not None:
+            query = query.filter(Entry.kb_name.in_(list(kb_names)))
         if kb_name:
             query = query.filter(Entry.kb_name == kb_name)
         query = query.order_by(Entry.entry_type)

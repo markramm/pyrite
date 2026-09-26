@@ -1587,9 +1587,17 @@ class KBService:
             min_importance=min_importance,
         )
 
-    def get_distinct_types(self, kb_name: str | None = None) -> list[str]:
-        """Get distinct entry types from the database."""
-        return self.db.get_distinct_types(kb_name=kb_name)
+    def get_distinct_types(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[str]:
+        """Get distinct entry types from the database.
+
+        ``kb_names`` restricts the result to the caller's readable KBs, so a
+        private KB's entry types never appear in the cross-KB aggregate.
+        """
+        return self.db.get_distinct_types(kb_name=kb_name, kb_names=kb_names)
 
     def get_timeline(
         self,
