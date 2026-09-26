@@ -226,17 +226,12 @@ def sw_new_adr(
             )
         except PyriteError as e:
             code = getattr(e, "error_code", None) or "CREATE_FAILED"
-            # A StorageError/PluginError/ConfigError (or a subclass that
-            # doesn't set its own) can carry server-side detail in str(e) --
-            # a real path, a driver's own text. public_message, when set, is
-            # what every other transport already shows (ADR-0037 theme 2
-            # round 2, item 1); the real detail still reaches the log.
-            public_message = getattr(e, "public_message", None)
-            if public_message is not None:
-                logger.warning("%s", e)
-                cli_error(public_message, error_code=code)
-            else:
-                cli_error(str(e), error_code=code)
+            # This is the operator's own terminal, not a transport boundary
+            # -- public_message exists to keep server-side detail (a real
+            # path, a driver's own text) out of REST/MCP responses, but
+            # masking it here hides that same detail from the person who
+            # would read the server log anyway (#506 item 3). Always str(e).
+            cli_error(str(e), error_code=code)
 
         from pyrite.storage.repository import KBRepository
 

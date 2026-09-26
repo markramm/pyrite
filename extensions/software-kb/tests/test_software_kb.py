@@ -2129,6 +2129,28 @@ class TestNewAdrGoesThroughPipeline:
         assert "ENTRY_EXISTS" in result.output, result.output
         assert expected_file.read_bytes() == original
 
+    def test_create_failure_prints_str_e_not_the_masked_public_message(self, env):
+        """#506 item 3: this is the operator's own terminal, so there is no
+        transport boundary to protect -- masking a StorageError/PluginError/
+        ConfigError's public_message here (#501's fixed sentence, meant for
+        REST/MCP) hides real detail for no security gain. Local CLI output
+        should always show str(e)."""
+        from unittest.mock import patch
+
+        from pyrite.exceptions import StorageError
+        from pyrite.services.kb_service import KBService
+
+        real_message = "Failed to materialize query result: real driver detail (dsn=x)"
+        with patch.object(KBService, "create_entry", side_effect=StorageError(real_message)):
+            result = self._run(env, ["new-adr", "Doomed ADR", "--kb", "sw-kb"])
+
+        assert result.exit_code != 0, result.output
+        # Rich may wrap the line at the terminal width the runner reports,
+        # so compare with whitespace collapsed rather than a raw substring.
+        normalized = " ".join(result.output.split())
+        assert real_message in normalized, result.output
+        assert "check the server log" not in normalized, result.output
+
 
 # =========================================================================
 # TestBacklogDependencies
