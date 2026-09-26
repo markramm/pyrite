@@ -176,6 +176,50 @@ the circuit breaker to land what a one-tick spike would have written as
 acceptance criteria: "no entry type writes a key its source file did not
 have; a no-op load→save is byte-identical."
 
+### Brief by model: mission for Opus and Fable, instructions for Sonnet and Haiku
+
+Match the brief to the model (maintainer, 2026-09-26).
+
+**Opus and Fable get a mission, not tactics.** Write:
+- the **goal state** as properties that must hold when the work is done;
+- the **invariants**: what must not change, meaning behaviour, public shape, and what may never be published;
+- the **hard constraints**: the machine budget, where to push, and security disclosure;
+- **done**: what evidence proves it;
+- **why it matters**, in a sentence.
+
+Leave out which helper to call, what to monkeypatch, and which line to edit. Those are the worker's judgment.
+
+**Sonnet and Haiku keep the precise, step-by-step brief** further up this file. For them the spec carries the judgment.
+
+**For every model, put nothing in the brief that the skill or the agent definition already says.** In the 2026-09-25/26 window, about fifteen lines of boilerplate in every brief crowded out the one line that mattered. Fix-round briefs follow the same rule: state the property that failed and the evidence; don't dictate the patch.
+
+### Plan before build (Opus-shaped themes)
+
+For a design-shaped or cross-cutting theme, the worker's first deliverable is a plan, not code. The plan is at most one page, posted as a comment on the draft PR, and covers:
+- the goal state restated as properties;
+- the surfaces and callers affected;
+- what must not change;
+- the test list, including negative, environment and concurrency cases;
+- what is out of scope;
+- open questions.
+
+The conductor, or a cold reader for security and storage themes, answers the plan within the tick. The worker builds only after that answer.
+
+**Why.** In the same window, almost every cold read changed its PR. Most findings were properties the brief never named, not coding slips:
+- behaviour that had to stay the same (#501's codes, #515's busy timeout);
+- environment edges (a read-only file, a directory fsync that fails, an old SDK, a built `web/dist`);
+- shared test state (#507, #509).
+
+Each cost a review round of 30–60 minutes plus a full suite. Answering a plan costs minutes.
+
+Sonnet mechanical themes skip the plan.
+
+### Keep the layer boundary ratcheting down
+
+The boundary test from #380 (`tests/test_layer_boundaries.py`) only lets its allowlist shrink. Two rules keep it shrinking:
+- **A theme that edits a function on the allowlist removes that function's entry in the same PR.** The theme leaves the file better than it found it. Put this in the brief's "done".
+- **Refactoring runs on a schedule.** The ~fifth-theme `quality` slot (SKILL.md) alternates between the retro's quality theme and a **ratchet-down theme**: remove the next few allowlist entries by moving storage and SQL access behind services, with the boundary test as acceptance.
+
 ### Prompt hygiene
 
 A worker's prompt says which files are **new** and which are **existing and

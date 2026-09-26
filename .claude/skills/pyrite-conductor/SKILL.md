@@ -313,6 +313,11 @@ goes ahead of new feature themes. Refactoring, test refactoring and code
 health are maintenance the release owes as much as its features; skipping
 the quality theme because features are waiting is how a codebase
 silts up.
+The slot alternates with a **ratchet-down theme** that removes the next few
+`tests/test_layer_boundaries.py` allowlist entries ([dispatch.md](dispatch.md),
+"Keep the layer boundary ratcheting down"). Service-layer violations are
+the recurring source of the one-fix-four-times bugs (Workstream S), so paying
+them down is regular maintenance, not a one-off theme.
 
 ### 4. Dispatch
 

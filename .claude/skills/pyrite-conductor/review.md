@@ -140,6 +140,19 @@ for #116 credits nobody because of it.
 - **Cold read** when the change is risky (below), then triage its findings
   the same way.
 
+## Review the plan, not only the diff
+
+For a theme dispatched as a mission (dispatch.md, "Plan before build"), the
+first review is of the worker's plan comment, in the tick it arrives. Check
+three things:
+- the properties it names against the ticket and the threat model;
+- the callers it found against a grep of your own;
+- the test list for negative, environment and concurrency cases.
+
+Answer with what is missing, stated as properties. That ten-minute read is
+where a cold read's usual findings are cheapest. The cold read of the diff
+still follows, and it should then find less.
+
 ## The cold read
 
 Dispatch `pyrite-reviewer` when the diff touches **`pyrite/server/`,

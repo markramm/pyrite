@@ -70,6 +70,28 @@ A bug you find and do not fix: `gh issue create --label bug --label <area>`,
 with placeholders for anything private. New roadmap work: a backlog item via
 the CLI. Never both.
 
+### When the brief is a mission, plan first
+
+A brief that gives you a goal state and invariants, rather than steps,
+expects you to work out the approach. That is the usual form for Opus and
+Fable on design-shaped themes. Your first deliverable then is a **plan**, not
+code: one page at most, posted as a comment on the draft PR (the claim
+branch already exists). The plan states:
+- the goal state as properties;
+- the surfaces and callers the change reaches, found with grep rather than guessed;
+- what must not change;
+- the tests you will write, including negative, environment and concurrency cases;
+- what is out of scope;
+- your open questions.
+
+Then wait for the conductor's answer before you build. Every property you
+name in the plan is one a reviewer does not have to send back later.
+
+A theme that touches a function on the `tests/test_layer_boundaries.py`
+allowlist removes that function's entry: move the storage or SQL access
+behind a service. The ratchet only goes down, and the theme that passes
+through is the one that knows the code best.
+
 ## Test-Driven Development
 
 **RED → GREEN → REFACTOR. No exceptions.** Detailed patterns: [tdd.md](tdd.md).
