@@ -126,6 +126,13 @@ class TestRegisterEndpoint:
         )
         assert r.status_code == 400
 
+    @pytest.mark.control(
+        reason="pins behaviour dev already had (only the registration call, "
+        "not the auto-login, is inside try/except ValueError); an earlier "
+        "version of this PR bundled both under one except and briefly broke "
+        "this, so it is pinned here even though the merge base itself was "
+        "never red"
+    )
     def test_register_auto_login_value_error_is_not_reported_as_a_registration_failure(
         self, auth_client
     ):
