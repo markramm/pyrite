@@ -159,9 +159,20 @@ def load_yaml_file(path: str | Path) -> dict[str, Any]:
     return result if result is not None else {}
 
 
-def dump_yaml_file(data: Any, path: str | Path) -> None:
-    """Write a mapping to a YAML file, preserving style."""
+def dump_yaml_file(data: Any, path: str | Path, *, atomic: bool = False) -> None:
+    """Write a mapping to a YAML file, preserving style.
+
+    ``atomic=True`` replaces the file crash-safely, keeping its mode, owner,
+    hard links and symlink (see ``pyrite.utils.atomic_write``, #405).
+    """
     p = Path(path)
     y = _dumper_for(data)
+    if atomic:
+        from .atomic_write import atomic_write_text
+
+        stream = StringIO()
+        y.dump(data, stream)
+        atomic_write_text(p, stream.getvalue())
+        return
     with open(p, "w") as f:
         y.dump(data, f)

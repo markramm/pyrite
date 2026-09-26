@@ -1393,7 +1393,9 @@ def save_config(
         logger.warning("Writing Pyrite config %s through symlink %s", real_file, config_file)
     trusted = current_config_source()[1]
     dump_yaml_file(
-        config.to_dict() if trusted else _untrusted_save_data(config, config_file), config_file
+        config.to_dict() if trusted else _untrusted_save_data(config, config_file),
+        config_file,
+        atomic=True,
     )
 
 
