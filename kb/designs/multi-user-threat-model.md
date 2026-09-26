@@ -257,8 +257,7 @@ G-persist.
 - **P-M3, a session is a credential.** The principal is fixed when the SSE
   stream is authenticated. A message posted to a session acts as that
   session's principal and no other. Knowing a session id does not confer
-  that session's principal on another caller unless the maintainer has
-  accepted that design and documented it.
+  that session's principal on another caller.
 - **P-M4, session lifetime.** An SSE session lives no longer than the
   credential that opened it, as ADR-0036 requires for `/ws`.
 - **P-M5, tier is a floor, not the decision.** Registering a tool at a tier
@@ -362,6 +361,9 @@ Attacker goals: G-escape, G-write (beyond the granted KB), G-deny.
 Attacker goals: G-pivot, G-deny, G-cred (a credential sent to the wrong
 host).
 
+- **P-F6, files at rest.** Export packs, site caches and backups are
+  readable only by principals who may read every KB they contain, and are
+  written with permissions no wider than the KB's own files.
 - **P-O1, no pivot.** A URL chosen by a non-admin principal (clipper, link
   check, clone, subscribe) cannot make the server connect to loopback,
   link-local, private or metadata addresses. That holds after DNS
@@ -412,7 +414,9 @@ A **finding** violates a property here, with a reproduction on `dev` at a
 named SHA: a single failing test, or a request sequence run alone against
 a scratch server (no suites). A property that holds today but is enforced
 nowhere structural is **hardening**, not a finding. Hardening may become an
-ordinary backlog item.
+ordinary backlog item. In every brief, a divergence **toward refusal** (the
+code refuses what the policy allows) is not a finding either: it is a G1
+pin or a bug issue.
 
 ## 6. Audit briefs
 
@@ -468,8 +472,8 @@ Every brief shares these rules:
   4. Cross-KB reads and derived data (P-R4). Do search, graph, timeline,
      tags, links, QA, stats and `entries/titles|resolve|wanted` leak from
      outside the `ReadScope`?
-  5. Is every credential scheme handled the same way on every route (the
-     roadmap's `Bearer <valid key>` note; P-A5)?
+  5. Is every credential scheme handled the same way on every route
+     (P-A5)?
 - **A finding is** a principal from §3 that gets a different answer class
   than the policy gives for the operation's actual effect, toward access.
 - **Not a finding:** a divergence toward refusal. That is a G1 pin or a
@@ -516,6 +520,8 @@ Every brief shares these rules:
   - `services/repo_service.py` sync and `services/git_service.py`, as they
     act on a cloned repository.
   - The subprocess sites in §4.1.
+  - Plugin loading (`plugins/registry.py`, `entry_points()`): can a KB's
+    own files name a module or entry point to import (P-K1)?
 - **Properties.** P-L1–P-L3, P-K1–P-K4, and REQ-5.1.
 - **Questions, in order.**
   1. What does a KB from a subscribed or forked repo make the server or
@@ -607,6 +613,8 @@ Every brief shares these rules:
      content (P-F3).
   4. The import payloads (P-F4).
   5. Size bounds on bodies, bulk, import and uploads (P-F5).
+  6. Files at rest (P-F6): who can later fetch an export pack or the site
+     cache, and with what on-disk permissions they are written.
 - **A finding is** a file created, read, changed or deleted outside its
   authorised root, or a request value interpreted as a command option.
 
@@ -620,6 +628,12 @@ Every brief shares these rules:
     `services/oauth_providers.py` and `github_auth.py`.
   - `services/settings_service.py` and `endpoints/settings_ep.py` (who can
     set a base URL).
+  - Every use of a stored provider key: `services/embedding_service.py`,
+    `services/query_expansion_service.py`, and the LLM client built in
+    `server/api.py`.
+  - Push and sync to a KB's existing git remotes: a stored GitHub token
+    goes only to a host the operator configured, never one a KB's files
+    chose (P-O4).
   - The open items in
     `web-clipper-response-size-cap-and-dns-rebinding-toctou-defense-r1300-follow-ups`.
 - **Properties.** P-O1–P-O5, P-R7.
