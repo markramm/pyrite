@@ -89,6 +89,9 @@ dev = [
     "pytest-xdist==3.8.0",
     # Diff coverage on the PR's 3.12 leg (advisory; see ci.yml's test job).
     "diff-cover==10.6.0",
+    # Pinned exactly: tests/test_storage_invariants.py runs derandomized, and
+    # its strict xfails depend on the sequences this version generates.
+    "hypothesis==6.168.1",
     "mypy>=1.9.0",
     "ruff>=0.15.0,<0.16",
     "build>=1.0.0",
