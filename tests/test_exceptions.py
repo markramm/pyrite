@@ -50,6 +50,12 @@ class TestEveryPyriteErrorHasAClassCode:
         ]
         assert not missing, f"classes with no class-level error_code: {missing}"
 
+    @pytest.mark.control(
+        reason="every public_message on dev before this PR was already a plain string "
+        "(ConfigSaveRefusedError, ConfigFileUnreadableError, BrandingInvalidError) -- this "
+        "type-guard would pass unchanged on dev too. It stays as a control against a future "
+        "class setting a non-string public_message by mistake, not as evidence for this PR."
+    )
     def test_public_message_is_none_or_a_safe_string_on_the_class(self):
         classes = self._all_pyrite_error_classes()
         bad = []
@@ -66,6 +72,11 @@ class TestEveryPyriteErrorHasAClassCode:
         exc = EntryNotFoundError("no entry here")
         assert exc.public_message is None
 
+    @pytest.mark.control(
+        reason="ConfigSaveRefusedError's own public_message predates this PR (#377) -- "
+        "this passes unchanged on dev. It stays as a control pinning that giving PyriteError "
+        "a base public_message=None (this PR) does not override a subclass's own value."
+    )
     def test_config_save_refused_keeps_its_own_public_message(self):
         """A class that opts into a fixed public_message (server-side detail
         in str(exc)) keeps it -- this is not overwritten by the base default."""

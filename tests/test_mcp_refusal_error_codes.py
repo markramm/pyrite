@@ -8,6 +8,8 @@ Unit-level: ``_refusal`` takes an exception instance and returns a dict; no
 app or dispatch needed.
 """
 
+import pytest
+
 from pyrite.exceptions import (
     BrandingInvalidError,
     ConfigError,
@@ -138,23 +140,32 @@ class TestCodesThatAlreadyAgreed:
     legacy_error_code at all -- there is nothing "legacy" to report, and
     adding the key unconditionally would be a new key on every response,
     not just the ones the maintainer's decision is about.
+
+    Each of these passes unchanged on dev too (no legacy_error_code existed
+    at all before this PR, on any class) -- they are controls, run
+    alongside TestCodesThatChanged to prove the mechanism does not
+    over-fire, not evidence of the fix on their own.
     """
 
+    @pytest.mark.control(reason="KBProtectedError's REST and MCP codes already agreed on dev")
     def test_kb_protected_no_legacy_code(self):
         out = _refusal(KBProtectedError("kb is protected"))
         assert out["error_code"] == "KB_PROTECTED"
         assert "legacy_error_code" not in out
 
+    @pytest.mark.control(reason="QuerySyntaxError's REST and MCP codes already agreed on dev")
     def test_query_syntax_no_legacy_code(self):
         out = _refusal(QuerySyntaxError("bad query"))
         assert out["error_code"] == "QUERY_SYNTAX"
         assert "legacy_error_code" not in out
 
+    @pytest.mark.control(reason="QueryTooLongError's REST and MCP codes already agreed on dev")
     def test_query_too_long_no_legacy_code(self):
         out = _refusal(QueryTooLongError("too long"))
         assert out["error_code"] == "QUERY_TOO_LONG"
         assert "legacy_error_code" not in out
 
+    @pytest.mark.control(reason="BrandingInvalidError's REST and MCP codes already agreed on dev")
     def test_branding_invalid_no_legacy_code(self):
         out = _refusal(BrandingInvalidError("bad branding.yaml"))
         assert out["error_code"] == "BRANDING_INVALID"
@@ -164,8 +175,10 @@ class TestCodesThatAlreadyAgreed:
 class TestValidationSubclassesUnaffected:
     """Subclasses that already carried their own code before this theme
     (#378's family) are untouched -- same code, no legacy_error_code, since
-    REST and MCP never disagreed about them."""
+    REST and MCP never disagreed about them. Controls: each already passed
+    on dev (no legacy_error_code existed there at all)."""
 
+    @pytest.mark.control(reason="UndeclaredTypeError already had its own code on dev (#378)")
     def test_undeclared_type_error(self):
         from pyrite.exceptions import UndeclaredTypeError
 
@@ -173,6 +186,7 @@ class TestValidationSubclassesUnaffected:
         assert out["error_code"] == "UNDECLARED_TYPE"
         assert "legacy_error_code" not in out
 
+    @pytest.mark.control(reason="EntryExistsError already had its own code on dev (#378)")
     def test_entry_exists_error(self):
         from pyrite.exceptions import EntryExistsError
 
