@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..config import (
+    KBConfig,
     auto_discover_kbs,
     load_config,
 )
@@ -19,8 +20,8 @@ from ..exceptions import PyriteError
 from .context import (
     cli_context,
     cli_registry_context,
-    get_config_and_db,
     get_config_with_registered_kbs,
+    open_index_for_validation,
 )
 
 kb_app = typer.Typer(help="Knowledge base management")
@@ -257,10 +258,11 @@ def kb_validate(
     && deploy` blocks on structural errors; scripts that want to gate on
     drift too can check for exit code 2.
     """
-    config, db = get_config_and_db(load_config())
-    try:
+    config = load_config()
+
+    def _select_kbs(current_config) -> list[KBConfig]:
         if name:
-            kb = config.get_kb(name)
+            kb = current_config.get_kb(name)
             if not kb:
                 from ..utils.errors import cli_error
 
@@ -270,18 +272,16 @@ def kb_validate(
                     error_code="KB_NOT_FOUND",
                     suggestion="Run `pyrite kb list` to see registered KBs.",
                 )
-            kbs = [kb]
-        else:
-            kbs = config.all_kbs()
+            return [kb]
+        return current_config.all_kbs()
 
-        # Run content-drift checks once (check_health walks all KBs internally),
-        # then bucket results by kb name.
-        from ..storage import IndexManager
-
-        index_mgr = IndexManager(db, config)
-        health = index_mgr.check_health()
+    config, db, health = open_index_for_validation(config)
+    drift_checked = db is not None
+    try:
+        kbs = _select_kbs(config)
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
     def _for_kb(kb_name: str, field: str) -> list:
         return [row for row in health.get(field, []) if row.get("kb") == kb_name]
@@ -317,6 +317,7 @@ def kb_validate(
             "kbs": kb_results,
             "all_valid": not any_structural_errors,
             "has_drift": any_drift,
+            "drift_checked": drift_checked,
         },
         output_format,
     )
@@ -329,6 +330,11 @@ def kb_validate(
         return
 
     # Rich output
+    if not drift_checked:
+        console.print(
+            "\n[yellow]Content-drift checks were skipped because the index database could not be read.[/yellow]"
+        )
+
     for kb_res in kb_results:
         console.print(f"\n[bold]Validating {kb_res['name']}...[/bold]")
         if kb_res["errors"]:

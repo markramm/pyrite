@@ -4,6 +4,7 @@ import logging
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
+from typing import Any
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -88,8 +89,53 @@ def get_config_and_db(config: PyriteConfig | None = None) -> tuple[PyriteConfig,
     """
     config = config or load_config()
     db = PyriteDB(config.settings.index_path)
-    db.merge_registered_kbs(config)
+    try:
+        db.merge_registered_kbs(config)
+    except Exception:
+        # Do not leak the engine if registry loading fails before this helper
+        # can return the database to its caller.
+        db.close()
+        raise
     return config, db
+
+
+def open_index_for_validation(
+    config: PyriteConfig,
+) -> tuple[PyriteConfig, PyriteDB | None, dict[str, Any]]:
+    """Open the index and collect health, falling back to YAML on DB errors.
+
+    The returned database belongs to the caller, which must close it. If
+    opening or checking the index fails, the returned config is freshly loaded
+    from YAML so partially merged DB-only KBs cannot leak into validation.
+    File-system errors while checking KB contents still propagate.
+    """
+    try:
+        config, db = get_config_and_db(config)
+    except (OSError, sqlite3.Error, SQLAlchemyError) as exc:
+        logger.warning(
+            "Could not read index database %s while validating KBs; "
+            "using YAML config without content-drift checks: %s",
+            config.settings.index_path,
+            exc,
+        )
+        return load_config(), None, {}
+
+    try:
+        health = IndexManager(db, config).check_health()
+    except (sqlite3.Error, SQLAlchemyError) as exc:
+        logger.warning(
+            "Could not read index database %s while validating KBs; "
+            "using YAML config without content-drift checks: %s",
+            config.settings.index_path,
+            exc,
+        )
+        db.close()
+        return load_config(), None, {}
+    except BaseException:
+        db.close()
+        raise
+
+    return config, db, health
 
 
 def get_config_with_registered_kbs(

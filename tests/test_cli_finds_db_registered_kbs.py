@@ -6,8 +6,10 @@ invoke the real Typer commands against SQLite.
 """
 
 import json
+import shutil
 
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 from typer.testing import CliRunner
 
 from pyrite.cli import app
@@ -93,6 +95,77 @@ def test_kb_validate_without_name_includes_db_registered_kbs(registered_kb):
     assert [kb["name"] for kb in payload["kbs"]] == ["registry-only"]
 
 
+def test_kb_validate_uses_yaml_config_when_index_database_is_unreadable(registered_kb, caplog):
+    _write_yaml_kb_config(registered_kb)
+    index_db = registered_kb["data_dir"] / "index.db"
+    corrupt_bytes = b"not a sqlite database"
+    index_db.write_bytes(corrupt_bytes)
+
+    with caplog.at_level("WARNING", logger="pyrite.cli.context"):
+        result = runner.invoke(app, ["kb", "validate", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert [kb["name"] for kb in payload["kbs"]] == ["yaml-only"]
+    assert payload["drift_checked"] is False
+    assert "using YAML config" in caplog.text
+    assert "without content-drift checks" in caplog.text
+    assert index_db.read_bytes() == corrupt_bytes
+
+    rich_result = runner.invoke(app, ["kb", "validate", "--format", "rich"])
+    assert rich_result.exit_code == 0, rich_result.output
+    assert "Content-drift checks were skipped" in rich_result.output
+
+
+def test_kb_validate_does_not_report_file_read_errors_as_database_errors(
+    registered_kb, monkeypatch, caplog
+):
+    from pyrite.storage.index import IndexManager
+
+    def fail_check_health(self, kb_name=None):
+        raise OSError("could not read a KB entry")
+
+    monkeypatch.setattr(IndexManager, "check_health", fail_check_health)
+
+    with caplog.at_level("WARNING", logger="pyrite.cli.context"):
+        result = runner.invoke(app, ["kb", "validate", "--format", "json"])
+
+    assert isinstance(result.exception, OSError)
+    assert "could not read a KB entry" in str(result.exception)
+    assert "Could not read index database" not in caplog.text
+
+
+def test_kb_validate_uses_yaml_config_when_health_check_has_database_error(
+    registered_kb, monkeypatch, caplog
+):
+    from pyrite.storage.index import IndexManager
+
+    _write_yaml_kb_config(registered_kb)
+    closed = []
+    original_close = PyriteDB.close
+
+    def fail_check_health(self, kb_name=None):
+        raise SQLAlchemyError("could not query the index")
+
+    def record_close(db):
+        closed.append(True)
+        original_close(db)
+
+    monkeypatch.setattr(IndexManager, "check_health", fail_check_health)
+    monkeypatch.setattr(PyriteDB, "close", record_close)
+
+    with caplog.at_level("WARNING", logger="pyrite.cli.context"):
+        result = runner.invoke(app, ["kb", "validate", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert [kb["name"] for kb in payload["kbs"]] == ["yaml-only"]
+    assert payload["drift_checked"] is False
+    assert "using YAML config" in caplog.text
+    assert "without content-drift checks" in caplog.text
+    assert closed == [True]
+
+
 def test_kb_schema_show_finds_db_registered_kb(registered_kb):
     payload = json.loads(
         _invoke(["kb", "schema", "show", "registry-only", "--format", "json"]).stdout
@@ -172,6 +245,34 @@ def test_kb_schema_set_finds_db_registered_kb(registered_kb, tmp_path):
 
     assert payload["set"] is True
     assert payload["type_count"] == 1
+
+
+@pytest.mark.parametrize("operation", ["add-type", "remove-type", "set"])
+def test_schema_writes_refuse_missing_db_registered_kb_directory(
+    registered_kb, tmp_path, operation
+):
+    shutil.rmtree(registered_kb["kb_path"])
+    args = ["kb", "schema", operation, "registry-only"]
+    if operation == "add-type":
+        args.extend(["--type", "project"])
+    elif operation == "remove-type":
+        args.extend(["--type", "note"])
+    else:
+        schema_file = tmp_path / "schema.yaml"
+        schema_file.write_text("types: {}\n", encoding="utf-8")
+        args.extend(["--schema-file", str(schema_file)])
+    args.extend(["--format", "json"])
+
+    result = runner.invoke(app, args)
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.stdout)
+    assert payload["error_code"] == "KB_NOT_FOUND"
+    assert payload["error"] == (
+        "KB 'registry-only' directory is missing; re-register or remove the KB"
+    )
+    assert str(registered_kb["kb_path"]) not in payload["error"]
+    assert not registered_kb["kb_path"].exists()
 
 
 @pytest.mark.control(
