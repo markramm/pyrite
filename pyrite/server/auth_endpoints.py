@@ -211,21 +211,28 @@ async def register(
 
     from starlette.concurrency import run_in_threadpool
 
-    def _register_and_login() -> tuple[dict, str]:
-        user = auth_service.register(
+    def _register() -> dict:
+        return auth_service.register(
             body.username, body.password, body.display_name, body.invite_code
         )
-        # Auto-login after registration
-        _, token = auth_service.login(body.username, body.password)
-        return user, token
 
     try:
-        user, token = await run_in_threadpool(_register_and_login)
+        user = await run_in_threadpool(_register)
     except RegistrationClosedError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Auto-login after registration. Deliberately outside the try/except
+    # above: a ValueError here is not a registration failure -- the account
+    # was already created -- so it must not be reported as one (400) or
+    # silently mapped to the wrong status; it propagates like any other
+    # unhandled error, exactly as it did before this call moved off the
+    # event loop.
+    def _login() -> tuple[dict, str]:
+        return auth_service.login(body.username, body.password)
+
+    _, token = await run_in_threadpool(_login)
     _set_session_cookie(response, token, config.settings.auth.session_ttl_hours, request)
 
     return AuthUserResponse(**user)

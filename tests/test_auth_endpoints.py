@@ -126,6 +126,29 @@ class TestRegisterEndpoint:
         )
         assert r.status_code == 400
 
+    def test_register_auto_login_value_error_is_not_reported_as_a_registration_failure(
+        self, auth_client
+    ):
+        """A ValueError from the auto-login after a successful registration
+        (#440) must not be mapped to 400: the account was already created,
+        so that response would say "bad request" about a request that
+        succeeded. The registration call is what 400 is for; the auto-login
+        is a separate step outside that except, exactly as before this PR
+        moved both calls off the event loop -- it propagates unhandled, as
+        it always did (TestClient's default re-raises it rather than
+        translating it to a response)."""
+        with (
+            patch(
+                "pyrite.services.auth_service.AuthService.login",
+                side_effect=ValueError("boom"),
+            ),
+            pytest.raises(ValueError, match="boom"),
+        ):
+            auth_client.post(
+                "/auth/register",
+                json={"username": "alice", "password": "password123"},
+            )
+
     def test_register_disabled(self, tmpdir):
         client, _, _ = _make_client(tmpdir, allow_registration=False)
         r = client.post(
