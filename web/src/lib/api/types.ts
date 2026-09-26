@@ -154,6 +154,12 @@ export interface TypeSchemaInfo {
 
 export interface TypeSchemasResponse {
 	types: Record<string, TypeSchemaInfo>;
+	/** The KB's own kb.yaml vocabulary. Empty or absent when the KB declares
+	 *  no types (an older server may omit this additive field entirely), in
+	 *  which case every type in `types` is offered and none is "undeclared".
+	 *  Callers must treat a missing `declared` as `[]`, never as "every type
+	 *  in `types` is declared". */
+	declared?: string[];
 }
 
 export interface CreateEntryRequest {

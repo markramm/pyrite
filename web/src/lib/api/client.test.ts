@@ -80,28 +80,49 @@ describe('ApiClient', () => {
 		});
 	});
 
-	describe('web writes keep the pre-#378 type behaviour', () => {
-		// The New-entry form defaults to `note` and offers every core and plugin
-		// type. REST refuses a type the KB's kb.yaml does not declare unless the
-		// caller sends allow_undeclared, so the web client sends it on every
-		// create, clip and import (#381 review, blocker 2).
-		it('createEntry sends allow_undeclared: true', async () => {
+	describe('allow_undeclared is the caller\'s explicit choice (#392)', () => {
+		// REST refuses a type the KB's kb.yaml does not declare unless the
+		// caller sends allow_undeclared (#378). The client is a pass-through:
+		// it never opts in on the caller's behalf, and only the New-entry
+		// form's explicit "use an undeclared type" control decides to pass it.
+		it('createEntry does not send allow_undeclared unless the caller passes it', async () => {
 			mockFetch.mockResolvedValueOnce(jsonResponse({ created: true, id: 'n', kb_name: 'kb', file_path: '' }));
 			await api.createEntry({ kb: 'kb', entry_type: 'note', title: 'From the form', body: '' });
 			const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-			expect(body).toEqual({ allow_undeclared: true, kb: 'kb', entry_type: 'note', title: 'From the form', body: '' });
+			expect(body).toEqual({ kb: 'kb', entry_type: 'note', title: 'From the form', body: '' });
+			expect(body.allow_undeclared).toBeUndefined();
 		});
 
-		it('clipUrl sends allow_undeclared: true', async () => {
-			mockFetch.mockResolvedValueOnce(jsonResponse({ created: true, id: 'c', kb_name: 'kb', title: 't', source_url: 'u' }));
-			await api.clipUrl({ url: 'https://example.org', kb: 'kb' });
+		it('createEntry sends allow_undeclared when the caller passes it', async () => {
+			mockFetch.mockResolvedValueOnce(jsonResponse({ created: true, id: 'n', kb_name: 'kb', file_path: '' }));
+			await api.createEntry({ kb: 'kb', entry_type: 'note', title: 'Undeclared', body: '', allow_undeclared: true });
 			const body = JSON.parse(mockFetch.mock.calls[0][1].body);
 			expect(body.allow_undeclared).toBe(true);
 		});
 
-		it('importEntries sends allow_undeclared=true', async () => {
+		it('clipUrl does not send allow_undeclared unless the caller passes it', async () => {
+			mockFetch.mockResolvedValueOnce(jsonResponse({ created: true, id: 'c', kb_name: 'kb', title: 't', source_url: 'u' }));
+			await api.clipUrl({ url: 'https://example.org', kb: 'kb' });
+			const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+			expect(body.allow_undeclared).toBeUndefined();
+		});
+
+		it('clipUrl sends allow_undeclared when the caller passes it', async () => {
+			mockFetch.mockResolvedValueOnce(jsonResponse({ created: true, id: 'c', kb_name: 'kb', title: 't', source_url: 'u' }));
+			await api.clipUrl({ url: 'https://example.org', kb: 'kb', allow_undeclared: true });
+			const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+			expect(body.allow_undeclared).toBe(true);
+		});
+
+		it('importEntries does not send allow_undeclared unless the caller passes it', async () => {
 			mockFetch.mockResolvedValueOnce(jsonResponse({ imported: 0, errors: 0, entries: [], error_details: [] }));
 			await api.importEntries(new File(['[]'], 'x.json'), 'kb');
+			expect(mockFetch.mock.calls[0][0] as string).not.toContain('allow_undeclared');
+		});
+
+		it('importEntries sends allow_undeclared=true when the caller passes it', async () => {
+			mockFetch.mockResolvedValueOnce(jsonResponse({ imported: 0, errors: 0, entries: [], error_details: [] }));
+			await api.importEntries(new File(['[]'], 'x.json'), 'kb', undefined, true);
 			expect(mockFetch.mock.calls[0][0] as string).toContain('allow_undeclared=true');
 		});
 	});
