@@ -137,6 +137,13 @@ not add ceremony.
    2026-09-25: retro 13 proposed "fix rounds never add core mechanisms" and it
    was withdrawn as surface-level; the root cause was that Pyrite had no
    single definition of entry identity and no invariant tests for storage).
+   The tools for this are in the demo KBs: `tps` `five-whys` (Ohno: go to the
+   gemba -- the diffs, the probes, the transcripts -- before asking why; fix
+   the shaft, not the fuse) and `a3-thinking`; `goldratt`
+   `current-reality-tree` (many undesirable effects, one core problem);
+   `deming` `common-cause-vs-special-cause-variation` (several failures from
+   one system cause are common-cause: patching each one as a special case is
+   tampering).
 4. **Name the constraint** — one lane, with the number that shows it. If
    the constraint is the maintainer's desk, say so plainly; the remedy is
    then to reduce what reaches it (better specs, better cold reads), not to
@@ -207,6 +214,8 @@ not add ceremony.
 - [pyrite-conductor](../pyrite-conductor/SKILL.md) — the loops you watch;
   its tick log and `process` issues are your primary evidence
 - `tcp-skills:hallway-agent-testing` — the stance
+- `tps` KB: `five-whys`, `a3-thinking`; `goldratt` KB: `current-reality-tree`;
+  `deming` KB: `common-cause-vs-special-cause-variation` -- the root-cause tools
 - `poppendiecks` KB: `amplify-learning`, `seven-wastes-of-software`,
   `eliminate-waste` — the premise and the checklist
 - ADR-0019 (the constraint is review attention), ADR-0032 §3a (the value
