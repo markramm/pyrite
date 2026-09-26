@@ -1,6 +1,9 @@
 ---
 id: the-cli-is-the-agent-interface-one-output-error-contract-a-fresh-index-a-zero
-title: 'The CLI is the agent interface: one output/error contract, a fresh index, a zero-setup local KB'
+title:
+- 'The CLI is the core of the terminal agent interface: one contract in the service layer'
+- a fresh index
+- a zero-setup local KB
 type: backlog_item
 tags:
 - cli
@@ -14,7 +17,7 @@ effort: L
 rank: 0
 ---
 
-Maintainer direction, 2026-09-26: a pi agent or Claude Code uses the pyrite CLI as shared memory across agents and time. No Python API is needed. Evidence comes from the CLI-only hallway test of 2026-09-26. An agent could do every task, but four things mislead it. Bugs are filed as #526 (partial failures exit 0), #527 (backlinks drop custom relations), #528 (ambiguous get) and #529 (a bad --format gives a traceback).
+Maintainer direction, 2026-09-26. We meet agents and users where they are. The CLI is the core of the terminal agent interface (pi, Claude Code). MCP serves Claude Desktop and Cowork agents, and the web UI serves people. So the contract below (errors, result shapes, index freshness) lives in the service layer, where every surface gets it. The CLI and MCP are thin adapters over it (ADR-0037's single error contract). The CLI is the first surface to hold it, because terminal agents chain and parse text. Evidence comes from the CLI-only hallway test of 2026-09-26. An agent could do every task, but four things mislead it. Bugs are filed as #526 (partial failures exit 0), #527 (backlinks drop custom relations), #528 (ambiguous get) and #529 (a bad --format gives a traceback).
 
 ## Three themes (0.27)
 
