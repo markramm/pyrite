@@ -13,7 +13,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from ..config import Settings
-from ..exceptions import PluginError
+from ..exceptions import MissingOptionalDependencyError
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +200,7 @@ class LLMService:
     def _get_anthropic_client(self):
         mod = _import_anthropic()
         if mod is None:
-            raise PluginError(
+            raise MissingOptionalDependencyError(
                 "The 'anthropic' package is required for the Anthropic provider. "
                 "Install it with: pip install 'pyrite[ai]'"
             )
@@ -401,7 +401,7 @@ class LLMService:
     def _get_openai_client(self):
         mod = _import_openai()
         if mod is None:
-            raise PluginError(
+            raise MissingOptionalDependencyError(
                 "The 'openai' package is required for the OpenAI/OpenRouter/Ollama provider. "
                 "Install it with: pip install 'pyrite[ai]'"
             )

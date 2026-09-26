@@ -134,6 +134,29 @@
       "status": 409
     }
   },
+  "DroppedHookRefusedError": {
+    "cli": {
+      "error": "characterization message for DroppedHookRefusedError",
+      "error_code": "ERROR",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for DroppedHookRefusedError",
+      "error_code": "PLUGIN_ERROR",
+      "legacy_error_code": "REQUEST_REFUSED",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "detail": {
+          "code": "PLUGIN_ERROR",
+          "message": "characterization message for DroppedHookRefusedError",
+          "retryable": false
+        }
+      },
+      "status": 502
+    }
+  },
   "EntryExistsError": {
     "cli": {
       "error": "characterization message for EntryExistsError",
@@ -224,6 +247,29 @@
       "status": 422
     }
   },
+  "IndexSyncRecoveryHintError": {
+    "cli": {
+      "error": "characterization message for IndexSyncRecoveryHintError",
+      "error_code": "ERROR",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for IndexSyncRecoveryHintError",
+      "error_code": "STORAGE_ERROR",
+      "legacy_error_code": "REQUEST_REFUSED",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "detail": {
+          "code": "STORAGE_ERROR",
+          "message": "characterization message for IndexSyncRecoveryHintError",
+          "retryable": false
+        }
+      },
+      "status": 500
+    }
+  },
   "InvalidGitRefError": {
     "cli": {
       "error": "characterization message for InvalidGitRefError",
@@ -244,6 +290,29 @@
         }
       },
       "status": 422
+    }
+  },
+  "KBAlreadyExistsError": {
+    "cli": {
+      "error": "characterization message for KBAlreadyExistsError",
+      "error_code": "ERROR",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for KBAlreadyExistsError",
+      "error_code": "CONFLICT",
+      "legacy_error_code": "CONFIG_ERROR",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "detail": {
+          "code": "CONFLICT",
+          "message": "characterization message for KBAlreadyExistsError",
+          "retryable": false
+        }
+      },
+      "status": 409
     }
   },
   "KBNotFoundError": {
@@ -334,6 +403,29 @@
         }
       },
       "status": 409
+    }
+  },
+  "MissingOptionalDependencyError": {
+    "cli": {
+      "error": "characterization message for MissingOptionalDependencyError",
+      "error_code": "ERROR",
+      "retryable": false
+    },
+    "mcp": {
+      "error": "characterization message for MissingOptionalDependencyError",
+      "error_code": "PLUGIN_ERROR",
+      "legacy_error_code": "REQUEST_REFUSED",
+      "retryable": false
+    },
+    "rest": {
+      "body": {
+        "detail": {
+          "code": "PLUGIN_ERROR",
+          "message": "characterization message for MissingOptionalDependencyError",
+          "retryable": false
+        }
+      },
+      "status": 502
     }
   },
   "NotAuthenticated": {

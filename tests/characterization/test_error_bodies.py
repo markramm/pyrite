@@ -226,3 +226,49 @@ def test_clipper_blocked_host_live_over_rest(world):
     )
     assert resp.status_code in (400, 403, 422)
     assert resp.json()["detail"]["code"] == "CLIPPER_BLOCKED_HOST"
+
+
+def test_kb_registry_add_duplicate_name_agrees_over_rest_and_mcp(world):
+    """#506 item 1: `kb_registry_add` over MCP used to answer a duplicate KB
+    name with the generic, fixed `ConfigError.public_message` ("The
+    configuration is invalid...") once #501 gave the base class one -- REST's
+    own `except ConfigError` catch at this same call (`admin.py`) still names
+    the conflict via `str(e)`. `KBAlreadyExistsError` (a narrow `ConfigError`
+    subclass, `public_message=None`) fixes this at the raise site
+    (`KBRegistryService.add_kb`), so both transports now say the same thing
+    for the SAME live duplicate, not just in the direct-construction golden
+    above."""
+    kb_name = "characterization-506-dup-kb"
+    p = world.principals["admin_key"]
+    try:
+        first = world.client.post(
+            "/api/kbs",
+            json={"name": kb_name, "path": str(world.tmpdir / kb_name)},
+            headers=p.rest_headers,
+        )
+        assert first.status_code == 200, first.json()
+
+        rest_resp = world.client.post(
+            "/api/kbs",
+            json={"name": kb_name, "path": str(world.tmpdir / kb_name)},
+            headers=p.rest_headers,
+        )
+        assert rest_resp.status_code == 409, rest_resp.json()
+        rest_detail = rest_resp.json()["detail"]
+        assert rest_detail["code"] == "CONFLICT"
+        assert rest_detail["message"] == f"KB '{kb_name}' already exists"
+
+        mcp_result = world.dispatch_tool(
+            "kb_registry_add",
+            {"name": kb_name, "path": str(world.tmpdir / kb_name)},
+            client_id="characterization-506-dup-kb",
+            readable_kbs=None,
+            writable_kbs=None,
+        )
+        assert mcp_result["error_code"] == "CONFLICT"
+        assert mcp_result["error"] == rest_detail["message"]
+    finally:
+        # DB-first (KBRegistryService.add_kb's own docstring: "creates a DB
+        # row, not in config.yaml") -- nothing was added to world.config,
+        # so only the DB row needs cleanup.
+        world.db.unregister_kb(kb_name)

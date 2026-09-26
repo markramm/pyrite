@@ -279,6 +279,36 @@ class TestCentralExceptionHandler:
         resp = self._fallback_probe(KBProtectedError, "SOME_PROTECTED_CODE_NOBODY_ADDED")
         assert resp.status_code == 403, resp.json()
 
+    def test_a_class_inheriting_two_base_class_fallback_bases_takes_the_first_in_tuple_order(
+        self,
+    ):
+        """#506 item 4: `_BASE_CLASS_FALLBACK` is a tuple walked in order, not
+        the class's MRO -- for a class inheriting from two of its eight
+        listed bases, which one wins is a decision, not an accident. Today's
+        order lists `ValidationError` (422) before `ConfigError` (409), so a
+        class inheriting both -- and whose own code is not in
+        `_STATUS_BY_CODE` -- resolves to `ValidationError`'s 422, not
+        `ConfigError`'s 409. Pinned here so re-ordering the tuple is a
+        reviewed change to this test, not a silent behaviour flip."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.exceptions import ConfigError, ValidationError
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        class _BothBasesError(ValidationError, ConfigError):
+            error_code = "SOME_DUAL_BASE_CODE_NOBODY_ADDED"
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            raise _BothBasesError("not in the table")
+
+        app.add_api_route("/probe/dual-base", _route, methods=["GET"])
+        resp = TestClient(app, raise_server_exceptions=False).get("/probe/dual-base")
+        assert resp.status_code == 422, resp.json()
+
     def test_body_has_no_top_level_code_or_message(self, error_client):
         """The old flat shape is gone: everything lives under detail."""
         resp = error_client.get("/probe/entry_not_found")

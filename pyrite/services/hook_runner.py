@@ -155,9 +155,9 @@ class HookRunner:
             # not knowing what was dropped is not "nothing was dropped".
             dropped = self._plugin_registry.dropped_before_hooks_for_kb(kb_type)
             if hook_name in dropped:
-                from ..exceptions import PluginError
+                from ..exceptions import DroppedHookRefusedError
 
-                raise PluginError(
+                raise DroppedHookRefusedError(
                     f"{hook_name} dispatch refused: a plugin's {hook_name} hook for "
                     f"KB type {kb_type!r} was dropped at registration for not matching "
                     f"the (entry, ctx) contract. The write cannot proceed without "

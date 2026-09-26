@@ -108,6 +108,52 @@ class TestRenameIndexVerification:
             with pytest.raises(StorageError, match="index"):
                 kb_service.rename_entry(old_id, "renamed-entry-id", kb_name)
 
+    def test_index_sync_failure_message_reaches_callers_unmasked(
+        self, indexed_test_env, sample_events
+    ):
+        """#506 item 2: the "Run `pyrite index sync` to recover" hint is safe
+        by construction (it names only the two entry ids and the caught
+        exception's text, never a real filesystem path or driver detail),
+        so it should reach REST/MCP/CLI callers as-is -- not the base
+        StorageError's fixed, generic public_message from #501. A narrow
+        StorageError subclass with public_message=None is the fix; the base
+        StorageError's masking (for OTHER raise sites that DO carry unsafe
+        detail) is untouched."""
+        kb_service = _kb_service(indexed_test_env)
+        old_id = sample_events[0].id
+        kb_name = indexed_test_env["events_kb"].name
+
+        with patch.object(
+            kb_service._index_mgr,
+            "sync_incremental",
+            side_effect=RuntimeError("simulated index failure"),
+        ):
+            with pytest.raises(StorageError) as excinfo:
+                kb_service.rename_entry(old_id, "renamed-entry-id", kb_name)
+
+        exc = excinfo.value
+        assert exc.public_message is None
+        assert "pyrite index sync" in str(exc)
+
+    def test_index_sync_missing_id_message_reaches_callers_unmasked(
+        self, indexed_test_env, sample_events
+    ):
+        """Same fix, the other raise site in this method (sync succeeds but
+        the new id still doesn't resolve)."""
+        kb_service = _kb_service(indexed_test_env)
+        old_id = sample_events[0].id
+        kb_name = indexed_test_env["events_kb"].name
+
+        with patch.object(
+            kb_service._index_mgr, "sync_incremental", return_value={"added": 0, "updated": 0}
+        ):
+            with pytest.raises(StorageError) as excinfo:
+                kb_service.rename_entry(old_id, "renamed-entry-id", kb_name)
+
+        exc = excinfo.value
+        assert exc.public_message is None
+        assert "pyrite index sync" in str(exc)
+
     def test_dry_run_skips_index_verification(self, indexed_test_env, sample_events):
         """A dry run never touches the filesystem or the index -- there is
         nothing to verify, and it must not raise. (dry_run still reports
