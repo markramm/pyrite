@@ -158,11 +158,15 @@ class TestRenameErrors:
         with pytest.raises(ValidationError):
             repo_with_links.rename("entry-a", "entry-b")
 
-    def test_rename_same_id_is_noop(self, repo_with_links):
-        """rename(x, x) is a no-op, not an error — callers may script it."""
-        result = repo_with_links.rename("entry-a", "entry-a")
-        assert result["renamed"] is False
-        assert (repo_with_links.path / "notes" / "entry-a.md").exists()
+    def test_rename_same_id_is_refused(self, repo_with_links):
+        """A same-id rename is refused without changing the source."""
+        source_path = repo_with_links.path / "notes" / "entry-a.md"
+        original = source_path.read_bytes()
+
+        with pytest.raises(ValidationError, match="new id equals old id"):
+            repo_with_links.rename("entry-a", "entry-a")
+
+        assert source_path.read_bytes() == original
 
 
 @pytest.fixture

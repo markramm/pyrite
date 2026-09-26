@@ -122,7 +122,7 @@ all eleven seeds:
 | I6 | **fails** | `ext_write(alpha.md at root, id gamma)`; `update(gamma, title)` → moved to `notes/alpha.md`. `rename` of an id-named file moves it (the proposed rule forbids that) | #488, #489 |
 | I7 | **fails** | `ext_write(alpha.md, id beta)`; `delete(alpha)` → removes `beta`'s file | #483 |
 | I8 | **fails** | `ext_write(beta.md, no id:, title "Alpha")` → `alpha` indexed, `find_file('alpha')` is None. `ext_write(alpha.md, no id:, title "Beta")` → `find_file('alpha')` returns a file holding `beta` | #483, #484 |
-| I9 | **fails** | `ext_write(alpha.md, no id:)`; `rename('alpha', 'alpha')` → ok, and still no row (a same-id rename is a silent no-op). `create(note "Gamma")`; `ext_write(x.md, id gamma)`; `delete(gamma)` → ok; `x.md` still holds `gamma` and has no row. Otherwise holds (exploratory run; M2 and M3 turn it red) | #493, #494 |
+| I9 | **fails** | `create(note "Gamma")`; `ext_write(x.md, id gamma)`; `delete(gamma)` → ok; `x.md` still holds `gamma` and has no row. Otherwise holds (exploratory run; M2 and M3 turn it red) | #494 |
 | I10 | **fails** (holds for `file_pattern` renames) | note `alpha`: commit, edit, commit, rename→`omega`, commit → history(`omega`) = `[rename]`. Hand edit `id: alpha`→`zeta` → history(`zeta`) = `[zeta, alpha]` | #489, #490 |
 
 One of the ten holds (I5). Every failure is one of three root causes:

@@ -563,24 +563,17 @@ class KBRepository:
 
         Raises:
             EntryNotFoundError: if ``old_id`` doesn't exist in this KB.
-            ValidationError: if ``new_id`` already exists.
+            ValidationError: if the new ID equals the old ID or already exists.
             KBReadOnlyError: if the KB is read-only.
         """
         if self.config.read_only and not dry_run:
             raise KBReadOnlyError(f"KB '{self.name}' is read-only")
 
-        # Same-id is a no-op — callers can script rename(x, x) safely.
+        # A rename must change the id; otherwise callers can silently skip index repair.
         self._validate_entry_id(new_id)
 
         if old_id == new_id:
-            return {
-                "renamed": False,
-                "old_id": old_id,
-                "new_id": new_id,
-                "files_rewritten": 0,
-                "links_rewritten": 0,
-                "dry_run": dry_run,
-            }
+            raise ValidationError(f"Cannot rename '{old_id}': new id equals old id")
 
         src = self.find_file(old_id)
         if not src or not src.exists():
