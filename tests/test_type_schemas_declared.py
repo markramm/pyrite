@@ -134,6 +134,18 @@ def test_rest_create_the_forms_default_payload_succeeds_without_allow_undeclared
         form = {"kb": "sw", "entry_type": default_type, "title": "From the form", "body": ""}
         resp = client.post("/api/entries", json=form)
         assert resp.status_code == 200, resp.text
-        assert len(list(software_env["kb_path"].rglob("from-the-form.md"))) == 1
+        # Not a hardcoded filename: the default declared type (`adr`, #391)
+        # can have its own `file_pattern`, so the file is not necessarily
+        # `<id>.md` -- assert by frontmatter id instead of by name.
+        entry_id = resp.json()["id"]
+        id_line = f"id: {entry_id}"
+        matches = [
+            p
+            for p in software_env["kb_path"].rglob("*.md")
+            if any(line.strip() == id_line for line in p.read_text().splitlines())
+        ]
+        assert len(matches) == 1, (
+            f"expected exactly one file with id: {entry_id!r}, found {matches}"
+        )
     finally:
         close()
