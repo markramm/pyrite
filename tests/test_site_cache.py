@@ -1503,9 +1503,10 @@ class TestBrokenBrandingDoesNotLeakOnPublicRoutes:
 
     def test_config_branding_route_answers_a_named_code_not_a_bare_500(self, tmp_path):
         """The route still fails closed (it cannot serve real branding), but
-        with the same ``{"code", "message"}`` shape every other PyriteError
-        gets from the central handler -- not FastAPI's generic
-        'Internal Server Error' text and not a traceback."""
+        with the same ``{"detail": {"code", "message", ...}}`` shape every
+        other PyriteError gets from the central handler (ADR-0037 theme 2)
+        -- not FastAPI's generic 'Internal Server Error' text and not a
+        traceback."""
         fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
         from fastapi.testclient import TestClient
 
@@ -1516,7 +1517,7 @@ class TestBrokenBrandingDoesNotLeakOnPublicRoutes:
         with TestClient(app, raise_server_exceptions=False) as client:
             resp = client.get("/config/branding")
 
-        body = resp.json()
+        body = resp.json()["detail"]
         assert body.get("code") == "BRANDING_INVALID", body
 
     @pytest.mark.control(
@@ -1531,14 +1532,16 @@ class TestBrokenBrandingDoesNotLeakOnPublicRoutes:
         )
     )
     def test_config_branding_central_handler_does_not_log_a_5xx_twice(self, tmp_path, caplog):
-        """#445 delta cold read: ``pyrite.server.api``'s central handler
-        logged a 5xx PyriteError with ``logger.error`` (with a traceback)
-        AND, whenever it had a ``public_message``, an unconditional second
-        ``logger.warning`` line for the very same exception -- doubling the
-        handler's own log output for a broken branding.yaml on every
-        request. Scoped to the ``pyrite.server.api`` logger specifically:
-        ``BrandingService`` logging its own line (once per mtime, a
-        separate concern) is not part of this count."""
+        """#445 delta cold read: the central handler (now
+        ``pyrite.server.errors``, moved from ``pyrite.server.api`` by
+        ADR-0037 theme 2) logged a 5xx PyriteError with ``logger.error``
+        (with a traceback) AND, whenever it had a ``public_message``, an
+        unconditional second ``logger.warning`` line for the very same
+        exception -- doubling the handler's own log output for a broken
+        branding.yaml on every request. Scoped to the
+        ``pyrite.server.errors`` logger specifically: ``BrandingService``
+        logging its own line (once per mtime, a separate concern) is not
+        part of this count."""
         import logging
 
         fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
@@ -1549,13 +1552,13 @@ class TestBrokenBrandingDoesNotLeakOnPublicRoutes:
         config, _branding = self._config_with_broken_branding(tmp_path, "- a list, not a mapping\n")
         app = create_app(config=config)
         with (
-            caplog.at_level(logging.WARNING, logger="pyrite.server.api"),
+            caplog.at_level(logging.WARNING, logger="pyrite.server.errors"),
             TestClient(app, raise_server_exceptions=False) as client,
         ):
             resp = client.get("/config/branding")
 
         assert resp.status_code >= 500, resp.text
-        handler_records = [r for r in caplog.records if r.name == "pyrite.server.api"]
+        handler_records = [r for r in caplog.records if r.name == "pyrite.server.errors"]
         assert len(handler_records) <= 1, (
             f"expected the central handler to log this 5xx at most once, got "
             f"{len(handler_records)}: {[r.getMessage() for r in handler_records]}"
@@ -1702,7 +1705,7 @@ class TestBrandingScalarFieldValidation:
         with TestClient(app, raise_server_exceptions=False) as client:
             r = client.get("/config/branding")
         assert r.status_code == 500, r.text
-        body = r.json()
+        body = r.json()["detail"]
         assert body.get("code") == "BRANDING_INVALID", body
         assert not isinstance(body.get("name"), list), body
 
@@ -1780,14 +1783,16 @@ class TestBrandingFailureCacheDoesNotLeakTracebackFrames:
         app = create_app(config=config)
         depths = []
         with (
-            caplog.at_level(logging.ERROR, logger="pyrite.server.api"),
+            caplog.at_level(logging.ERROR, logger="pyrite.server.errors"),
             TestClient(app, raise_server_exceptions=False) as client,
         ):
             for _ in range(8):
                 caplog.clear()
                 r = client.get("/config/branding")
                 assert r.status_code == 500, r.text
-                handler_records = [rec for rec in caplog.records if rec.name == "pyrite.server.api"]
+                handler_records = [
+                    rec for rec in caplog.records if rec.name == "pyrite.server.errors"
+                ]
                 assert handler_records, "expected the central handler to log this 5xx"
                 exc_info = handler_records[0].exc_info
                 assert exc_info is not None and exc_info[2] is not None, (

@@ -5,7 +5,7 @@ import json
 import pytest
 import typer
 
-from pyrite.utils.errors import build_error, cli_error
+from pyrite.utils.errors import build_error, cli_error, cli_error_from
 
 
 def test_build_error_shape():
@@ -64,6 +64,91 @@ def test_cli_error_rich_format(capsys):
     out = capsys.readouterr().out
     assert "KB_NOT_FOUND" in out
     assert "KB not found: x" in out
+
+
+class TestCliErrorFrom:
+    """ADR-0037 theme 2: cli_error_from(exc) replaces the hand-kept
+    isinstance chain (the old ``pyrite/cli/__init__.py::_cli_err``, which
+    hardcoded NOT_FOUND / KB_NOT_FOUND / VALIDATION_FAILED for three
+    exception types and "ERROR" for everything else) with one call that
+    reads the class's own ``error_code`` -- the same code REST's central
+    handler and MCP's ``_refusal`` now read from the same attribute.
+    """
+
+    def test_reads_the_class_code(self, capsys):
+        from pyrite.exceptions import KBNotFoundError
+
+        with pytest.raises(typer.Exit) as exc:
+            cli_error_from(KBNotFoundError("KB not found: x"), output_format="json")
+        assert exc.value.exit_code == 1
+        parsed = json.loads(capsys.readouterr().out)
+        assert parsed["error_code"] == "KB_NOT_FOUND"
+        assert parsed["error"] == "KB not found: x"
+
+    def test_entry_not_found_code(self, capsys):
+        from pyrite.exceptions import EntryNotFoundError
+
+        with pytest.raises(typer.Exit):
+            cli_error_from(EntryNotFoundError("no entry here"), output_format="json")
+        parsed = json.loads(capsys.readouterr().out)
+        assert parsed["error_code"] == "ENTRY_NOT_FOUND"
+
+    def test_base_validation_error_reads_the_class_code(self, capsys):
+        """The old _cli_err hardcoded VALIDATION_FAILED for any ValidationError
+        via an isinstance chain; cli_error_from reads the class's own code
+        instead -- which happens to be the same string here (conductor
+        decision, ADR-0037 theme 2 fix round 1: the base ValidationError code
+        is VALIDATION_FAILED, the write pipeline's documented spelling), so
+        this is not a change in what the CLI reports, only in how it is
+        derived. No legacy_error_code -- that concept is MCP-only per the
+        maintainer's decision (2026-09-25)."""
+        from pyrite.exceptions import ValidationError
+
+        with pytest.raises(typer.Exit):
+            cli_error_from(ValidationError("bad field"), output_format="json")
+        parsed = json.loads(capsys.readouterr().out)
+        assert parsed["error_code"] == "VALIDATION_FAILED"
+        assert "legacy_error_code" not in parsed
+
+    def test_a_class_the_old_isinstance_chain_did_not_know_about(self, capsys):
+        """The old chain fell to a bare "ERROR" for anything that wasn't
+        EntryNotFoundError/KBNotFoundError/ValidationError -- e.g. StorageError.
+        cli_error_from has no such gap: every PyriteError has a class code."""
+        from pyrite.exceptions import StorageError
+
+        with pytest.raises(typer.Exit):
+            cli_error_from(StorageError("disk gone"), output_format="json")
+        parsed = json.loads(capsys.readouterr().out)
+        assert parsed["error_code"] == "STORAGE_ERROR"
+
+    def test_public_message_replaces_str_exc_when_set(self, capsys):
+        from pyrite.exceptions import ConfigSaveRefusedError
+
+        exc = ConfigSaveRefusedError("/real/secret/path.yaml leaked here", dropped=["x"])
+        with pytest.raises(typer.Exit):
+            cli_error_from(exc, output_format="json")
+        parsed = json.loads(capsys.readouterr().out)
+        assert parsed["error_code"] == "CONFIG_SAVE_REFUSED"
+        assert "/real/secret/path.yaml" not in parsed["error"]
+
+    def test_suggestion_becomes_the_hint(self, capsys):
+        from pyrite.exceptions import ValidationError
+
+        exc = ValidationError("bad field")
+        exc.suggestion = "try again"
+        with pytest.raises(typer.Exit):
+            cli_error_from(exc, output_format="json")
+        parsed = json.loads(capsys.readouterr().out)
+        assert parsed["suggestion"] == "try again"
+
+    def test_defaults_to_rich_format(self, capsys):
+        from pyrite.exceptions import KBNotFoundError
+
+        with pytest.raises(typer.Exit):
+            cli_error_from(KBNotFoundError("KB not found: x"))
+        out = capsys.readouterr().out
+        assert "KB_NOT_FOUND" in out
+        assert "KB not found: x" in out
 
 
 def test_search_unregistered_kb_returns_kb_not_found():

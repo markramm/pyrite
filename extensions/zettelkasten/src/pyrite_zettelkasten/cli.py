@@ -1,5 +1,7 @@
 """Zettelkasten CLI commands."""
 
+import logging
+
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -9,6 +11,7 @@ from pyrite.storage.database import PyriteDB
 
 zettel_app = typer.Typer(help="Zettelkasten knowledge management")
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 @zettel_app.command("new")
@@ -73,7 +76,17 @@ def zettel_new(
             )
         except PyriteError as e:
             code = getattr(e, "error_code", None) or "CREATE_FAILED"
-            cli_error(str(e), error_code=code)
+            # A StorageError/PluginError/ConfigError (or a subclass that
+            # doesn't set its own) can carry server-side detail in str(e) --
+            # a real path, a driver's own text. public_message, when set, is
+            # what every other transport already shows (ADR-0037 theme 2
+            # round 2, item 1); the real detail still reaches the log.
+            public_message = getattr(e, "public_message", None)
+            if public_message is not None:
+                logger.warning("%s", e)
+                cli_error(public_message, error_code=code)
+            else:
+                cli_error(str(e), error_code=code)
 
         from pyrite.storage.repository import KBRepository
 

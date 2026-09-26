@@ -80,8 +80,24 @@ def _project_fields(entry: dict, fields: list[str] | None) -> dict:
     return out
 
 
-# Most specific first: the dispatcher takes the first isinstance match.
-_DOMAIN_ERROR_CODES: tuple[tuple[type[PyriteError], str], ...] = (
+# ADR-0037 theme 2 (maintainer decision, 2026-09-25): "one code per
+# exception, and REST's code wins. For one release, MCP keeps emitting its
+# current code in a legacy_error_code field, then switches." Codes now live
+# on the exception classes (``pyrite.exceptions``) -- REST's spelling, since
+# REST's is the more specific one where the two transports used to disagree.
+#
+# This table and _legacy_mcp_code() below reproduce *exactly* what this
+# module computed before this theme (the old _DOMAIN_ERROR_CODES lookup,
+# most-specific-first via isinstance, falling back to the class's own old
+# error_code attribute, and finally to "REQUEST_REFUSED") -- kept only to
+# detect where that disagrees with the class's new code and populate
+# ``legacy_error_code`` for one release. It is not consulted for the code
+# MCP reports going forward (``exc.error_code`` is). A hand-picked list of
+# "the codes that changed" was tried first and missed cases (FrontmatterError,
+# TruncatedBodyError, PluginError, StorageError -- anything that used to fall
+# through to the REQUEST_REFUSED fallback or inherit a base class's old
+# literal); replaying the actual old algorithm cannot miss one.
+_LEGACY_DOMAIN_ERROR_CODES: tuple[tuple[type[PyriteError], str], ...] = (
     (EntryNotFoundError, "NOT_FOUND"),
     (KBNotFoundError, "NOT_FOUND"),
     (KBReadOnlyError, "READ_ONLY"),
@@ -92,6 +108,74 @@ _DOMAIN_ERROR_CODES: tuple[tuple[type[PyriteError], str], ...] = (
     (ConfigError, "CONFIG_ERROR"),
     (BrandingInvalidError, "BRANDING_INVALID"),
 )
+#: The literal ``error_code`` every ``PyriteError`` subclass carried before
+#: this theme gave classes without their own a code at all (ADR-0037 theme
+#: 2). Anything not listed here had no class-level code pre-theme.
+_LEGACY_OWN_ERROR_CODE: dict[str, str] = {
+    "ValidationError": "VALIDATION_FAILED",
+    "UndeclaredTypeError": "UNDECLARED_TYPE",
+    "EntryExistsError": "ENTRY_EXISTS",
+    "SchemaViolationError": "SCHEMA_VIOLATION",
+    "InvalidGitRefError": "INVALID_REF",
+    "QuerySyntaxError": "QUERY_SYNTAX",
+    "QueryTooLongError": "QUERY_TOO_LONG",
+    "ClipperBlockedHostError": "CLIPPER_BLOCKED_HOST",
+    "LastAdminError": "LAST_ADMIN",
+}
+
+
+#: Classes ADR-0037 theme 2 introduces (``exceptions.AccessDenied`` and its
+#: subclasses). Never raised by any surface before this theme -- theme 1/3b's
+#: job -- so there is no old MCP behaviour to disagree with, and no
+#: ``legacy_error_code`` should be reported for them even though they are
+#: not explicitly in the tables above either.
+_NEW_IN_THIS_THEME = frozenset({"AccessDenied", "NotAuthenticated", "Forbidden"})
+
+
+def _legacy_mcp_code(exc: PyriteError) -> str | None:
+    """What this module would have reported for ``exc`` before this theme,
+    or ``None`` for a class this theme introduces (see ``_NEW_IN_THIS_THEME``).
+
+    Walks the exception's own MRO up to (and including) ``PyriteError`` so a
+    subclass with no code of its own inherits its nearest ancestor's old
+    literal, exactly as plain attribute lookup did before this theme.
+    """
+    for klass in type(exc).__mro__:
+        name = klass.__name__
+        if name in _NEW_IN_THIS_THEME:
+            return None
+        if name in _LEGACY_OWN_ERROR_CODE:
+            return _LEGACY_OWN_ERROR_CODE[name]
+        if klass is PyriteError:
+            break
+    for t, c in _LEGACY_DOMAIN_ERROR_CODES:
+        if isinstance(exc, t):
+            return c
+    return "REQUEST_REFUSED"
+
+
+def _safe_message(exc: Exception) -> str:
+    """The message an MCP tool handler may show for ``exc``.
+
+    ADR-0037 theme 2 round 2 (conductor cold read of 5d65caa7, item 1): a
+    hand-written ``except PyriteError as e: return _error(CODE, str(e))``
+    site bypasses the ``public_message`` ``_refusal`` already respects for
+    the dispatcher's own catch-all. A ``StorageError``/``PluginError``/
+    ``ConfigError`` (or a subclass that doesn't set its own) can carry
+    server-side detail in ``str(exc)`` -- a real path, a driver's own text.
+    Every one of these hand-written sites should call this instead of
+    ``str(e)`` directly. Logs the real detail server-side when it masks it,
+    the same split ``_refusal``/``server/errors.py`` already make.
+
+    Some of these sites catch ``(PyriteError, ValueError)`` together, so
+    ``exc`` is not always a ``PyriteError`` -- ``public_message`` is looked
+    up with ``getattr``, not assumed present.
+    """
+    public_message = getattr(exc, "public_message", None)
+    if public_message is not None:
+        logger.warning("%s", exc)
+        return public_message
+    return str(exc)
 
 
 def _error(
@@ -100,35 +184,59 @@ def _error(
     *,
     suggestion: str | None = None,
     retryable: bool = False,
+    legacy_error_code: str | None = None,
 ) -> dict:
     """Build a structured error response for MCP tools."""
     r: dict = {"error": message, "error_code": code, "retryable": retryable}
     if suggestion:
         r["suggestion"] = suggestion
+    if legacy_error_code is not None:
+        r["legacy_error_code"] = legacy_error_code
     return r
 
 
 def _refusal(exc: PyriteError) -> dict:
-    """Map a service refusal to the MCP envelope, keeping its own code.
+    """Map a service refusal to the MCP envelope.
 
-    Write refusals carry a stable ``error_code`` (see the ValidationError
-    subclasses in ``pyrite.exceptions``) that REST and the CLI report
-    unchanged (#378). Not retryable -- the same call fails the same way --
-    except a ``StorageError`` that says otherwise: a locked or busy database
+    The code is the exception class's own (``exc.error_code`` -- every
+    ``PyriteError`` carries one; see ``pyrite.exceptions``) -- REST's more
+    specific spelling where REST and MCP used to disagree (``ENTRY_NOT_FOUND``
+    replacing ``NOT_FOUND``, etc.), or the one spelling REST, MCP and the CLI
+    already agreed on where they did not (the base ``ValidationError``:
+    conductor decision, fix round 1 -- the write pipeline's documented
+    ``VALIDATION_FAILED`` wins over the central handler's less-visited
+    ``VALIDATION_ERROR``). Where the class's code differs from what MCP used
+    to report for this class (``_legacy_mcp_code``, replaying the old
+    ``_LEGACY_DOMAIN_ERROR_CODES``/``_LEGACY_OWN_ERROR_CODE`` lookup), the old
+    code is carried one more release in ``legacy_error_code`` so an existing
+    MCP caller matching on the old string is not broken outright (ADR-0037
+    theme 2, maintainer decision 2026-09-25). A class MCP and REST already
+    agreed on gets no ``legacy_error_code`` key at all -- there is nothing
+    legacy to report.
+
+    Not retryable -- the same call fails the same way -- except a
+    ``StorageError`` that says otherwise: a locked or busy database
     (``StorageBusyError``) can succeed on a retry; schema drift, a missing
     table and corruption cannot (#431).
     """
-    code = getattr(exc, "error_code", None) or next(
-        (c for t, c in _DOMAIN_ERROR_CODES if isinstance(exc, t)), "REQUEST_REFUSED"
-    )
+    code = exc.error_code
+    legacy_code = _legacy_mcp_code(exc)
+    if legacy_code == code:
+        legacy_code = None
     retryable = isinstance(exc, StorageError) and exc.retryable
     # str(exc) is safe for every existing domain error here -- validation
     # messages, "not found", query syntax -- except one that opts out via a
     # `public_message` class attribute because its own str() names a real
     # filesystem path (BrandingInvalidError; the REST side's #377 pattern,
     # #445's cold read).
-    message = getattr(exc, "public_message", None) or str(exc)
-    err = _error(code, message, suggestion=getattr(exc, "suggestion", None), retryable=retryable)
+    message = exc.public_message or str(exc)
+    err = _error(
+        code,
+        message,
+        suggestion=getattr(exc, "suggestion", None),
+        retryable=retryable,
+        legacy_error_code=legacy_code,
+    )
     declared = getattr(exc, "declared_types", None)
     if declared is not None:
         err["declared_types"] = declared
@@ -877,7 +985,7 @@ class PyriteMCPServer:
         try:
             return self.svc.orient(kb_name, recent_limit=recent_limit)
         except PyriteError as e:
-            return _error("OPERATION_FAILED", str(e))
+            return _error("OPERATION_FAILED", _safe_message(e))
 
     def _kb_recent(
         self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
@@ -1093,7 +1201,7 @@ class PyriteMCPServer:
         except ValidationError as e:
             return _refusal(e)
         except PyriteError as e:
-            return _error("CREATE_FAILED", str(e), retryable=True)
+            return _error("CREATE_FAILED", _safe_message(e), retryable=True)
 
         entry = written.entry
         result = {
@@ -1129,7 +1237,7 @@ class PyriteMCPServer:
                 kb_name, entries, allow_undeclared=bool(args.get("allow_undeclared"))
             )
         except PyriteError as e:
-            return _error("BULK_CREATE_FAILED", str(e), retryable=True)
+            return _error("BULK_CREATE_FAILED", _safe_message(e), retryable=True)
 
         created = sum(1 for r in results if r.get("created"))
         failed = len(results) - created
@@ -1167,7 +1275,7 @@ class PyriteMCPServer:
         except ValidationError as e:
             return _refusal(e)
         except PyriteError as e:
-            return _error("UPDATE_FAILED", str(e), retryable=True)
+            return _error("UPDATE_FAILED", _safe_message(e), retryable=True)
 
         entry = written.entry
         result: dict[str, Any] = {
@@ -1190,7 +1298,7 @@ class PyriteMCPServer:
         try:
             deleted = self.svc.delete_entry(entry_id, kb_name)
         except PyriteError as e:
-            return _error("DELETE_FAILED", str(e), retryable=True)
+            return _error("DELETE_FAILED", _safe_message(e), retryable=True)
 
         if not deleted:
             return _error(
@@ -1229,7 +1337,7 @@ class PyriteMCPServer:
             # retryability.
             return _error("LINK_FAILED", str(e), retryable=False)
         except PyriteError as e:
-            return _error("LINK_FAILED", str(e), retryable=True)
+            return _error("LINK_FAILED", _safe_message(e), retryable=True)
 
         return {
             "linked": True,
@@ -1482,7 +1590,7 @@ class PyriteMCPServer:
             )
             return {"decomposed": True, "parent_id": args["parent_id"], "children": results}
         except (PyriteError, ValueError) as e:
-            return _error("OPERATION_FAILED", str(e))
+            return _error("OPERATION_FAILED", _safe_message(e))
 
     def _task_checkpoint(self, args: dict[str, Any]) -> dict[str, Any]:
         """Log a checkpoint on a task."""
@@ -1495,7 +1603,7 @@ class PyriteMCPServer:
                 partial_evidence=args.get("partial_evidence"),
             )
         except (PyriteError, ValueError) as e:
-            return _error("OPERATION_FAILED", str(e))
+            return _error("OPERATION_FAILED", _safe_message(e))
 
     # =========================================================================
     # Admin handlers
@@ -1605,7 +1713,7 @@ class PyriteMCPServer:
                 return svc.set_schema(kb_name, schema)
 
         except (PyriteError, ValueError) as e:
-            return _error("OPERATION_FAILED", str(e))
+            return _error("OPERATION_FAILED", _safe_message(e))
 
         return _error("OPERATION_FAILED", f"Unknown schema action: {action}")
 
@@ -1624,7 +1732,7 @@ class PyriteMCPServer:
                 kb_name, message=message, paths=paths, sign_off=sign_off
             )
         except PyriteError as e:
-            return _error("OPERATION_FAILED", str(e))
+            return _error("OPERATION_FAILED", _safe_message(e))
 
     def _kb_push(self, args: dict[str, Any]) -> dict[str, Any]:
         """Push KB commits to a remote repository."""
@@ -1640,7 +1748,7 @@ class PyriteMCPServer:
         except InvalidGitRefError as e:
             return _error("VALIDATION_ERROR", str(e))
         except PyriteError as e:
-            return _error("OPERATION_FAILED", str(e))
+            return _error("OPERATION_FAILED", _safe_message(e))
 
     def _kb_registry_add(self, args: dict[str, Any]) -> dict[str, Any]:
         """Register a new user KB by path."""
@@ -1657,7 +1765,7 @@ class PyriteMCPServer:
             )
             return {"created": True, **result}
         except (PyriteError, ValueError) as e:
-            return _error("CONFLICT", str(e))
+            return _error("CONFLICT", _safe_message(e))
 
     def _kb_registry_remove(self, args: dict[str, Any]) -> dict[str, Any]:
         """Remove a user-added KB."""

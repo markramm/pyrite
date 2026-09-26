@@ -456,7 +456,7 @@ class TestClassification:
     def test_rest_answers_it_400(self, rest_api_env):
         resp = rest_api_env["client"].get("/api/search", params={"q": 'x AND "a.b":y'})
         assert resp.status_code == 400, resp.json()
-        assert resp.json()["code"] == "QUERY_SYNTAX"
+        assert resp.json()["detail"]["code"] == "QUERY_SYNTAX"
 
     def test_a_missing_column_the_query_does_not_name_is_storage(self):
         from pyrite.services.search_service import _looks_like_query_syntax_error
@@ -538,7 +538,8 @@ class TestClassification:
             EmbeddingService, "has_embeddings", _raise(_real_locked_error(tmp_path))
         )
         result = mcp_server._dispatch_tool("kb_search", {"query": "hello", "mode": "hybrid"})
-        assert result["error_code"] == "REQUEST_REFUSED", result
+        assert result["error_code"] == "STORAGE_ERROR", result
+        assert result["legacy_error_code"] == "REQUEST_REFUSED", result
         assert result["retryable"] is True
 
 
@@ -550,7 +551,8 @@ class TestClassification:
 def _mcp_retryable(server, monkeypatch, error) -> bool:
     monkeypatch.setattr(server.db, "search", _raise(error))
     result = server._dispatch_tool("kb_search", {"query": "hello", "mode": "keyword"})
-    assert result["error_code"] == "REQUEST_REFUSED", result
+    assert result["error_code"] == "STORAGE_ERROR", result
+    assert result["legacy_error_code"] == "REQUEST_REFUSED", result
     return result["retryable"]
 
 
@@ -571,11 +573,20 @@ class TestRestContract:
         )
         resp = self._get(rest_api_env, caplog)
         assert resp.status_code == 500
-        assert resp.json()["code"] == "STORAGE_ERROR"
-        assert "file is not a database" in resp.json()["message"]
+        assert resp.json()["detail"]["code"] == "STORAGE_ERROR"
+        # ADR-0037 theme 2 fix round 1: StorageError has a fixed, safe
+        # public_message now (ADR §3) -- the real detail ("file is not a
+        # database", which could be considered server-internal) no longer
+        # reaches the response body; it still reaches the server log below,
+        # with a traceback.
+        assert resp.json()["detail"]["message"] == (
+            "A storage operation failed. An administrator needs to check the "
+            "server log for the underlying error."
+        )
         records = _error_records(caplog)
         assert len(records) == 1, [r.getMessage() for r in records]
         assert records[0].exc_info and records[0].exc_info[0] is not None
+        assert "file is not a database" in records[0].getMessage()
 
     def test_a_semantic_leg_failure_is_a_json_500_logged_with_a_traceback(
         self, rest_api_env, monkeypatch, caplog
@@ -586,8 +597,9 @@ class TestRestContract:
         monkeypatch.setattr(EmbeddingService, "search_similar", _raise(_real_missing_table_error()))
         resp = self._get(rest_api_env, caplog, mode="semantic")
         assert resp.status_code == 500
-        assert set(resp.json()) == {"code", "message"}
-        assert resp.json()["code"] == "STORAGE_ERROR"
+        assert set(resp.json()) == {"detail"}
+        assert set(resp.json()["detail"]) >= {"code", "message", "retryable"}
+        assert resp.json()["detail"]["code"] == "STORAGE_ERROR"
         records = _error_records(caplog)
         assert len(records) == 1, [r.getMessage() for r in records]
         assert records[0].exc_info and records[0].exc_info[0] is not None
@@ -602,7 +614,8 @@ class TestMcpContract:
         monkeypatch.setattr(mcp_server.db, "search", _raise(_real_locked_error(tmp_path)))
         result = self._search(mcp_server, caplog)
         assert result["retryable"] is True, result
-        assert result["error_code"] == "REQUEST_REFUSED"
+        assert result["error_code"] == "STORAGE_ERROR"
+        assert result["legacy_error_code"] == "REQUEST_REFUSED"
         records = _error_records(caplog)
         assert len(records) == 1, [r.getMessage() for r in records]
         assert records[0].exc_info and records[0].exc_info[0] is not None
@@ -613,7 +626,8 @@ class TestMcpContract:
         monkeypatch.setattr(mcp_server.db, "search", _raise(_real_not_a_database_error(tmp_path)))
         result = self._search(mcp_server, caplog)
         assert result["retryable"] is False, result
-        assert result["error_code"] == "REQUEST_REFUSED"
+        assert result["error_code"] == "STORAGE_ERROR"
+        assert result["legacy_error_code"] == "REQUEST_REFUSED"
         records = _error_records(caplog)
         assert len(records) == 1, [r.getMessage() for r in records]
         assert records[0].exc_info and records[0].exc_info[0] is not None
@@ -626,9 +640,21 @@ class TestMcpContract:
         monkeypatch.setattr(EmbeddingService, "has_embeddings", lambda self: True)
         monkeypatch.setattr(EmbeddingService, "search_similar", _raise(_real_missing_table_error()))
         result = self._search(mcp_server, caplog, mode="semantic")
-        assert result["error_code"] == "REQUEST_REFUSED", result
+        assert result["error_code"] == "STORAGE_ERROR", result
+        assert result["legacy_error_code"] == "REQUEST_REFUSED", result
         assert result["retryable"] is False
-        assert "no such table" in result["error"]
+        # ADR-0037 theme 2 fix round 1: StorageError has a fixed, safe
+        # public_message now (ADR §3) -- the real detail ("no such table")
+        # no longer reaches the MCP envelope; it still reaches the server
+        # log (checked below), with a traceback.
+        assert result["error"] == (
+            "A storage operation failed. An administrator needs to check the "
+            "server log for the underlying error."
+        )
+        records = _error_records(caplog)
+        assert any("no such table" in r.getMessage() for r in records), [
+            r.getMessage() for r in records
+        ]
 
     @pytest.mark.parametrize(
         ("query", "code"),

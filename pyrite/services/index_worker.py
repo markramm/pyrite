@@ -213,7 +213,7 @@ class IndexWorker:
                     SET status = 'failed', error = ?, completed_at = ?
                     WHERE job_id = ?
                     """,
-                    (str(e), now, job_id),
+                    (getattr(e, "public_message", None) or str(e), now, job_id),
                 )
                 db._raw_conn.commit()
             except Exception:
@@ -256,7 +256,7 @@ class IndexWorker:
                     SET status = 'failed', error = ?, completed_at = ?
                     WHERE job_id = ?
                     """,
-                    (str(e), now, job_id),
+                    (getattr(e, "public_message", None) or str(e), now, job_id),
                 )
                 db._raw_conn.commit()
             except Exception:

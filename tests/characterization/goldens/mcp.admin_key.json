@@ -4198,7 +4198,8 @@
   },
   "task_create | admin_key | missing-kb": {
     "error": "KB not found: missing-kb",
-    "error_code": "NOT_FOUND",
+    "error_code": "KB_NOT_FOUND",
+    "legacy_error_code": "NOT_FOUND",
     "retryable": false
   },
   "task_create | admin_key | no-default-role-kb": {

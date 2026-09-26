@@ -21,8 +21,14 @@ Every MCP tool must have:
 
 ## Error Handling
 
-Every error surface — CLI (`--format json`), MCP tool responses, and
-the REST `PyriteError` handler — returns the same canonical shape:
+ADR-0037 theme 2 (maintainer decision, 2026-09-25): **codes live on the
+exception class.** Every `PyriteError` subclass (`pyrite/exceptions.py`)
+carries a class-level `error_code` and a safe `public_message` (`None` when
+`str(exc)` itself is already safe to show). Every surface derives its code
+from the class the same way — no per-transport lookup table keyed by
+exception type — but each surface keeps its own wire shape:
+
+**CLI (`--format json`) and MCP tool responses** return the same flat shape:
 
 ```json
 {
@@ -41,13 +47,21 @@ the REST `PyriteError` handler — returns the same canonical shape:
 - `retryable: true` means the same request could succeed on retry
   (e.g. a transient lock); `false` means the request itself needs to
   change (e.g. a malformed query).
+- **MCP only, for one release:** where REST's code differs from what MCP
+  used to report for a class, the tool response also carries the old code
+  in `legacy_error_code`. The CLI has no such field.
+
+**REST** answers `{"detail": {"code", "message", "retryable", "hint"?}}` —
+the single shape every REST path uses, whether the refusal reached the
+central `PyriteError` handler (`server/errors.py`) or an endpoint's own
+`HTTPException(detail={...})`.
 
 Build errors via the shared helper (`pyrite/utils/errors.py`'s
-`build_error`/`cli_error`, or MCP's `_error()` in `mcp_server.py`) —
-never hand-roll `{"error": "message"}`. That shape was the OLD
-convention; the full canonical contract (including success envelopes,
-body-truncation fields, and exit codes) is documented in
-`docs/json-contracts.md`.
+`build_error`/`cli_error`/`cli_error_from` for CLI, MCP's `_error()`/
+`_refusal()` in `server/mcp_server.py`, or REST's `server/errors.py`) —
+never hand-roll `{"error": "message"}`. The full canonical contract
+(including success envelopes, body-truncation fields, and exit codes) is
+documented in `docs/json-contracts.md`.
 
 Return guidance for file creation (create tools don't write files
 directly, they return instructions).

@@ -7,15 +7,21 @@ operator's memory — see `docs-operational-contracts-travel-with-tool`.
 
 ## Error shape
 
-Every error surface that can emit JSON at all (MCP tool `_error`, REST
-`PyriteError` handler, and CLI commands that have a `--format` flag, via
-`cli_error`) returns the same structure. Some write commands
-(`create`, `add`, `delete`, `link`) have no `--format` flag and always
-print Rich-formatted text, never this JSON shape, on error or success —
-see `docs/agent-write-path.md` for the per-command table. Making CLI
-output consistent regardless of TTY is **#303** (open); this page
-describes the shape you get when you do get JSON, not a promise that
-every command gives you the option.
+ADR-0037 theme 2 (maintainer decision, 2026-09-25): **codes live on the
+exception class** (`pyrite/exceptions.py`; every `PyriteError` subclass
+carries an `error_code`, and a safe `public_message` where its own text can
+carry server-side detail). Each transport has its own wire shape, but each
+now derives its code from the class the same way — no per-transport lookup
+table keyed by exception type.
+
+**MCP and the CLI** (MCP tool `_error`/`_refusal`, and CLI commands with a
+`--format` flag via `cli_error`/`cli_error_from`) return the flat structure
+below. Some write commands (`create`, `add`, `delete`, `link`) have no
+`--format` flag and always print Rich-formatted text, never this JSON shape,
+on error or success — see `docs/agent-write-path.md` for the per-command
+table. Making CLI output consistent regardless of TTY is **#303** (open);
+this page describes the shape you get when you do get JSON, not a promise
+that every command gives you the option.
 
 ```json
 {
@@ -36,7 +42,44 @@ every command gives you the option.
   succeed on retry (e.g. a transient lock); `false` means the request
   itself needs to change first (e.g. a malformed query).
 
-Source of truth: `pyrite/utils/errors.py` (`build_error`).
+**MCP only, for one release: `legacy_error_code`.** Where a class's code
+changed on MCP because REST's more specific code won (ADR-0037 theme 2:
+`ENTRY_NOT_FOUND`/`KB_NOT_FOUND` replacing `NOT_FOUND`, `KB_READ_ONLY`
+replacing `READ_ONLY`, `INVALID_FRONTMATTER` replacing `VALIDATION_FAILED`
+for `FrontmatterError` specifically, `CONFIG_CONFLICT`/`CONFIG_SAVE_REFUSED`
+replacing `CONFIG_ERROR`, `STORAGE_ERROR`/`PLUGIN_ERROR` replacing
+`REQUEST_REFUSED`, and others), the MCP tool response carries the *old*
+code one more release in `legacy_error_code`, alongside the new
+`error_code`. A class whose REST and MCP codes already agreed gets no
+`legacy_error_code` key at all — that includes the base `ValidationError`
+itself: its code is `VALIDATION_FAILED` on every transport, unchanged (see
+"Write refusals" below). The CLI has no transition field, and no CLI write
+command has adopted the new class-level codes yet — see "Write refusals".
+
+**REST** answers a domain refusal as `{"detail": {"code", "message",
+"retryable", "hint"?}}` — the web client already speaks this shape
+(`web/src/lib/api/client.ts`). This is true whether the refusal reached the
+central `PyriteError` handler (`server/errors.py`) or an endpoint's own
+`HTTPException(detail={...})` (e.g. `write_refusal.refusal_http`): both
+answer the same wrapped shape, with the same code, for the same exception
+class. `hint` carries a `ValidationError`'s `suggestion` when set, and is
+omitted otherwise — match the CLI/MCP shape's `suggestion` semantics, just
+under a different key.
+
+```json
+{
+  "detail": {
+    "code": "KB_NOT_FOUND",
+    "message": "human-readable message",
+    "retryable": false,
+    "hint": "optional fix hint"
+  }
+}
+```
+
+Source of truth: `pyrite/exceptions.py` (the codes), `pyrite/utils/errors.py`
+(`build_error`, `cli_error`, `cli_error_from`), `pyrite/server/errors.py`
+(REST's central handler), `pyrite/server/mcp_server.py` (`_refusal`).
 
 ## Write refusals (create, import, update)
 
@@ -51,7 +94,7 @@ so the same entry is refused with the same `error_code` on every surface:
 | `UNDECLARED_TYPE` | the KB's `kb.yaml` declares types and this is not one of them. Core types (`note`, `person`, …) are **not** exempt. Override with `allow_undeclared` (MCP, REST body or import query) / `--allow-undeclared` (CLI). The error carries `declared_types` on MCP and REST. |
 | `ENTRY_EXISTS` | the id (given, or derived from the title) already exists. Create never replaces; use update. REST answers `409`. |
 | `SCHEMA_VIOLATION` | the KB schema (with `validation.enforce`) or a plugin validator rejected a field: enum, required, range, format. |
-| `VALIDATION_FAILED` | anything else the entry model refuses (an event without a date, a missing title), and the ADR-0034 truncated-body refusal below. |
+| `VALIDATION_FAILED` | anything else the entry model refuses (an event without a date, a missing title), and the ADR-0034 truncated-body refusal below. Unchanged by ADR-0037 theme 2 (2026-09-25): REST, MCP and the CLI already agreed on this code before that theme, and continue to — no `legacy_error_code`. |
 
 All are `retryable: false`. REST reports them as
 `{"detail": {"code", "message", "retryable": false, "hint"?, "declared_types"?}}`
@@ -107,8 +150,10 @@ type's required fields (including the plugin-type gap, #232) and an
 
 ## Repo endpoint errors
 
-`/api/repos/*` predates the shape above and answers a failure with a
-FastAPI `detail` object instead:
+`/api/repos/*` is not `PyriteError`-based (it is out of scope for ADR-0037
+theme 2's endpoint conversion) and answers a failure with its own
+hand-built `detail` object, structurally the same wrapper as REST's error
+shape above but without `retryable` or `hint`:
 
 ```json
 {"detail": {"code": "REPO_NOT_FOUND", "message": "human-readable"}}

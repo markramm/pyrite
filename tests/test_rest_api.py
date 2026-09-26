@@ -96,7 +96,14 @@ def test_env():
 
 class TestCentralExceptionHandler:
     """register_pyrite_exception_handler maps every PyriteError to a clean HTTP
-    status + {code,message} body, instead of leaking a raw 500 traceback.
+    status + ``{"detail": {"code", "message", "retryable", "hint"?}}`` body,
+    instead of leaking a raw 500 traceback.
+
+    ADR-0037 theme 2, decision 1 (maintainer, 2026-09-25): REST keeps the
+    ``detail``-wrapped shape (matching what ``HTTPException(detail={...})``
+    sites, e.g. ``write_refusal.refusal_http``, already answer) rather than
+    the flat ``{"code", "message"}`` this handler used to emit -- so the
+    wire shape is the same regardless of which of REST's paths produced it.
 
     Tested on a minimal app wired with the same registration helper create_app
     uses, so it exercises the real mapping without the full app's static-mount
@@ -153,7 +160,7 @@ class TestCentralExceptionHandler:
             ("kb_not_found", 404, "KB_NOT_FOUND"),
             ("protected", 403, "KB_PROTECTED"),
             ("frontmatter", 422, "INVALID_FRONTMATTER"),
-            ("validation", 422, "VALIDATION_ERROR"),
+            ("validation", 422, "VALIDATION_FAILED"),
             ("last_admin", 409, "LAST_ADMIN"),
             ("config", 409, "CONFIG_CONFLICT"),
             ("plugin", 502, "PLUGIN_ERROR"),
@@ -165,10 +172,187 @@ class TestCentralExceptionHandler:
         resp = error_client.get(f"/probe/{name}")
         assert resp.status_code == status
         body = resp.json()
-        assert body["code"] == code
-        assert isinstance(body["message"], str) and body["message"]
+        detail = body["detail"]
+        assert detail["code"] == code
+        assert isinstance(detail["message"], str) and detail["message"]
+        assert detail["retryable"] is False
         # No traceback / internals leaked
-        assert "Traceback" not in body["message"]
+        assert "Traceback" not in detail["message"]
+
+    def test_an_unlisted_validation_subclass_falls_back_to_the_base_status(self):
+        """Item 6 (conductor cold read of #501): a future ValidationError
+        subclass that narrows its own error_code, without anyone adding a row
+        to server/errors.py's _STATUS_BY_CODE, must still answer 422 like its
+        base -- not a silent 500. Exercises a throwaway subclass, not one of
+        the real ones (which do have rows, for speed and clarity)."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.exceptions import ValidationError
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        class _HypotheticalFutureValidationError(ValidationError):
+            error_code = "SOME_CODE_NOBODY_ADDED_TO_THE_TABLE_YET"
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            raise _HypotheticalFutureValidationError("not in the table")
+
+        app.add_api_route("/probe/unlisted-validation", _route, methods=["GET"])
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/probe/unlisted-validation")
+        assert resp.status_code == 422, resp.json()
+        assert resp.json()["detail"]["code"] == "SOME_CODE_NOBODY_ADDED_TO_THE_TABLE_YET"
+
+    def test_an_unlisted_config_subclass_falls_back_to_the_base_status(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.exceptions import ConfigError
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        class _HypotheticalFutureConfigError(ConfigError):
+            error_code = "ANOTHER_CODE_NOBODY_ADDED"
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            raise _HypotheticalFutureConfigError("not in the table")
+
+        app.add_api_route("/probe/unlisted-config", _route, methods=["GET"])
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/probe/unlisted-config")
+        assert resp.status_code == 409, resp.json()
+
+    def _fallback_probe(self, base, code):
+        """A throwaway subclass of ``base`` with a code no one added to
+        ``_STATUS_BY_CODE``, run through the real registered handler."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        subclass = type(f"_Unlisted{base.__name__}", (base,), {"error_code": code})
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            raise subclass("not in the table")
+
+        app.add_api_route("/probe/fallback", _route, methods=["GET"])
+        return TestClient(app, raise_server_exceptions=False).get("/probe/fallback")
+
+    def test_an_unlisted_plugin_error_subclass_falls_back_to_the_base_status(self):
+        """Item 2 (conductor cold read of 5d65caa7): _BASE_CLASS_FALLBACK
+        only covered ValidationError/ConfigError/StorageError. A future
+        PluginError subclass with its own code needs the same safety net."""
+        from pyrite.exceptions import PluginError
+
+        resp = self._fallback_probe(PluginError, "SOME_PLUGIN_CODE_NOBODY_ADDED")
+        assert resp.status_code == 502, resp.json()
+
+    def test_an_unlisted_entry_not_found_subclass_falls_back_to_the_base_status(self):
+        from pyrite.exceptions import EntryNotFoundError
+
+        resp = self._fallback_probe(EntryNotFoundError, "SOME_ENTRY_CODE_NOBODY_ADDED")
+        assert resp.status_code == 404, resp.json()
+
+    def test_an_unlisted_kb_not_found_subclass_falls_back_to_the_base_status(self):
+        from pyrite.exceptions import KBNotFoundError
+
+        resp = self._fallback_probe(KBNotFoundError, "SOME_KB_CODE_NOBODY_ADDED")
+        assert resp.status_code == 404, resp.json()
+
+    def test_an_unlisted_kb_read_only_subclass_falls_back_to_the_base_status(self):
+        from pyrite.exceptions import KBReadOnlyError
+
+        resp = self._fallback_probe(KBReadOnlyError, "SOME_READ_ONLY_CODE_NOBODY_ADDED")
+        assert resp.status_code == 403, resp.json()
+
+    def test_an_unlisted_kb_protected_subclass_falls_back_to_the_base_status(self):
+        from pyrite.exceptions import KBProtectedError
+
+        resp = self._fallback_probe(KBProtectedError, "SOME_PROTECTED_CODE_NOBODY_ADDED")
+        assert resp.status_code == 403, resp.json()
+
+    def test_body_has_no_top_level_code_or_message(self, error_client):
+        """The old flat shape is gone: everything lives under detail."""
+        resp = error_client.get("/probe/entry_not_found")
+        body = resp.json()
+        assert set(body) == {"detail"}
+        assert set(body["detail"]) >= {"code", "message", "retryable"}
+
+    def test_a_retryable_storage_error_says_so(self, error_client):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.exceptions import StorageBusyError
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            raise StorageBusyError("database is locked")
+
+        app.add_api_route("/probe/busy", _route, methods=["GET"])
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/probe/busy")
+        assert resp.status_code == 500
+        assert resp.json()["detail"]["retryable"] is True
+
+    def test_public_message_replaces_str_exc_when_set(self, error_client):
+        """A class-level public_message (ConfigSaveRefusedError, #377) is
+        what the caller sees; str(exc)'s operator detail never reaches the
+        response body."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.exceptions import ConfigSaveRefusedError
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            raise ConfigSaveRefusedError("/real/secret/path.yaml leaked here", dropped=["x"])
+
+        app.add_api_route("/probe/config_save", _route, methods=["GET"])
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/probe/config_save")
+        detail = resp.json()["detail"]
+        assert detail["code"] == "CONFIG_SAVE_REFUSED"
+        assert "/real/secret/path.yaml" not in detail["message"]
+
+    def test_a_suggestion_becomes_hint(self, error_client):
+        """ValidationError.suggestion, when set, appears as detail.hint --
+        matching write_refusal.refusal_http's own key name."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from pyrite.exceptions import ValidationError
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        def _route():
+            exc = ValidationError("bad field")
+            exc.suggestion = "try again with a valid field"
+            raise exc
+
+        app.add_api_route("/probe/hinted", _route, methods=["GET"])
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/probe/hinted")
+        assert resp.json()["detail"]["hint"] == "try again with a valid field"
+
+    def test_no_hint_key_when_no_suggestion(self, error_client):
+        resp = error_client.get("/probe/entry_not_found")
+        assert "hint" not in resp.json()["detail"]
 
 
 @pytest.mark.core

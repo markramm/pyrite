@@ -305,4 +305,4 @@ class TestLastAdminErrorType:
         admin, _, _, admin_id, _ = two_sessions
         r = admin.put(f"/auth/users/{admin_id}/role", json={"role": "read"})
         assert r.status_code == 422, r.text
-        assert r.json().get("code") == "VALIDATION_ERROR", r.text
+        assert r.json()["detail"].get("code") == "VALIDATION_FAILED", r.text

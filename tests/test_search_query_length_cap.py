@@ -111,7 +111,7 @@ class TestRestSearch:
     def test_over_cap_is_422_query_too_long(self, rest_api_env, mode):
         resp = rest_api_env["client"].get("/api/search", params={"q": OVER_CAP, "mode": mode})
         assert resp.status_code == 422, resp.text
-        body = resp.json()
+        body = resp.json()["detail"]
         assert body["code"] == "QUERY_TOO_LONG", body
         assert str(MAX_SEARCH_QUERY_LENGTH) in body["message"]
 

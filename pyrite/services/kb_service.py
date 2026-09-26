@@ -102,13 +102,34 @@ class WriteResult:
     warnings: list[dict[str, Any]] = field(default_factory=list)
 
 
+def _safe_message(exc: Exception) -> str:
+    """The message a client-facing body may show for ``exc``.
+
+    ADR-0037 theme 2 round 2 (conductor cold read of 5d65caa7, item 1): a
+    ``StorageError``/``PluginError``/``ConfigError`` (or a subclass that
+    doesn't set its own) can carry server-side detail in ``str(exc)`` -- a
+    real filesystem path, a driver's own text. ``public_message``, when the
+    class sets one, is what REST's central handler (``server/errors.py``)
+    and MCP's ``_refusal`` already show instead; every other client-facing
+    body this module builds by hand (bulk per-item results, a batch
+    write-back's per-position error, a publish's ``push_error``) should use
+    this too, rather than ``str(exc)`` directly. Logs the real detail
+    server-side when it masks it.
+    """
+    public_message = getattr(exc, "public_message", None)
+    if public_message is not None:
+        logger.warning("%s", exc)
+        return public_message
+    return str(exc)
+
+
 def _refusal_result(exc: Exception) -> dict[str, Any]:
     """A per-item failure in the bulk result shape, with its stable code."""
     if isinstance(exc, PyriteError):
         code = getattr(exc, "error_code", None) or "CREATE_FAILED"
     else:
         code = "CREATE_FAILED"
-    return {"created": False, "error": str(exc), "error_code": code}
+    return {"created": False, "error": _safe_message(exc), "error_code": code}
 
 
 class KBService:
@@ -1418,7 +1439,7 @@ class KBService:
                 self._doc_mgr.save_entry(entry, kb_name, kb_config)
             except Exception as e:
                 for i in positions:
-                    results[i] = {"status": "failed", "error": str(e)}
+                    results[i] = {"status": "failed", "error": _safe_message(e)}
         return results
 
     # =========================================================================
@@ -2227,7 +2248,10 @@ class KBService:
                 push_error = push_result.get("message", "Push failed")
         except Exception as e:
             logger.warning("Push failed for KB %r after publish: %s", kb_name, e, exc_info=True)
-            push_error = str(e)
+            # Already logged above (with a traceback) -- public_message, when
+            # set, is what the caller sees; str(e) can carry server-side
+            # detail (ADR-0037 theme 2 round 2, item 1).
+            push_error = getattr(e, "public_message", None) or str(e)
 
         return {
             "success": True,
