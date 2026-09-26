@@ -144,7 +144,7 @@ a shrinking allowlist", and §5.4 is part of §5.
 
 | # | Theme | Kind | Model | heavy | Cold read | After |
 |---|---|---|---|---|---|---|
-| T1 | Threat model and audit briefs | spike → kb PR | opus | no | yes | now |
+| T1 | Threat model and audit briefs | spike → kb PR | opus | no | yes | **done 2026-09-26**: [[multi-user-threat-model]] |
 | G1 | Authorization oracle: every entry point × principal checked against the policy | worker → PR | opus | no | yes | #509 merged; maintainer yes |
 | L0 | The persona world: a seeded, auth-enabled live server | worker → PR | sonnet | yes (live server) | no | now |
 | A1–A8 | Per-surface audits | spikes → findings + tickets | opus | no | n/a (read-only) | T1 |
@@ -157,6 +157,13 @@ take no suite slots and can run several at once. L1 runs with nothing else
 heavy, and not beside #419's Playwright slot.
 
 ### T1 — Threat model and audit briefs — model: opus — heavy: no — cold read: yes
+
+**Done 2026-09-26** (spike T1): [[multi-user-threat-model]]
+(`kb/designs/multi-user-threat-model.md`). It holds the deployment modes,
+assets S1–S8, principals U0–U11, boundaries B1–B10 with properties, the
+severity scale, the A1–A8 briefs (§6) and the L0/L1 persona world (§7).
+The entry-point counts come from `tests/_surface_inventory.py` on e0a6ae11.
+The cold read is still owed before A1–A8 dispatch.
 
 Acceptance (from this item's Shape 1 and Acceptance, merged):
 - A threat-model document in `kb/designs/` covering:
@@ -439,3 +446,35 @@ deploy docs.
   confirms the loop runs from `tcp-skills`.** Its #393 gate has cleared
   (merged 2026-09-25). It is a docs/process change, not on the security
   path. No spike is needed.
+
+## Audit briefs
+
+The full briefs are in [[multi-user-threat-model]] §6: scope, properties,
+questions in priority order, and what counts as a finding. Shared rules:
+read-only, one conductor tick each, findings to the conductor only, and
+every finding names a property (P-…) and a severity (§5).
+
+- **A1 REST authorization, writes first**: B1, P-R1–P-R8. Every mutating
+  operation as a table of resolved resources → covering check.
+- **A2 MCP**: B3 and B4, P-M3–P-M7 and P-L1. SSE session binding and
+  lifetime; the 40 write- and admin-tier tools' KB arguments; tool
+  arguments as untrusted input (#228 stand-in).
+- **A3 CLI, local processes, KB-supplied configuration**: B4 and B10,
+  P-L1–P-L3 and P-K1–P-K4. What a subscribed or forked KB makes the host
+  do; template sandboxing; the container user.
+- **A4 `/ws`, `/site`, anonymous renders**: B5, B6 and P-B1. Public-only
+  renders including derived data; path containment; stored content never
+  executes; the FastAPI documentation routes the inventory misses.
+- **A5 Authentication flows**: B2, P-A1–P-A8 and P-B3. Modes × key
+  resolution; revocation as an event → credentials table; CSRF; invites;
+  OAuth; rate limits.
+- **A6 The write path**: B8, P-F1–P-F5. Every request → path join;
+  delete precision; subprocess arguments; import; size bounds.
+- **A7 Outbound requests**: B9, P-O1–P-O5. Per site: who picks the URL and
+  what it can reach; schemes; bounds; where credentials go.
+- **A8 CodeQL triage**: maps each alert to a property; output in the
+  CodeQL item.
+
+L0 additions from the threat model (§7): a `public` KB, a named `root`
+persona, alice and bob as KB admins of their own KBs, canary tokens, two
+cross-KB references, and a user API key per persona for `/mcp`.
