@@ -7,7 +7,7 @@ tags:
 - testing
 importance: 5
 kind: tech_debt
-status: in_progress
+status: done
 priority: high
 assignee: agent:pyrite-worker
 effort: S
