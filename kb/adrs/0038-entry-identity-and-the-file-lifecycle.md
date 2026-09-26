@@ -87,28 +87,51 @@ different histories depending on the type (#489). An in-place id change
 type with `file_pattern: "{number:04d}-{title}.md"`), update (title, body,
 tags), rename, delete, `sync_incremental`, `index_kb`, `sync_kb`, and
 external edits (write a file, including a duplicate id or no `id:` line;
-change an `id:` in place; edit a body keeping the mtime; `mv`; `rm`). One
-parametrized run per invariant, 50 examples of 20 steps each,
-`derandomize=True`. The three history checks are plain tests with a real
-git repo. The whole file runs in 8.1 s at `-n 4`.
+change an `id:` in place; edit a body keeping the mtime; `mv`; `rm`).
+
+It has two layers. **One hand-written test per known violation** replays the
+sequence Hypothesis shrank it to. Each is a strict xfail tied to one issue,
+and it must fail with an `AssertionError` whose message starts `I<n>:`, so a
+crash does not count as the expected failure. **One exploratory run** checks
+only the invariants with no known violation (I5, and I9 outside the shapes
+of its known bugs, which are excluded by the state that causes them, not by
+seed). It runs 150 examples of 20 steps with a pinned `@seed(20260925)`. An
+earlier version derandomized by the test's name, so renaming the machine
+class flipped results and hid the I9 violations below. The three history
+checks are plain tests with a real git repo. The whole file runs in about
+10 s at `-n 4`.
+
+Mutation check: each of these, applied alone, turns the exploratory run red
+on the pinned seed, and on seeds 1 to 10, while the unmutated code passes on
+all eleven seeds:
+
+- M1, create may overwrite: the exists checks off and a non-exclusive write.
+  This fails I5.
+- M2, update does not write the index (`document_manager.py:109` skipped for
+  updates). This fails I9.
+- M3, delete keeps the row (`document_manager.py:188` removed). This fails
+  I9.
 
 | Invariant | Today | Minimal failing sequence (shrunk) | Issue |
 |---|---|---|---|
 | I1 | **fails** | `ext_write(alpha.md, no id:, title "Beta")`; `create(note "Beta")` → two files claim `beta` | #484 |
-| I2 | **fails** | `create(decision dec-1)`; `ext_rm`; `index_kb` → row with no file. `create`; `mv notes/alpha.md x.md`; `sync_kb` → row keeps the old path. `create`; edit body keeping mtime; `sync_incremental` → stale row | #486, #487 |
+| I2 | **fails** | `create(decision dec-1)`; `ext_rm`; `index_kb` → row with no file. `create`; `mv notes/alpha.md x.md`; `sync_kb` → row keeps the old path. `create`; edit body keeping mtime; `sync_incremental` → stale row | #486, #487, #495 |
 | I3 | **fails** | `create(note "Alpha")`; `ext_write(alpha.md, no id:, title "Alpha")`; `sync`; `sync` → `{'updated': 1}` every time | #485 |
 | I4 | **fails** | `ext_write(alpha.md, no id:, title "Beta")`; `delete(alpha)` → removes entry `beta` | #483 |
-| I5 | holds | (#466's exclusive create) | |
+| I5 | holds | on the exploratory run (seed 20260925 and seeds 1 to 10, 150 × 20 steps each), which M1 turns red. #466's exclusive create | |
 | I6 | **fails** | `ext_write(alpha.md at root, id gamma)`; `update(gamma, title)` → moved to `notes/alpha.md`. `rename` of an id-named file moves it (the proposed rule forbids that) | #488, #489 |
 | I7 | **fails** | `ext_write(alpha.md, id beta)`; `delete(alpha)` → removes `beta`'s file | #483 |
 | I8 | **fails** | `ext_write(beta.md, no id:, title "Alpha")` → `alpha` indexed, `find_file('alpha')` is None. `ext_write(alpha.md, no id:, title "Beta")` → `find_file('alpha')` returns a file holding `beta` | #483, #484 |
-| I9 | holds | | |
+| I9 | **fails** | `ext_write(alpha.md, no id:)`; `rename('alpha', 'alpha')` → ok, and still no row (a same-id rename is a silent no-op). `create(note "Gamma")`; `ext_write(x.md, id gamma)`; `delete(gamma)` → ok; `x.md` still holds `gamma` and has no row. Otherwise holds (exploratory run; M2 and M3 turn it red) | #493, #494 |
 | I10 | **fails** (holds for `file_pattern` renames) | note `alpha`: commit, edit, commit, rename→`omega`, commit → history(`omega`) = `[rename]`. Hand edit `id: alpha`→`zeta` → history(`zeta`) = `[zeta, alpha]` | #489, #490 |
 
-Two of the ten hold. Every failure is one of three root causes: lookup and
-loading disagree on a file's id (#483, #484); the three index walks each
-reconcile differently (#485, #486, #487); and "keep the location" has no
-single owner (#488, #489, #490).
+One of the ten holds (I5). Every failure is one of three root causes:
+
+- Lookup and loading disagree on a file's id, and nothing handles an id held
+  by two files (#483, #484, #494).
+- The three index walks each reconcile differently (#485, #486, #487, #495).
+- "Keep the location" and "change the id" have no single owner (#488, #489,
+  #490, #493).
 
 ## Decision
 
@@ -143,7 +166,7 @@ insufficient.
 |---|---|---|---|
 | Create | Writes a new file at the resolved location, exclusively; refuses if the id is held by any file or the path exists. | Upserts `(kb, id)`. | Starts at the commit that adds the file. |
 | Update | Rewrites the one file that holds the id, in place. The path changes only for a templated subdirectory, and then only the folder. | Upserts. | Continues. |
-| Rename (id change) | Rewrites `id:` in the same file, **for every type**; appends the old id to a managed `previous_ids` list; rewrites wikilinks. The path does not change. | Upserts `(kb, new)`, moves the old id's `entry_version` rows to it, then retires `(kb, old)` (today the cascade drops them): directly, no full sync. | Continues across the rename: a commit whose file held any of `previous_ids` belongs to the entry. |
+| Rename (id change) | Refuses `rename(x, x)` with a `ValidationError`: a same-id rename is the case that exposed the I9 violation #493, and has nothing to do. Otherwise rewrites `id:` in the same file, **for every type**; appends the old id to a managed `previous_ids` list; rewrites wikilinks. The path does not change. | Upserts `(kb, new)`, moves the old id's `entry_version` rows to it, then retires `(kb, old)` (today the cascade drops them): directly, no full sync. | Continues across the rename: a commit whose file held any of `previous_ids` belongs to the entry. |
 | Move (location change, a future explicit operation) | Moves the file (for example to the current naming rule). The id does not change. | Upserts the new path. | Continues across the path change, because the id matches at both ends. |
 | Delete | Removes the files that hold the id, and only those. | Deletes `(kb, id)`. | Its `entry_version` rows go with it, as today; git keeps the commits. |
 | External edit, restore | Pyrite does not write. | The next reconcile makes the rows match the files. | By id, as below. |
@@ -196,9 +219,16 @@ reconciles. "Holds X" means the loader derives id X from the file.
   explicit `id:`; the loader derives one) → create's check at
   `kb_service.py:606` passes and a second file is written. #484.
 - Violates **I2** at `index.py:524-531` (`index_kb` only upserts). #486.
-- Violates **I2** at `index.py:1204-1213` (`sync_kb` ignores a moved path)
-  and at `index.py:699-703` (staleness is mtime-only in both syncs, though
-  `content_hash` is stored at :180). #487.
+- Violates **I2** at `index.py:1204-1213` (`sync_kb` ignores a moved path).
+  #487.
+- Violates **I2** at `index.py:699-703` (staleness is mtime-only in both
+  syncs, though `content_hash` is stored at :180). #495.
+- Violates **I9** at `repository.py:501-509` with the `renamed` guard in
+  `KBService.rename_entry`. `rename(x, x)` is a silent no-op that reports
+  success, so an entry that is not yet indexed stays unindexed. #493.
+- Violates **I9** at `document_manager.py:175-189`. Delete unlinks the one
+  file `find_file` returns and drops the row, while a second file holding the
+  id stays on disk with no row. #494.
 - Violates **I3** at `index.py:1124-1136` (a duplicate id's losing path is
   re-parsed and re-upserted on every sync; nothing reports it). #485.
 - Violates **I4**, **I7** and **I8** at `repository.py:279-284, 327-330`
@@ -249,9 +279,9 @@ cannot forget).
 | # | Step | Fixes | Files | Model | After |
 |---|---|---|---|---|---|
 | 0 | **Land the invariant harness.** `tests/test_storage_invariants.py` and the `hypothesis==6.168.1` dev pin, with its strict xfails. No production change. | — | the test, `pyproject.toml` | Sonnet | #466 |
-| 1 | **One id reader, lookup by id.** One function (the loader's) answers "which id does this file hold"; `find_file` verifies a filename hit and scans with it; `entry_id_from_markdown` uses it; the scan's skip rules match `list_files`. | #483, #484 (I1, I4, I7, I8) | `storage/repository.py`, `models/core_types.py` | Sonnet | 0 |
-| 2 | **One reconcile.** `index_kb`, `sync_kb` and `sync_incremental` share one walk-and-reconcile: unseen rows retired, a path change applied, staleness by mtime or size, duplicates reported and resolved by path order. `pyrite index sync` and `index health` print duplicates. | #485, #486, #487 (I2, I3) | `storage/index.py`, `cli/index_commands.py`, `services/kb_registry_service.py` | **Opus** | 1 |
-| 3 | **Sticky location.** "Keep this folder" and "infer the folder" become different arguments; `KBRepository.rename` keeps the path for every type. Needs the open question below answered first. | #488, #489 file half (I6) | `storage/document_manager.py`, `storage/repository.py` | Sonnet | 1, ADR accepted |
+| 1 | **One id reader, lookup by id.** One function (the loader's) answers "which id does this file hold"; `find_file` verifies a filename hit and scans with it; `entry_id_from_markdown` uses it; the scan's skip rules match `list_files`. | #483, #484, #494 (I1, I4, I7, I8, and I9 for delete: delete removes every file holding the id) | `storage/repository.py`, `models/core_types.py`, `storage/document_manager.py` (delete) | Sonnet | 0 |
+| 2 | **One reconcile.** `index_kb`, `sync_kb` and `sync_incremental` share one walk-and-reconcile: unseen rows retired, a path change applied, staleness by mtime or size, duplicates reported and resolved by path order. `pyrite index sync` and `index health` print duplicates. | #485, #486, #487, #495 (I2, I3) | `storage/index.py`, `cli/index_commands.py`, `services/kb_registry_service.py` | **Opus** | 1 |
+| 3 | **Sticky location.** "Keep this folder" and "infer the folder" become different arguments; `KBRepository.rename` keeps the path for every type (open question 1, decided); `rename(x, x)` is refused. | #488, #489 file half (I6), #493 (I9) | `storage/document_manager.py`, `storage/repository.py`, `services/kb_service.py` (`rename_entry`) | Sonnet | 1 |
 | 4 | **History by id.** `rename` records `previous_ids` (a managed field); `_same_entry_history` and `VersionService.record_commit` check the id at every commit and accept `previous_ids`. | #489 history half, #490 (I10) | `storage/index.py`, `services/version_service.py`, `storage/repository.py`, `services/kb_service.py` (`_MANAGED_FIELDS`) | **Opus** | 3 |
 | 5 | **One write owner.** `DocumentManager` owns every file-and-row transition: rename and delete go through it; rename writes its two rows directly (I9) instead of a full `sync_incremental`; the undeclared-key rule (#447) lives in one place. A structural test fails if `storage/repository.py`'s write methods are called from outside `DocumentManager`. | I9 for rename without a full sync; #447's split | `storage/document_manager.py`, `services/kb_service.py`, a guard test | **Opus** | 2, 4 |
 
@@ -266,7 +296,7 @@ Backlog items, one per step: [[storage-invariants-harness-land-the-adr-0038-stat
 
 - Every future storage change has a list to be checked against. A cold read
   asks "which invariant does this touch", and the state machine asks it on
-  every push: 8 s at `-n 4`.
+  every push: about 10 s at `-n 4`.
 - `find_file` gets slower on a miss after step 1: a filename hit must be
   parsed, and a scan is still a scan. The index can answer first once step 2
   makes it trustworthy. Measure on the pyrite KB (about 2,000 entries)
@@ -304,9 +334,10 @@ Backlog items, one per step: [[storage-invariants-harness-land-the-adr-0038-stat
 
 ---
 
-<small>Measured on `ce7dce71` (`origin/fix/391-extension-writes-through-pipeline`).
-Invariant results: `.venv/bin/pytest tests/test_storage_invariants.py -n 4`
-(3 passed, 9 xfailed, 8.1 s), shrunk sequences with
+<small>First measured on `ce7dce71` (#466's head); re-run after #466 merged,
+on `dev` `c7863013`. Invariant results:
+`.venv/bin/pytest tests/test_storage_invariants.py -n 4` (2 passed,
+15 xfailed, about 10 s), shrunk sequences with
 `PYRITE_INVARIANT_SHRINK=1`. The single-operation checks in the I2 row
 (`sync_incremental` misses a same-mtime edit; `sync_kb` keeps a moved path;
 `index_kb` keeps a deleted or re-id'd row; `sync_incremental` handles `mv`,

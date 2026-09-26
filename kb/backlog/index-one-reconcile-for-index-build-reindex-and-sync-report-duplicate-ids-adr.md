@@ -13,7 +13,7 @@ effort: M
 rank: 0
 ---
 
-Step 2 of [[adr-0038]] (proposed). Fixes #485, #486 and #487.
+Step 2 of [[adr-0038]] (proposed). Fixes #485, #486, #487 and #495.
 
 The three index walks reconcile differently. `index_kb` never retires rows. `sync_kb` keys by id and ignores a moved path. Both syncs judge staleness by mtime alone. Duplicate ids flip the row on every sync, and nothing reports them.
 
@@ -22,7 +22,7 @@ The three index walks reconcile differently. `index_kb` never retires rows. `syn
 - A known path is re-parsed when mtime or size differs from what was indexed (store size, or compare to the hash when both match; the ADR's open question 4 decides).
 - Duplicate ids are returned as `duplicates: [{id, paths}]` in the result, printed by `pyrite index sync` and `pyrite index health`. The same file wins every time (the ADR proposes the lexicographically first KB-relative path).
 - A second reconcile with no file change reports 0 added, updated and removed (I3).
-- `test_storage_invariant[I2]` and `[I3]` XPASS; their xfails are removed.
+- The per-bug tests for #485, #486, #487 and #495 (`test_i2_…`, `test_i3_…`) XPASS; their markers are removed.
 - Measure sync time on the pyrite KB before and after.
 
 ## Footprint

@@ -13,14 +13,14 @@ effort: S
 rank: 0
 ---
 
-Step 3 of [[adr-0038]] (proposed). Fixes #488 and the file half of #489. **Blocked on the ADR's open question 1** (does a rename ever move a file?).
+Step 3 of [[adr-0038]] (proposed). Fixes #488, the file half of #489, and #493. Open question 1 is decided: a rename changes only the id and never moves a file, for any type; a wrong path is delete + create.
 
 ## Acceptance criteria
 - "Keep the file in its folder" and "infer the type's folder" are different arguments to `KBRepository.save` (today `subdir=None` means both). An update keeps a KB-root file at the root.
-- If the maintainer takes option (a): `KBRepository.rename` rewrites the id in place for every type, never moving the file. The CLI, MCP and REST rename output and docs say so.
-- `test_storage_invariant[I6]` XPASSes; its xfail is removed. If option (b) is taken, the I6 rename check is relaxed to "moves only `<old>.md` to `<new>.md`", and the ADR is edited to match.
+- `KBRepository.rename` rewrites the id in place for every type, never moving the file. `rename(x, x)` is refused with a `ValidationError` (#493). The CLI, MCP and REST rename output and docs say so.
+- `test_i6_update_moves_a_root_file` (#488), `test_i6_rename_moves_an_id_named_file` (#489) and `test_i9_rename_to_same_id_leaves_no_row` (#493) XPASS; their markers are removed.
 
 ## Footprint
-`pyrite/storage/document_manager.py`, `pyrite/storage/repository.py`, rename docs (`docs/`), `tests/test_storage_invariants.py`.
+`pyrite/storage/document_manager.py`, `pyrite/storage/repository.py`, `pyrite/services/kb_service.py` (`rename_entry`), rename docs (`docs/`), `tests/test_storage_invariants.py`.
 
-**Model:** sonnet. **After:** step 1 and ADR-0038 accepted.
+**Model:** sonnet. **After:** step 1.
