@@ -1002,7 +1002,7 @@ class KBService:
         repo = KBRepository(kb_config)
         entry = repo.load(entry_id)
         if not entry:
-            raise EntryNotFoundError(f"Entry not found: {entry_id}")
+            raise EntryNotFoundError(f"Entry not found: {entry_id}{repo.not_found_hint(entry_id)}")
 
         # `type`/`entry_type` and the empty key are never model attributes on
         # any entry (`type` is frontmatter-only; `entry_type` is a read-only

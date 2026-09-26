@@ -21,7 +21,7 @@ from ..exceptions import (
 from ..migrations import get_migration_registry, load_plugin_migrations
 from ..models import Entry, EventEntry
 from ..models.collection import CollectionEntry
-from ..models.core_types import entry_from_frontmatter
+from ..models.core_types import entry_from_frontmatter, explicit_entry_id, read_entry_id
 from ..schema import CORE_TYPES
 from ..utils.yaml import load_yaml_file
 
@@ -276,38 +276,58 @@ class KBRepository:
         target = os.path.normpath(os.path.abspath(path))
         return os.path.commonpath([root, target]) == root
 
-    def _find_by_filename(self, entry_id: str) -> Path | None:
-        """Filename-based lookups; ``entry_id`` must already be a plain stem."""
-        # Check root by filename
+    def _filename_candidates(self, entry_id: str) -> Iterator[Path]:
+        """Files whose NAME matches ``entry_id``; ``entry_id`` must already be
+        a plain stem. A name is a hint for a fast lookup, never evidence of
+        the id the file holds: ``find_file`` verifies each one."""
         root_path = self.path / f"{entry_id}.md"
-        if root_path.exists():
-            return root_path
+        if root_path.is_file() and self._listed(root_path):
+            yield root_path
 
-        # Check all subdirectories recursively by filename
         # glob.escape: an id is a name, not a pattern -- `*` must not match
         # (and so let `kb_delete` remove) whichever entry globs first.
         filename = glob.escape(f"{entry_id}.md")
         for match in self.path.rglob(filename):
-            if not any(part.startswith(".") for part in match.relative_to(self.path).parts):
-                return match
+            if match != root_path and self._listed(match):
+                yield match
 
-        # Check for collection entries (collection-<folder_name>)
+        # Collection entries (collection-<folder_name>)
         if entry_id.startswith("collection-"):
             folder_name = entry_id[len("collection-") :]
             if folder_name in ("", ".", ".."):
-                return None
+                return
             for subdir in self.path.rglob(glob.escape(folder_name)):
                 if subdir.is_dir():
                     yaml_path = subdir / "__collection.yaml"
                     if yaml_path.exists():
-                        return yaml_path
-        return None
+                        yield yaml_path
+
+    def id_of_file(self, file_path: Path) -> str | None:
+        """The id ``file_path`` holds, by the loader's rule; None when it is
+        not a readable entry.
+
+        Markdown goes through ``read_entry_id`` -- the one function that
+        answers this (ADR-0038 decision 1) -- with this KB's schema
+        migrations applied first, as ``_load_entry`` applies them.
+        """
+        try:
+            if file_path.name == "__collection.yaml":
+                return self._load_collection(file_path).id or None
+            return read_entry_id(file_path.read_text(encoding="utf-8"), migrate=self._maybe_migrate)
+        except Exception as e:
+            logger.warning("Skipping unreadable file during id lookup: %s (%s)", file_path, e)
+            return None
 
     def find_file(self, entry_id: str) -> Path | None:
-        """Find the file path for an entry.
+        """The file that holds ``entry_id``, or None (ADR-0038 I8).
 
-        Searches by filename first (fast), then falls back to scanning
-        frontmatter IDs (handles cases where filename != entry ID).
+        A file named like the id is tried first and returned only if it holds
+        the id (#483: a filename hit used to be returned unread, so
+        ``delete('alpha')`` removed a file holding ``beta``). Otherwise every
+        file ``list_files`` walks -- the same skip rules -- is read with
+        ``id_of_file``, so an id derived from the title is found too (#484).
+        When two files hold the id, the first found is returned; ``find_files``
+        returns them all.
 
         An id that is not a plain filename stem (a path separator, a leading
         '.', NUL, empty) is never turned into a path: writes were already
@@ -324,37 +344,90 @@ class KBRepository:
         except ValidationError:
             plain = False
 
+        tried: set[Path] = set()
         if plain:
-            found = self._find_by_filename(entry_id)
-            if found is not None and self._lexically_inside(found):
-                return found
+            for candidate in self._filename_candidates(entry_id):
+                tried.add(candidate)
+                if self._lexically_inside(candidate) and self.id_of_file(candidate) == entry_id:
+                    return candidate
 
-        # Fallback: scan frontmatter IDs (handles filename != entry ID)
-        # This is slower but catches entries like ADRs where the file is
-        # "0025-release-workflow.md" but the ID is "adr-0025"
-        from pyrite.utils.yaml import load_yaml
-
-        for md_file in self.path.rglob("*.md"):
-            if any(
-                part.startswith(".") or part.startswith("_")
-                for part in md_file.relative_to(self.path).parts
-            ):
-                continue
-            try:
-                text = md_file.read_text(encoding="utf-8")
-                if text.startswith("---"):
-                    end = text.find("---", 3)
-                    if end > 0:
-                        fm = load_yaml(text[3:end])
-                        if isinstance(fm, dict) and fm.get("id") == entry_id:
-                            return md_file
-            except Exception as e:
-                logger.warning(
-                    "Skipping unreadable file during find_file scan: %s (%s)", md_file, e
-                )
-                continue
-
+        for md_file in self.list_files():
+            if md_file not in tried and self.id_of_file(md_file) == entry_id:
+                return md_file
         return None
+
+    def _holds(self, file_path: Path, entry_id: str) -> str | None:
+        """How ``file_path`` holds ``entry_id``: ``"explicit"`` (its ``id:``
+        says so), ``"derived"`` (the id comes from its title), or None."""
+        if not file_path.is_file() or self.id_of_file(file_path) != entry_id:
+            return None
+        if file_path.name == "__collection.yaml":
+            return "explicit"  # named by its folder, or its own ``id:``
+        try:
+            stated = explicit_entry_id(file_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        return "explicit" if stated == entry_id else "derived"
+
+    def files_to_delete(self, entry_id: str, indexed_path: Path | None = None) -> list[Path]:
+        """The files ``delete(entry_id)`` removes: only files certain to BE
+        the entry (ADR-0038 I7).
+
+        First the cheap candidates -- the index row's file and the files named
+        like the id -- each verified. If one of them states the id in its
+        ``id:``, every candidate stating it is removed, and nothing else is
+        read: a copy elsewhere in the KB is reported by the reconcile (step 2,
+        #494), not found by walking the KB on every delete.
+
+        Otherwise the id is derived from a title (or not found cheaply), so
+        the whole KB is walked. One file holding it is removed. Several files
+        holding it, any of them by derivation (two notes titled "Draft", or
+        untitled notes that all derive one id), cannot be told apart: the
+        delete is refused with their paths, and an ``id:`` line settles it.
+        """
+        if not isinstance(entry_id, str) or not entry_id:
+            return []
+        candidates: list[Path] = []
+        if indexed_path is not None and self._lexically_inside(indexed_path):
+            candidates.append(indexed_path)
+        try:
+            self._validate_entry_id(entry_id)
+            candidates.extend(self._filename_candidates(entry_id))
+        except ValidationError:
+            pass
+        held = {c: self._holds(c, entry_id) for c in dict.fromkeys(candidates)}
+        explicit = [c for c, how in held.items() if how == "explicit"]
+        if explicit:
+            return explicit
+
+        held = {f: self._holds(f, entry_id) for f in self.list_files()}
+        held = {f: how for f, how in held.items() if how}
+        if len(held) > 1 and "derived" in held.values():
+            paths = ", ".join(str(f.relative_to(self.path)) for f in sorted(held))
+            raise ValidationError(
+                f"Refusing to delete '{entry_id}': {len(held)} files hold it and at least "
+                f"one derives it from its title, so which is the entry is not certain "
+                f"({paths}). Add an `id:` line to the one to delete, or remove it by hand."
+            )
+        return list(held)
+
+    def not_found_hint(self, entry_id: str) -> str:
+        """Why a lookup by a filename found nothing: the file named like the
+        id holds another id. Empty when there is no such file."""
+        try:
+            self._validate_entry_id(entry_id)
+        except ValidationError:
+            return ""
+        for candidate in self._filename_candidates(entry_id):
+            held = self.id_of_file(candidate)
+            if held and held != entry_id:
+                rel = candidate.relative_to(self.path)
+                return (
+                    f"; no file holds id '{entry_id}', but {rel} holds '{held}' (its id "
+                    f"comes from its title unless it has an `id:` line). Use '{held}', "
+                    f"or add `id: {entry_id}` to the file"
+                )
+        return ""
 
     def load(self, entry_id: str) -> Entry | None:
         """Load an entry by ID."""
@@ -442,16 +515,17 @@ class KBRepository:
 
         return file_path
 
-    def delete(self, entry_id: str) -> bool:
-        """Delete an entry file. Returns True if deleted."""
+    def delete(self, entry_id: str, *, indexed_path: Path | None = None) -> bool:
+        """Delete the files that are certainly ``entry_id`` (``files_to_delete``;
+        refuses when that is not certain). Returns True if any was deleted.
+        ``indexed_path`` is the index row's file, a candidate checked first."""
         if self.config.read_only:
             raise KBReadOnlyError(f"KB '{self.name}' is read-only")
 
-        file_path = self.find_file(entry_id)
-        if file_path and file_path.exists():
-            file_path.unlink()
-            return True
-        return False
+        files = self.files_to_delete(entry_id, indexed_path)
+        for file_path in files:
+            file_path.unlink(missing_ok=True)
+        return bool(files)
 
     # ---------------------------------------------------------------
     # Rename — Tier A r1700. The smallest useful slice: same-KB file
@@ -510,7 +584,9 @@ class KBRepository:
 
         src = self.find_file(old_id)
         if not src or not src.exists():
-            raise EntryNotFoundError(f"Entry '{old_id}' not found in KB '{self.name}'")
+            raise EntryNotFoundError(
+                f"Entry '{old_id}' not found in KB '{self.name}'{self.not_found_hint(old_id)}"
+            )
 
         if self.find_file(new_id):
             raise ValidationError(
@@ -618,18 +694,25 @@ class KBRepository:
     def list_files(self) -> Iterator[Path]:
         """Iterate over all markdown files in the KB."""
         for md_file in self.path.rglob("*.md"):
-            # Skip hidden directories and files (check relative path only,
-            # so a KB stored under e.g. ~/.pyrite/kbs/ is not skipped)
+            if self._listed(md_file):
+                yield md_file
+
+    def _listed(self, md_file: Path) -> bool:
+        """Whether ``list_files`` walks ``md_file``; ``find_file`` uses the
+        same rule, so what sync indexes is what lookup finds."""
+        try:
             rel = md_file.relative_to(self.path)
-            if any(part.startswith(".") for part in rel.parts):
-                continue
-            # Skip template scaffold files in _templates directories
-            if "_templates" in rel.parts:
-                continue
-            # Skip README files (case-insensitive) — they lack frontmatter
-            if md_file.name.lower() == "readme.md":
-                continue
-            yield md_file
+        except ValueError:
+            return False
+        # Skip hidden directories and files (check relative path only,
+        # so a KB stored under e.g. ~/.pyrite/kbs/ is not skipped)
+        if any(part.startswith(".") for part in rel.parts):
+            return False
+        # Skip template scaffold files in _templates directories
+        if "_templates" in rel.parts:
+            return False
+        # Skip README files (case-insensitive) — they lack frontmatter
+        return md_file.name.lower() != "readme.md"
 
     def list_all_files(self) -> Iterator[Path]:
         """Iterate over all entry file paths (md + collection yaml) without parsing."""

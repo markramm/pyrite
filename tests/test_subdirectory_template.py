@@ -170,7 +170,7 @@ class TestInferSubdirWithTemplates:
         # Create a file at depth 2: backlog/done/my-item.md
         nested = kb_dir / "backlog" / "done"
         nested.mkdir(parents=True)
-        (nested / "my-item.md").write_text("---\ntitle: test\n---\n")
+        (nested / "my-item.md").write_text("---\nid: my-item\ntitle: test\n---\n")
 
         config = KBConfig(path=kb_dir, name="test", kb_type="generic")
         repo = KBRepository(config)

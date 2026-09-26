@@ -7,7 +7,9 @@ Every field is optional except title.
 
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from typing import Any
 
 from ..schema import (
@@ -465,21 +467,67 @@ def _frontmatter_of(text: str) -> tuple[dict, str] | None:
     return meta, parts[1].strip()
 
 
-def entry_id_from_markdown(text: str) -> str | None:
-    """The id an entry file's text gives its entry, derived the way loading
-    the file derives it (an explicit ``id:``, or the type's generated one).
+def id_text(value: Any) -> str | None:
+    """An entry id as text, the one way the index stores it and lookup
+    compares it. A YAML scalar id (``id: true``, ``id: 123``, ``id: 1.50``,
+    ``id: 2026-01-01``) loads as a bool, number or date; this spells it as
+    SQLite's TEXT column always did (``true`` -> ``'1'``), so an id read from
+    a file matches its index row. None for no id."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, datetime):
+        return value.isoformat(" ")
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)
 
-    None when the text is not an entry. Used to tell a rename of one entry
-    from a replacement by another: git pairs files by content similarity,
-    and entries share frontmatter boilerplate, so similarity alone links
-    unrelated entries (#432). Comparing ids assumes an id is unique within
-    a KB, which the index already relies on.
+
+def read_entry_id(
+    text: str, migrate: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+) -> str | None:
+    """The id an entry file's text holds: THE answer to "which id does this
+    file hold" (ADR-0038 decision 1). Lookup (``KBRepository.find_file``,
+    and through it create's exists check and delete) and history
+    (``entry_id_from_markdown``) all ask it.
+
+    It is the loader's rule: the frontmatter split as ``Entry.from_markdown``
+    splits it (the closing ``---`` must be a line of its own, not the first
+    ``---`` anywhere), the type dispatched as ``entry_from_frontmatter``
+    dispatches it, so the id is an explicit ``id:`` or, when there is none,
+    the one the type derives from the title. ``migrate`` is the repository's
+    schema migration, applied to the frontmatter before the id is read, as
+    the loader applies it.
+
+    None when the text has no frontmatter; raises what the loader would
+    raise on malformed frontmatter.
+    """
+    parsed = _frontmatter_of(text)
+    if parsed is None:
+        return None
+    meta, body = parsed
+    if migrate is not None:
+        meta = migrate(meta)
+    if meta.get("id"):
+        # Every entry class takes a truthy `id:` as is (`Entry._base_kwargs`),
+        # so building the entry only to read it back costs a KB walk its
+        # largest share for nothing.
+        return id_text(meta["id"])
+    return id_text(entry_from_frontmatter(meta, body).id)
+
+
+def entry_id_from_markdown(text: str) -> str | None:
+    """``read_entry_id``, with None for text that is not an entry.
+
+    Used to tell a rename of one entry from a replacement by another: git
+    pairs files by content similarity, and entries share frontmatter
+    boilerplate, so similarity alone links unrelated entries (#432).
+    Comparing ids assumes an id is unique within a KB, which the index
+    already relies on.
     """
     try:
-        parsed = _frontmatter_of(text)
-        if parsed is None:
-            return None
-        return entry_from_frontmatter(*parsed).id or None
+        return read_entry_id(text)
     except Exception:
         return None
 
@@ -492,7 +540,6 @@ def explicit_entry_id(text: str) -> str | None:
         parsed = _frontmatter_of(text)
         if parsed is None:
             return None
-        value = parsed[0].get("id")
-        return str(value) if value not in (None, "") else None
+        return id_text(parsed[0].get("id"))
     except Exception:
         return None
