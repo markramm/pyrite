@@ -153,8 +153,8 @@ insufficient.
 The one behaviour change a user sees: `pyrite rename alpha omega` leaves the
 file at `notes/alpha.md` with `id: omega`, where today it writes
 `notes/omega.md`. That is already what happens for every `file_pattern` type
-since #466. The alternative, keeping the move for id-named files, is listed
-under open questions.
+since #466. A wrong *path* is corrected by delete + create, with a fresh
+history (open question 1, decided).
 
 ### 3. The invariants
 
@@ -280,10 +280,18 @@ Backlog items, one per step: [[storage-invariants-harness-land-the-adr-0038-stat
 
 ## Open questions for the maintainer
 
-1. **Rename and the filename.** (a) A rename never moves a file, for any
-   type (this ADR; one rule; history needs only `previous_ids`). (b) An
-   id-named file moves to `<new_id>.md`, as today; `previous_ids` still
-   carries the history, and I6 is relaxed for that one case.
+1. **Rename and the filename. DECIDED (maintainer, 2026-09-25): (a).** A
+   rename changes only the id and never moves a file, for any type. When the
+   *path itself* is wrong -- the maintainer's example: `jacob_is_a_monkey.md`,
+   where Jacob is in fact a rabbit, so the filename makes a false claim --
+   that is not a rename. It is a **delete followed by a new create**: the new
+   entry starts a fresh history, and nothing links it to the old one. Links to
+   the old id become dangling and are reported by `qa` and `index health`, which
+   is intended, since they pointed at the false claim. Out of scope here and
+   noted for later: the deleted file's content, false claim included, stays
+   in the KB's git history. Removing a claim from the record (a legal or
+   defamation concern) is a separate purge or redaction operation that delete
+   does not provide.
 2. **`previous_ids` or `aliases`.** A separate managed field (this ADR), or
    the existing user-facing `aliases`, which would also make `[[old-id]]`
    resolve after a rename.
