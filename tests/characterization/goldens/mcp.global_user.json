@@ -1,0 +1,3692 @@
+{
+  "cascade_actors | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "cascade_actors | global_user | no-default-role-kb": {
+    "actors": [],
+    "count": "<ENUMERATION_CONTENT>"
+  },
+  "cascade_actors | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "cascade_actors | global_user | readable-kb": {
+    "actors": [],
+    "count": "<ENUMERATION_CONTENT>"
+  },
+  "cascade_capture_lanes | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "cascade_capture_lanes | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "lanes": []
+  },
+  "cascade_capture_lanes | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "cascade_capture_lanes | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "lanes": []
+  },
+  "cascade_network | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "cascade_network | global_user | no-default-role-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "no-default-role-note",
+      "title": "No-default-role note"
+    },
+    "limit": 50,
+    "offset": 0,
+    "outlinks": [],
+    "totals": {
+      "backlinks": 0,
+      "outlinks": 0
+    },
+    "truncated": false
+  },
+  "cascade_network | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "cascade_network | global_user | readable-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "readable-note",
+      "title": "Readable note"
+    },
+    "limit": 50,
+    "offset": 0,
+    "outlinks": [],
+    "totals": {
+      "backlinks": 0,
+      "outlinks": 0
+    },
+    "truncated": false
+  },
+  "cascade_timeline | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "cascade_timeline | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": []
+  },
+  "cascade_timeline | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "cascade_timeline | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": []
+  },
+  "investigation_bulk_edges | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_bulk_edges | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_bulk_edges | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_bulk_edges | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_claims | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_claims | global_user | no-default-role-kb": {
+    "claims": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_claims | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_claims | global_user | readable-kb": {
+    "claims": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_create_claim | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_create_claim | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_create_claim | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_create_claim | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_create_entity | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_create_entity | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_create_entity | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_create_entity | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_create_event | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_create_event | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_create_event | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_create_event | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_entities | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_entities | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entities": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_entities | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_entities | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entities": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_evidence_chain | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_evidence_chain | global_user | no-default-role-kb": {
+    "error": "Claim 'characterization-placeholder-id-investigation_evidence_chain-global_user-no-default-role-kb' not found"
+  },
+  "investigation_evidence_chain | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_evidence_chain | global_user | readable-kb": {
+    "error": "Claim 'characterization-placeholder-id-investigation_evidence_chain-global_user-readable-kb' not found"
+  },
+  "investigation_export_pack | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_export_pack | global_user | no-default-role-kb": {
+    "content": "<ENUMERATION_CONTENT>",
+    "format": "json"
+  },
+  "investigation_export_pack | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_export_pack | global_user | readable-kb": {
+    "content": "<ENUMERATION_CONTENT>",
+    "format": "json"
+  },
+  "investigation_find_duplicates | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_find_duplicates | global_user | no-default-role-kb": {
+    "duplicates": []
+  },
+  "investigation_find_duplicates | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_find_duplicates | global_user | readable-kb": {
+    "duplicates": []
+  },
+  "investigation_ftm_export | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_ftm_export | global_user | no-default-role-kb": {
+    "entities": []
+  },
+  "investigation_ftm_export | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_ftm_export | global_user | readable-kb": {
+    "entities": []
+  },
+  "investigation_ftm_import | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_ftm_import | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_ftm_import | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_ftm_import | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_log_source | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_log_source | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_log_source | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_log_source | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_money_flow | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_money_flow | global_user | no-default-role-kb": {
+    "circular_flows": [],
+    "direction": "both",
+    "entity": {
+      "id": "no-default-role-note",
+      "title": "No-default-role note"
+    },
+    "flows": [],
+    "summary": "Traced both flows for No-default-role note; 0 flow path(s) found"
+  },
+  "investigation_money_flow | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_money_flow | global_user | readable-kb": {
+    "circular_flows": [],
+    "direction": "both",
+    "entity": {
+      "id": "readable-note",
+      "title": "Readable note"
+    },
+    "flows": [],
+    "summary": "Traced both flows for Readable note; 0 flow path(s) found"
+  },
+  "investigation_network | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_network | global_user | no-default-role-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "no-default-role-note",
+      "title": "No-default-role note"
+    },
+    "limit": 50,
+    "offset": 0,
+    "outlinks": [],
+    "totals": {
+      "backlinks": 0,
+      "outlinks": 0
+    },
+    "truncated": false
+  },
+  "investigation_network | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_network | global_user | readable-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "readable-note",
+      "title": "Readable note"
+    },
+    "limit": 50,
+    "offset": 0,
+    "outlinks": [],
+    "totals": {
+      "backlinks": 0,
+      "outlinks": 0
+    },
+    "truncated": false
+  },
+  "investigation_ownership_chain | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_ownership_chain | global_user | no-default-role-kb": {
+    "beneficial_owners": [],
+    "chains": [],
+    "entity": {
+      "id": "no-default-role-note",
+      "title": "No-default-role note"
+    },
+    "shell_indicators": []
+  },
+  "investigation_ownership_chain | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_ownership_chain | global_user | readable-kb": {
+    "beneficial_owners": [],
+    "chains": [],
+    "entity": {
+      "id": "readable-note",
+      "title": "Readable note"
+    },
+    "shell_indicators": []
+  },
+  "investigation_promote_claim | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_promote_claim | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_promote_claim | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_promote_claim | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_qa_report | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_qa_report | global_user | no-default-role-kb": {
+    "claims": "<ENUMERATION_CONTENT>",
+    "quality_score": "<ENUMERATION_CONTENT>",
+    "source_tiers": "<ENUMERATION_CONTENT>",
+    "warnings": []
+  },
+  "investigation_qa_report | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_qa_report | global_user | readable-kb": {
+    "claims": "<ENUMERATION_CONTENT>",
+    "quality_score": "<ENUMERATION_CONTENT>",
+    "source_tiers": "<ENUMERATION_CONTENT>",
+    "warnings": []
+  },
+  "investigation_search_all | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_search_all | global_user | no-default-role-kb": {
+    "groups": "<ENUMERATION_CONTENT>",
+    "query": "zebra",
+    "total_count": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_search_all | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_search_all | global_user | readable-kb": {
+    "groups": "<ENUMERATION_CONTENT>",
+    "query": "zebra",
+    "total_count": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_sources | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_sources | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "sources": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_sources | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_sources | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "sources": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_start | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_start | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_start | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_start | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "investigation_status | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_status | global_user | no-default-role-kb": {
+    "claim_breakdown": "<ENUMERATION_CONTENT>",
+    "claim_count": "<ENUMERATION_CONTENT>",
+    "entity_count": "<ENUMERATION_CONTENT>",
+    "event_count": "<ENUMERATION_CONTENT>",
+    "source_count": "<ENUMERATION_CONTENT>",
+    "summary": "<ENUMERATION_CONTENT>",
+    "unverified_claims": []
+  },
+  "investigation_status | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_status | global_user | readable-kb": {
+    "claim_breakdown": "<ENUMERATION_CONTENT>",
+    "claim_count": "<ENUMERATION_CONTENT>",
+    "entity_count": "<ENUMERATION_CONTENT>",
+    "event_count": "<ENUMERATION_CONTENT>",
+    "source_count": "<ENUMERATION_CONTENT>",
+    "summary": "<ENUMERATION_CONTENT>",
+    "unverified_claims": []
+  },
+  "investigation_timeline | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_timeline | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_timeline | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "investigation_timeline | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "kb_backlinks | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_backlinks | global_user | no-default-role-kb": {
+    "backlink_count": "<ENUMERATION_CONTENT>",
+    "backlinks": [],
+    "entry_id": "no-default-role-note",
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_backlinks | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_backlinks | global_user | readable-kb": {
+    "backlink_count": "<ENUMERATION_CONTENT>",
+    "backlinks": [],
+    "entry_id": "readable-note",
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_batch_read | global_user | missing-kb": {
+    "entries": [],
+    "found": 0,
+    "not_found": [
+      {
+        "entry_id": "characterization-missing-entry",
+        "kb_name": "missing-kb"
+      }
+    ]
+  },
+  "kb_batch_read | global_user | no-default-role-kb": {
+    "entries": [
+      {
+        "assigned_at": null,
+        "assignee": null,
+        "body": "a zebra of no fixed abode",
+        "coordinates": null,
+        "created_at": "<TIMESTAMP>",
+        "created_by": null,
+        "date": null,
+        "due_date": null,
+        "end_date": null,
+        "entry_type": "note",
+        "file_path": "<TMPDIR>/no-default-role-kb/notes/no-default-role-note.md",
+        "id": "no-default-role-note",
+        "importance": 5,
+        "indexed_at": "<TIMESTAMP>",
+        "kb_name": "no-default-role-kb",
+        "lifecycle": "active",
+        "links": [],
+        "location": null,
+        "metadata": {},
+        "modified_by": null,
+        "priority": null,
+        "sources": [],
+        "start_date": null,
+        "status": null,
+        "summary": "",
+        "tags": [],
+        "title": "No-default-role note",
+        "updated_at": "<TIMESTAMP>"
+      }
+    ],
+    "found": 1,
+    "not_found": []
+  },
+  "kb_batch_read | global_user | private-kb": {
+    "entries": [],
+    "found": 0,
+    "not_found": [
+      {
+        "entry_id": "private-note",
+        "kb_name": "private-kb"
+      }
+    ]
+  },
+  "kb_batch_read | global_user | readable-kb": {
+    "entries": [
+      {
+        "assigned_at": null,
+        "assignee": null,
+        "body": "a zebra in the open",
+        "coordinates": null,
+        "created_at": "<TIMESTAMP>",
+        "created_by": null,
+        "date": null,
+        "due_date": null,
+        "end_date": null,
+        "entry_type": "note",
+        "file_path": "<TMPDIR>/readable-kb/notes/readable-note.md",
+        "id": "readable-note",
+        "importance": 5,
+        "indexed_at": "<TIMESTAMP>",
+        "kb_name": "readable-kb",
+        "lifecycle": "active",
+        "links": [],
+        "location": null,
+        "metadata": {},
+        "modified_by": null,
+        "priority": null,
+        "sources": [],
+        "start_date": null,
+        "status": null,
+        "summary": "",
+        "tags": [],
+        "title": "Readable note",
+        "updated_at": "<TIMESTAMP>"
+      }
+    ],
+    "found": 1,
+    "not_found": []
+  },
+  "kb_batch_suggest | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_batch_suggest | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "pairs": [],
+    "source_kb": "no-default-role-kb",
+    "target_kb": "no-default-role-kb"
+  },
+  "kb_batch_suggest | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_batch_suggest | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "pairs": [],
+    "source_kb": "readable-kb",
+    "target_kb": "readable-kb"
+  },
+  "kb_bulk_create | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_bulk_create | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_bulk_create | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_bulk_create | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_commit | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_commit | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_commit | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_commit | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_create | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_create | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_create | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_create | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_delete | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_delete | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_delete | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_delete | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_discover_neighbors | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_discover_neighbors | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "discoveries": [],
+    "entry_id": "no-default-role-note",
+    "kb_name": "no-default-role-kb"
+  },
+  "kb_discover_neighbors | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_discover_neighbors | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "discoveries": [],
+    "entry_id": "readable-note",
+    "kb_name": "readable-kb"
+  },
+  "kb_find_by_assignee | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_find_by_assignee | global_user | no-default-role-kb": {
+    "assignee": "characterization-assignee",
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_find_by_assignee | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_find_by_assignee | global_user | readable-kb": {
+    "assignee": "characterization-assignee",
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_find_by_location | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_find_by_location | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [],
+    "location": "characterization-location-kb_find_by_location-global_user-no-default-role-kb"
+  },
+  "kb_find_by_location | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_find_by_location | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [],
+    "location": "characterization-location-kb_find_by_location-global_user-readable-kb"
+  },
+  "kb_find_by_status | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_find_by_status | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [],
+    "status": "open"
+  },
+  "kb_find_by_status | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_find_by_status | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [],
+    "status": "open"
+  },
+  "kb_find_overdue | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_find_overdue | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_find_overdue | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_find_overdue | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_get | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_get | global_user | no-default-role-kb": {
+    "entry": {
+      "assigned_at": null,
+      "assignee": null,
+      "backlinks": [],
+      "body": "a zebra of no fixed abode",
+      "coordinates": null,
+      "created_at": "<TIMESTAMP>",
+      "created_by": null,
+      "date": null,
+      "due_date": null,
+      "end_date": null,
+      "entry_type": "note",
+      "file_path": "<TMPDIR>/no-default-role-kb/notes/no-default-role-note.md",
+      "id": "no-default-role-note",
+      "importance": 5,
+      "indexed_at": "<TIMESTAMP>",
+      "kb_name": "no-default-role-kb",
+      "lifecycle": "active",
+      "links": [],
+      "location": null,
+      "metadata": {},
+      "modified_by": null,
+      "outlinks": [],
+      "priority": null,
+      "sources": [],
+      "start_date": null,
+      "status": null,
+      "summary": "",
+      "tags": [],
+      "title": "No-default-role note",
+      "updated_at": "<TIMESTAMP>"
+    }
+  },
+  "kb_get | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_get | global_user | readable-kb": {
+    "entry": {
+      "assigned_at": null,
+      "assignee": null,
+      "backlinks": [],
+      "body": "a zebra in the open",
+      "coordinates": null,
+      "created_at": "<TIMESTAMP>",
+      "created_by": null,
+      "date": null,
+      "due_date": null,
+      "end_date": null,
+      "entry_type": "note",
+      "file_path": "<TMPDIR>/readable-kb/notes/readable-note.md",
+      "id": "readable-note",
+      "importance": 5,
+      "indexed_at": "<TIMESTAMP>",
+      "kb_name": "readable-kb",
+      "lifecycle": "active",
+      "links": [],
+      "location": null,
+      "metadata": {},
+      "modified_by": null,
+      "outlinks": [],
+      "priority": null,
+      "sources": [],
+      "start_date": null,
+      "status": null,
+      "summary": "",
+      "tags": [],
+      "title": "Readable note",
+      "updated_at": "<TIMESTAMP>"
+    }
+  },
+  "kb_index_sync | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_index_sync | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_index_sync | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_index_sync | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_link | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_link | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_link | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_link | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_list | global_user | missing-kb": {
+    "knowledge_bases": [
+      {
+        "name": "no-default-role-kb"
+      },
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
+    ]
+  },
+  "kb_list | global_user | no-default-role-kb": {
+    "knowledge_bases": [
+      {
+        "name": "no-default-role-kb"
+      },
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
+    ]
+  },
+  "kb_list | global_user | private-kb": {
+    "knowledge_bases": [
+      {
+        "name": "no-default-role-kb"
+      },
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
+    ]
+  },
+  "kb_list | global_user | readable-kb": {
+    "knowledge_bases": [
+      {
+        "name": "no-default-role-kb"
+      },
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
+    ]
+  },
+  "kb_list_entries | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_list_entries | global_user | no-default-role-kb": {
+    "entries": [
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      }
+    ],
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "kb_list_entries | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_list_entries | global_user | readable-kb": {
+    "entries": [
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
+    ],
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "kb_manage | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_manage | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_manage | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_manage | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_orient | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_orient | global_user | no-default-role-kb": {
+    "description": "",
+    "guidelines": {},
+    "kb": "no-default-role-kb",
+    "kb_type": "generic",
+    "operational_contracts": {
+      "error_contract": {
+        "error": "human-readable message",
+        "error_code": "machine-readable code, e.g. QUERY_SYNTAX, KB_NOT_FOUND",
+        "retryable": "bool -- whether retrying the same request could succeed",
+        "shape": "{error, error_code, suggestion?, retryable}",
+        "suggestion": "optional fix hint, omitted when not applicable"
+      },
+      "indexing": "Entries are only searchable once indexed. Direct file writes under a KB's path (not via `pyrite create`/`update`) need `pyrite index sync` afterward -- it's incremental and cheap, safe to run after every batch of writes.",
+      "search_quoting": "Special-char tokens (hyphens, dots, colons) are auto-quoted ONLY when the query has no AND/OR/NOT operator and no existing quote. Once you use an operator or a phrase quote, quote special-char tokens yourself (e.g. '\"family separation\" \"cross-link\"') or the query can fail with error_code QUERY_SYNTAX (deterministic, not retryable).",
+      "task_claims": "Task claims are atomic; a lost race means the task is already claimed by someone else. On conflict, do NOT override the claim -- re-run the task list and pick a different item."
+    },
+    "read_only": false,
+    "recent": "<ENUMERATION_CONTENT>",
+    "schema": {
+      "evaluation_rubric": [
+        {
+          "checker": "descriptive_title",
+          "text": "Entry has a descriptive title"
+        },
+        {
+          "covered_by": "schema",
+          "text": "Entry body is non-empty"
+        },
+        {
+          "checker": "has_tags",
+          "text": "Entry has at least one tag"
+        },
+        {
+          "checker": "has_outlinks",
+          "text": "Entry links to at least one related entry (unless a stub)"
+        }
+      ],
+      "guidelines": {
+        "completeness": "Fill all required fields. Use summary for quick orientation.",
+        "cross_linking": "Entries should link to related entries for discoverability.",
+        "sourcing": "Claims should link to evidence. Prefer primary sources."
+      },
+      "relationship_types": {
+        "actor_reference": "Event references an actor (resolved from string or wikilink)",
+        "advised_by": "Advised by another entity",
+        "advises": "Advisory relationship",
+        "answers_question": "Answers a question",
+        "asks_question": "Poses a question",
+        "authored": "Authorship",
+        "authored_by": "Authored by",
+        "beneficial_owner_of": "Person is the beneficial owner of an entity",
+        "beneficially_owned_by": "Entity is beneficially owned by a person",
+        "blocked_by": "Backlog item cannot start until blocker completes",
+        "blocks": "Backlog item must complete before another can start",
+        "branches_from": "Branches from a parent note",
+        "built_on": "Solidarity infrastructure built on earlier infrastructure",
+        "capture_mechanism": "Mechanism used in a capture event",
+        "causally_follows": "Causal successor",
+        "causally_precedes": "Causal predecessor",
+        "contains_part": "Contains a part",
+        "contradicted_by": "Claim is contradicted by evidence",
+        "contradicts": "Evidence contradicts a claim",
+        "controlled_by": "Controlled by another entity",
+        "controls": "Control relationship",
+        "corroborated_by": "Claim is corroborated by evidence",
+        "corroborates": "Evidence corroborates a claim",
+        "depended_on_by": "Component depended on by another",
+        "depends_on": "Component depends on another component",
+        "directed_by": "Directed by another entity",
+        "directs": "Directorship",
+        "documented_by": "Component documented by a runbook",
+        "documents": "Runbook documents a component",
+        "elaborated_by": "Elaborated by another note",
+        "elaborates": "Elaborates on another note",
+        "employed_by": "Employment relationship",
+        "employs": "Employs",
+        "enabled": "Earlier infrastructure enabled later solidarity infrastructure",
+        "enabled_capture": "Event enabled by a capture mechanism",
+        "extended_by": "Extended by",
+        "extends": "Extends or elaborates on",
+        "funded_by": "Organization is funded by another organization",
+        "funds": "Organization funds another organization",
+        "has_actor": "Actor is referenced by an event",
+        "has_branch": "Has a branch note",
+        "has_example": "Has example",
+        "has_member": "Organization has a member",
+        "has_party": "Legal action has an entity as a party",
+        "has_session": "Backlog item has a work session log",
+        "has_subtask": "Epic or large item decomposed into subtasks",
+        "implemented_by": "Component implements a design doc",
+        "implements": "Design doc implemented by a component",
+        "investigated": "Actor investigated an event",
+        "investigated_by": "Event was investigated by an actor",
+        "involved_in": "Involved in",
+        "involves": "Involvement",
+        "is_example_of": "Example of a concept",
+        "is_part_of": "Part of a larger whole",
+        "located_at": "Location relationship",
+        "location_of": "Location of",
+        "member_of": "Actor is a member of an organization",
+        "mentioned_by": "Mentioned by",
+        "mentions": "Mentions",
+        "owned_by": "Asset or organization is owned by an entity",
+        "owns": "Entity owns an asset or organization",
+        "party_to": "Entity is a party to a legal action",
+        "produced_by": "Entry was produced by a task",
+        "produces": "Task produces an entry as evidence",
+        "provoked_response": "Capture event provoked a solidarity response",
+        "received_transaction_from": "Entity received a transaction from another entity",
+        "refined_by": "Refined by",
+        "refines": "Refines or narrows",
+        "responded_to": "Solidarity action responded to a capture event",
+        "session_for": "Work log records a session for a backlog item",
+        "source_for": "Document is a source for a claim or fact",
+        "sourced_from": "Claim or fact is sourced from a document",
+        "subtask_of": "Subtask belonging to a parent epic or large item",
+        "superseded_by": "Old ADR superseded by a new one",
+        "supersedes": "New ADR supersedes an old one",
+        "supported_by": "Claim is supported by evidence",
+        "supports": "Evidence supports a claim",
+        "synthesized_from": "Was synthesized from into a permanent note",
+        "synthesizes": "Synthesizes multiple notes into a permanent note",
+        "tracked_by": "ADR/design doc tracked by a backlog item",
+        "tracks": "Backlog item tracks an ADR or design doc",
+        "transacted_with": "Entity transacted with another entity",
+        "wikilink": "Inline wikilink reference",
+        "wikilinked_by": "Referenced by inline wikilink"
+      },
+      "types": {
+        "collection": {
+          "ai_instructions": "A folder-backed collection that groups related entries. Created automatically from __collection.yaml files in KB folders. Use to organize entries into browsable groups with list or table views.",
+          "description": "A folder-backed collection of entries",
+          "display": {
+            "icon": "folder",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "description": "Human-readable description of the collection's purpose",
+            "folder_path": "Relative path to the folder within the KB",
+            "icon": "Icon identifier for display",
+            "source_type": "Collection source: 'folder' for filesystem-backed",
+            "view_config": "View settings: default_view, table_columns"
+          },
+          "fields": {
+            "description": "str",
+            "folder_path": "str",
+            "icon": "str",
+            "source_type": "str",
+            "view_config": "dict"
+          }
+        },
+        "document": {
+          "ai_instructions": "A reference to an external document: report, filing, memo, article, etc. Always include the source URL when available. Use document_type to classify.",
+          "description": "A reference document",
+          "display": {
+            "icon": "file",
+            "layout": "document"
+          },
+          "evaluation_rubric": [
+            {
+              "checker": "has_any_field",
+              "params": {
+                "fields": [
+                  "url",
+                  "author"
+                ]
+              },
+              "text": "Document has a source URL or author"
+            },
+            {
+              "checker": "has_field",
+              "params": {
+                "field": "document_type"
+              },
+              "text": "Document has a document_type classification"
+            }
+          ],
+          "field_descriptions": {
+            "author": "Author or issuing body",
+            "date": "Publication or filing date",
+            "document_type": "Category: report, filing, memo, article, press-release, court-document, etc.",
+            "url": "URL to the original document"
+          },
+          "fields": {
+            "author": "str",
+            "date": "str",
+            "document_type": "str",
+            "url": "str"
+          }
+        },
+        "event": {
+          "ai_instructions": "A specific occurrence with a known or approximate date. Always include a date. Set importance 1-10 based on significance. Use participants to link people/orgs involved.",
+          "description": "Something that happened",
+          "display": {
+            "icon": "calendar",
+            "layout": "record"
+          },
+          "evaluation_rubric": [
+            {
+              "covered_by": "schema",
+              "text": "Event has a date field"
+            },
+            {
+              "covered_by": "schema",
+              "text": "Event has an importance score between 1 and 10"
+            }
+          ],
+          "field_descriptions": {
+            "date": "When the event occurred (YYYY-MM-DD)",
+            "importance": "Significance score from 1 (minor) to 10 (major)",
+            "location": "Where the event took place",
+            "participants": "People or organizations involved",
+            "status": "Verification status: confirmed, disputed, alleged, rumored"
+          },
+          "fields": {
+            "date": "str",
+            "importance": "int",
+            "location": "str",
+            "participants": "list[str]",
+            "status": "EventStatus"
+          }
+        },
+        "note": {
+          "ai_instructions": "General-purpose knowledge note. Use for observations, analysis, summaries, or any content that doesn't fit a more specific type. Keep notes focused on a single topic.",
+          "description": "General-purpose knowledge note",
+          "display": {
+            "icon": "file-text",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "links": "Typed relationships to other entries",
+            "summary": "Brief one-line summary of the note",
+            "tags": "Categorization tags for discovery and filtering",
+            "title": "Descriptive title summarizing the note's content"
+          },
+          "fields": {
+            "links": "list[Link]",
+            "tags": "list[str]"
+          }
+        },
+        "organization": {
+          "ai_instructions": "A group, company, government body, or institution. Specify org_type (gov, ngo, corp, media, political, military, etc.) and jurisdiction where relevant.",
+          "description": "A group, company, institution",
+          "display": {
+            "icon": "building",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "founded": "Date or year the organization was established",
+            "importance": "Relevance score from 1 to 10",
+            "jurisdiction": "Geographic or legal jurisdiction",
+            "org_type": "Category: gov, ngo, corp, media, political, military, academic, religious, etc."
+          },
+          "fields": {
+            "founded": "str",
+            "jurisdiction": "str",
+            "org_type": "str"
+          }
+        },
+        "person": {
+          "ai_instructions": "An individual person. Use role to describe their primary function or position. List organizational affiliations. Set importance based on relevance to research.",
+          "description": "An individual",
+          "display": {
+            "icon": "user",
+            "layout": "record"
+          },
+          "evaluation_rubric": [
+            {
+              "checker": "has_field",
+              "params": {
+                "field": "role"
+              },
+              "text": "Person has a role or position described"
+            }
+          ],
+          "field_descriptions": {
+            "affiliations": "Organizations this person is associated with",
+            "importance": "Relevance score from 1 (peripheral) to 10 (central)",
+            "research_status": "How complete the profile is: stub, partial, draft, complete, published",
+            "role": "Primary role, title, or position"
+          },
+          "fields": {
+            "affiliations": "list[str]",
+            "role": "str"
+          }
+        },
+        "relationship": {
+          "ai_instructions": "A reified relationship between two entities. Use when the relationship itself has properties worth tracking (dates, evidence, context). For simple links, use the links field instead.",
+          "description": "A connection between entities",
+          "display": {
+            "icon": "link",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "relationship_type": "Type of relationship (see relationship_types in schema)",
+            "source_entity": "Entry ID of the source entity",
+            "target_entity": "Entry ID of the target entity"
+          },
+          "fields": {
+            "relationship_type": "str",
+            "source": "str",
+            "target": "str"
+          }
+        },
+        "timeline": {
+          "ai_instructions": "An ordered sequence of related events. Use to group events into a narrative arc. Reference individual events via links.",
+          "description": "An ordered sequence of events",
+          "display": {
+            "icon": "clock",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "date_range": "Time span covered, e.g. '2024-01 to 2025-06'"
+          },
+          "fields": {
+            "date_range": "str"
+          }
+        },
+        "topic": {
+          "ai_instructions": "A theme, subject area, or concept that entries can be organized around. Use as a hub to connect related entries via links and tags.",
+          "description": "A theme, subject area, or concept",
+          "display": {
+            "icon": "hash",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "importance": "Centrality of this topic to the research, 1-10"
+          },
+          "fields": {}
+        }
+      }
+    },
+    "top_tags": [],
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "types": "<ENUMERATION_CONTENT>"
+  },
+  "kb_orient | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_orient | global_user | readable-kb": {
+    "description": "",
+    "guidelines": {},
+    "kb": "readable-kb",
+    "kb_type": "generic",
+    "operational_contracts": {
+      "error_contract": {
+        "error": "human-readable message",
+        "error_code": "machine-readable code, e.g. QUERY_SYNTAX, KB_NOT_FOUND",
+        "retryable": "bool -- whether retrying the same request could succeed",
+        "shape": "{error, error_code, suggestion?, retryable}",
+        "suggestion": "optional fix hint, omitted when not applicable"
+      },
+      "indexing": "Entries are only searchable once indexed. Direct file writes under a KB's path (not via `pyrite create`/`update`) need `pyrite index sync` afterward -- it's incremental and cheap, safe to run after every batch of writes.",
+      "search_quoting": "Special-char tokens (hyphens, dots, colons) are auto-quoted ONLY when the query has no AND/OR/NOT operator and no existing quote. Once you use an operator or a phrase quote, quote special-char tokens yourself (e.g. '\"family separation\" \"cross-link\"') or the query can fail with error_code QUERY_SYNTAX (deterministic, not retryable).",
+      "task_claims": "Task claims are atomic; a lost race means the task is already claimed by someone else. On conflict, do NOT override the claim -- re-run the task list and pick a different item."
+    },
+    "read_only": false,
+    "recent": "<ENUMERATION_CONTENT>",
+    "schema": {
+      "evaluation_rubric": [
+        {
+          "checker": "descriptive_title",
+          "text": "Entry has a descriptive title"
+        },
+        {
+          "covered_by": "schema",
+          "text": "Entry body is non-empty"
+        },
+        {
+          "checker": "has_tags",
+          "text": "Entry has at least one tag"
+        },
+        {
+          "checker": "has_outlinks",
+          "text": "Entry links to at least one related entry (unless a stub)"
+        }
+      ],
+      "guidelines": {
+        "completeness": "Fill all required fields. Use summary for quick orientation.",
+        "cross_linking": "Entries should link to related entries for discoverability.",
+        "sourcing": "Claims should link to evidence. Prefer primary sources."
+      },
+      "relationship_types": {
+        "actor_reference": "Event references an actor (resolved from string or wikilink)",
+        "advised_by": "Advised by another entity",
+        "advises": "Advisory relationship",
+        "answers_question": "Answers a question",
+        "asks_question": "Poses a question",
+        "authored": "Authorship",
+        "authored_by": "Authored by",
+        "beneficial_owner_of": "Person is the beneficial owner of an entity",
+        "beneficially_owned_by": "Entity is beneficially owned by a person",
+        "blocked_by": "Backlog item cannot start until blocker completes",
+        "blocks": "Backlog item must complete before another can start",
+        "branches_from": "Branches from a parent note",
+        "built_on": "Solidarity infrastructure built on earlier infrastructure",
+        "capture_mechanism": "Mechanism used in a capture event",
+        "causally_follows": "Causal successor",
+        "causally_precedes": "Causal predecessor",
+        "contains_part": "Contains a part",
+        "contradicted_by": "Claim is contradicted by evidence",
+        "contradicts": "Evidence contradicts a claim",
+        "controlled_by": "Controlled by another entity",
+        "controls": "Control relationship",
+        "corroborated_by": "Claim is corroborated by evidence",
+        "corroborates": "Evidence corroborates a claim",
+        "depended_on_by": "Component depended on by another",
+        "depends_on": "Component depends on another component",
+        "directed_by": "Directed by another entity",
+        "directs": "Directorship",
+        "documented_by": "Component documented by a runbook",
+        "documents": "Runbook documents a component",
+        "elaborated_by": "Elaborated by another note",
+        "elaborates": "Elaborates on another note",
+        "employed_by": "Employment relationship",
+        "employs": "Employs",
+        "enabled": "Earlier infrastructure enabled later solidarity infrastructure",
+        "enabled_capture": "Event enabled by a capture mechanism",
+        "extended_by": "Extended by",
+        "extends": "Extends or elaborates on",
+        "funded_by": "Organization is funded by another organization",
+        "funds": "Organization funds another organization",
+        "has_actor": "Actor is referenced by an event",
+        "has_branch": "Has a branch note",
+        "has_example": "Has example",
+        "has_member": "Organization has a member",
+        "has_party": "Legal action has an entity as a party",
+        "has_session": "Backlog item has a work session log",
+        "has_subtask": "Epic or large item decomposed into subtasks",
+        "implemented_by": "Component implements a design doc",
+        "implements": "Design doc implemented by a component",
+        "investigated": "Actor investigated an event",
+        "investigated_by": "Event was investigated by an actor",
+        "involved_in": "Involved in",
+        "involves": "Involvement",
+        "is_example_of": "Example of a concept",
+        "is_part_of": "Part of a larger whole",
+        "located_at": "Location relationship",
+        "location_of": "Location of",
+        "member_of": "Actor is a member of an organization",
+        "mentioned_by": "Mentioned by",
+        "mentions": "Mentions",
+        "owned_by": "Asset or organization is owned by an entity",
+        "owns": "Entity owns an asset or organization",
+        "party_to": "Entity is a party to a legal action",
+        "produced_by": "Entry was produced by a task",
+        "produces": "Task produces an entry as evidence",
+        "provoked_response": "Capture event provoked a solidarity response",
+        "received_transaction_from": "Entity received a transaction from another entity",
+        "refined_by": "Refined by",
+        "refines": "Refines or narrows",
+        "responded_to": "Solidarity action responded to a capture event",
+        "session_for": "Work log records a session for a backlog item",
+        "source_for": "Document is a source for a claim or fact",
+        "sourced_from": "Claim or fact is sourced from a document",
+        "subtask_of": "Subtask belonging to a parent epic or large item",
+        "superseded_by": "Old ADR superseded by a new one",
+        "supersedes": "New ADR supersedes an old one",
+        "supported_by": "Claim is supported by evidence",
+        "supports": "Evidence supports a claim",
+        "synthesized_from": "Was synthesized from into a permanent note",
+        "synthesizes": "Synthesizes multiple notes into a permanent note",
+        "tracked_by": "ADR/design doc tracked by a backlog item",
+        "tracks": "Backlog item tracks an ADR or design doc",
+        "transacted_with": "Entity transacted with another entity",
+        "wikilink": "Inline wikilink reference",
+        "wikilinked_by": "Referenced by inline wikilink"
+      },
+      "types": {
+        "collection": {
+          "ai_instructions": "A folder-backed collection that groups related entries. Created automatically from __collection.yaml files in KB folders. Use to organize entries into browsable groups with list or table views.",
+          "description": "A folder-backed collection of entries",
+          "display": {
+            "icon": "folder",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "description": "Human-readable description of the collection's purpose",
+            "folder_path": "Relative path to the folder within the KB",
+            "icon": "Icon identifier for display",
+            "source_type": "Collection source: 'folder' for filesystem-backed",
+            "view_config": "View settings: default_view, table_columns"
+          },
+          "fields": {
+            "description": "str",
+            "folder_path": "str",
+            "icon": "str",
+            "source_type": "str",
+            "view_config": "dict"
+          }
+        },
+        "document": {
+          "ai_instructions": "A reference to an external document: report, filing, memo, article, etc. Always include the source URL when available. Use document_type to classify.",
+          "description": "A reference document",
+          "display": {
+            "icon": "file",
+            "layout": "document"
+          },
+          "evaluation_rubric": [
+            {
+              "checker": "has_any_field",
+              "params": {
+                "fields": [
+                  "url",
+                  "author"
+                ]
+              },
+              "text": "Document has a source URL or author"
+            },
+            {
+              "checker": "has_field",
+              "params": {
+                "field": "document_type"
+              },
+              "text": "Document has a document_type classification"
+            }
+          ],
+          "field_descriptions": {
+            "author": "Author or issuing body",
+            "date": "Publication or filing date",
+            "document_type": "Category: report, filing, memo, article, press-release, court-document, etc.",
+            "url": "URL to the original document"
+          },
+          "fields": {
+            "author": "str",
+            "date": "str",
+            "document_type": "str",
+            "url": "str"
+          }
+        },
+        "event": {
+          "ai_instructions": "A specific occurrence with a known or approximate date. Always include a date. Set importance 1-10 based on significance. Use participants to link people/orgs involved.",
+          "description": "Something that happened",
+          "display": {
+            "icon": "calendar",
+            "layout": "record"
+          },
+          "evaluation_rubric": [
+            {
+              "covered_by": "schema",
+              "text": "Event has a date field"
+            },
+            {
+              "covered_by": "schema",
+              "text": "Event has an importance score between 1 and 10"
+            }
+          ],
+          "field_descriptions": {
+            "date": "When the event occurred (YYYY-MM-DD)",
+            "importance": "Significance score from 1 (minor) to 10 (major)",
+            "location": "Where the event took place",
+            "participants": "People or organizations involved",
+            "status": "Verification status: confirmed, disputed, alleged, rumored"
+          },
+          "fields": {
+            "date": "str",
+            "importance": "int",
+            "location": "str",
+            "participants": "list[str]",
+            "status": "EventStatus"
+          }
+        },
+        "note": {
+          "ai_instructions": "General-purpose knowledge note. Use for observations, analysis, summaries, or any content that doesn't fit a more specific type. Keep notes focused on a single topic.",
+          "description": "General-purpose knowledge note",
+          "display": {
+            "icon": "file-text",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "links": "Typed relationships to other entries",
+            "summary": "Brief one-line summary of the note",
+            "tags": "Categorization tags for discovery and filtering",
+            "title": "Descriptive title summarizing the note's content"
+          },
+          "fields": {
+            "links": "list[Link]",
+            "tags": "list[str]"
+          }
+        },
+        "organization": {
+          "ai_instructions": "A group, company, government body, or institution. Specify org_type (gov, ngo, corp, media, political, military, etc.) and jurisdiction where relevant.",
+          "description": "A group, company, institution",
+          "display": {
+            "icon": "building",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "founded": "Date or year the organization was established",
+            "importance": "Relevance score from 1 to 10",
+            "jurisdiction": "Geographic or legal jurisdiction",
+            "org_type": "Category: gov, ngo, corp, media, political, military, academic, religious, etc."
+          },
+          "fields": {
+            "founded": "str",
+            "jurisdiction": "str",
+            "org_type": "str"
+          }
+        },
+        "person": {
+          "ai_instructions": "An individual person. Use role to describe their primary function or position. List organizational affiliations. Set importance based on relevance to research.",
+          "description": "An individual",
+          "display": {
+            "icon": "user",
+            "layout": "record"
+          },
+          "evaluation_rubric": [
+            {
+              "checker": "has_field",
+              "params": {
+                "field": "role"
+              },
+              "text": "Person has a role or position described"
+            }
+          ],
+          "field_descriptions": {
+            "affiliations": "Organizations this person is associated with",
+            "importance": "Relevance score from 1 (peripheral) to 10 (central)",
+            "research_status": "How complete the profile is: stub, partial, draft, complete, published",
+            "role": "Primary role, title, or position"
+          },
+          "fields": {
+            "affiliations": "list[str]",
+            "role": "str"
+          }
+        },
+        "relationship": {
+          "ai_instructions": "A reified relationship between two entities. Use when the relationship itself has properties worth tracking (dates, evidence, context). For simple links, use the links field instead.",
+          "description": "A connection between entities",
+          "display": {
+            "icon": "link",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "relationship_type": "Type of relationship (see relationship_types in schema)",
+            "source_entity": "Entry ID of the source entity",
+            "target_entity": "Entry ID of the target entity"
+          },
+          "fields": {
+            "relationship_type": "str",
+            "source": "str",
+            "target": "str"
+          }
+        },
+        "timeline": {
+          "ai_instructions": "An ordered sequence of related events. Use to group events into a narrative arc. Reference individual events via links.",
+          "description": "An ordered sequence of events",
+          "display": {
+            "icon": "clock",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "date_range": "Time span covered, e.g. '2024-01 to 2025-06'"
+          },
+          "fields": {
+            "date_range": "str"
+          }
+        },
+        "topic": {
+          "ai_instructions": "A theme, subject area, or concept that entries can be organized around. Use as a hub to connect related entries via links and tags.",
+          "description": "A theme, subject area, or concept",
+          "display": {
+            "icon": "hash",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "importance": "Centrality of this topic to the research, 1-10"
+          },
+          "fields": {}
+        }
+      }
+    },
+    "top_tags": [],
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "types": "<ENUMERATION_CONTENT>"
+  },
+  "kb_push | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_push | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_push | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_push | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_qa_assess | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_qa_assess | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_qa_assess | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_qa_assess | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_qa_status | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_qa_status | global_user | no-default-role-kb": {
+    "coverage": "<ENUMERATION_CONTENT>",
+    "issues_by_rule": "<ENUMERATION_CONTENT>",
+    "issues_by_severity": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_issues": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_status | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_qa_status | global_user | readable-kb": {
+    "coverage": "<ENUMERATION_CONTENT>",
+    "issues_by_rule": "<ENUMERATION_CONTENT>",
+    "issues_by_severity": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_issues": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_validate | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_qa_validate | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "issues": "<ENUMERATION_CONTENT>",
+    "truncated": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_validate | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_qa_validate | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "issues": "<ENUMERATION_CONTENT>",
+    "truncated": "<ENUMERATION_CONTENT>"
+  },
+  "kb_read_body | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_read_body | global_user | no-default-role-kb": {
+    "body": "a zebra of no fixed abode",
+    "body_chunk_size": 25,
+    "body_length": 25,
+    "body_offset": 0,
+    "has_more": false
+  },
+  "kb_read_body | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_read_body | global_user | readable-kb": {
+    "body": "a zebra in the open",
+    "body_chunk_size": 19,
+    "body_length": 19,
+    "body_offset": 0,
+    "has_more": false
+  },
+  "kb_recent | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_recent | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      }
+    ]
+  },
+  "kb_recent | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_recent | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
+    ]
+  },
+  "kb_schema | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_schema | global_user | no-default-role-kb": {
+    "evaluation_rubric": [
+      {
+        "checker": "descriptive_title",
+        "text": "Entry has a descriptive title"
+      },
+      {
+        "covered_by": "schema",
+        "text": "Entry body is non-empty"
+      },
+      {
+        "checker": "has_tags",
+        "text": "Entry has at least one tag"
+      },
+      {
+        "checker": "has_outlinks",
+        "text": "Entry links to at least one related entry (unless a stub)"
+      }
+    ],
+    "guidelines": {
+      "completeness": "Fill all required fields. Use summary for quick orientation.",
+      "cross_linking": "Entries should link to related entries for discoverability.",
+      "sourcing": "Claims should link to evidence. Prefer primary sources."
+    },
+    "relationship_types": {
+      "actor_reference": "Event references an actor (resolved from string or wikilink)",
+      "advised_by": "Advised by another entity",
+      "advises": "Advisory relationship",
+      "answers_question": "Answers a question",
+      "asks_question": "Poses a question",
+      "authored": "Authorship",
+      "authored_by": "Authored by",
+      "beneficial_owner_of": "Person is the beneficial owner of an entity",
+      "beneficially_owned_by": "Entity is beneficially owned by a person",
+      "blocked_by": "Backlog item cannot start until blocker completes",
+      "blocks": "Backlog item must complete before another can start",
+      "branches_from": "Branches from a parent note",
+      "built_on": "Solidarity infrastructure built on earlier infrastructure",
+      "capture_mechanism": "Mechanism used in a capture event",
+      "causally_follows": "Causal successor",
+      "causally_precedes": "Causal predecessor",
+      "contains_part": "Contains a part",
+      "contradicted_by": "Claim is contradicted by evidence",
+      "contradicts": "Evidence contradicts a claim",
+      "controlled_by": "Controlled by another entity",
+      "controls": "Control relationship",
+      "corroborated_by": "Claim is corroborated by evidence",
+      "corroborates": "Evidence corroborates a claim",
+      "depended_on_by": "Component depended on by another",
+      "depends_on": "Component depends on another component",
+      "directed_by": "Directed by another entity",
+      "directs": "Directorship",
+      "documented_by": "Component documented by a runbook",
+      "documents": "Runbook documents a component",
+      "elaborated_by": "Elaborated by another note",
+      "elaborates": "Elaborates on another note",
+      "employed_by": "Employment relationship",
+      "employs": "Employs",
+      "enabled": "Earlier infrastructure enabled later solidarity infrastructure",
+      "enabled_capture": "Event enabled by a capture mechanism",
+      "extended_by": "Extended by",
+      "extends": "Extends or elaborates on",
+      "funded_by": "Organization is funded by another organization",
+      "funds": "Organization funds another organization",
+      "has_actor": "Actor is referenced by an event",
+      "has_branch": "Has a branch note",
+      "has_example": "Has example",
+      "has_member": "Organization has a member",
+      "has_party": "Legal action has an entity as a party",
+      "has_session": "Backlog item has a work session log",
+      "has_subtask": "Epic or large item decomposed into subtasks",
+      "implemented_by": "Component implements a design doc",
+      "implements": "Design doc implemented by a component",
+      "investigated": "Actor investigated an event",
+      "investigated_by": "Event was investigated by an actor",
+      "involved_in": "Involved in",
+      "involves": "Involvement",
+      "is_example_of": "Example of a concept",
+      "is_part_of": "Part of a larger whole",
+      "located_at": "Location relationship",
+      "location_of": "Location of",
+      "member_of": "Actor is a member of an organization",
+      "mentioned_by": "Mentioned by",
+      "mentions": "Mentions",
+      "owned_by": "Asset or organization is owned by an entity",
+      "owns": "Entity owns an asset or organization",
+      "party_to": "Entity is a party to a legal action",
+      "produced_by": "Entry was produced by a task",
+      "produces": "Task produces an entry as evidence",
+      "provoked_response": "Capture event provoked a solidarity response",
+      "received_transaction_from": "Entity received a transaction from another entity",
+      "refined_by": "Refined by",
+      "refines": "Refines or narrows",
+      "responded_to": "Solidarity action responded to a capture event",
+      "session_for": "Work log records a session for a backlog item",
+      "source_for": "Document is a source for a claim or fact",
+      "sourced_from": "Claim or fact is sourced from a document",
+      "subtask_of": "Subtask belonging to a parent epic or large item",
+      "superseded_by": "Old ADR superseded by a new one",
+      "supersedes": "New ADR supersedes an old one",
+      "supported_by": "Claim is supported by evidence",
+      "supports": "Evidence supports a claim",
+      "synthesized_from": "Was synthesized from into a permanent note",
+      "synthesizes": "Synthesizes multiple notes into a permanent note",
+      "tracked_by": "ADR/design doc tracked by a backlog item",
+      "tracks": "Backlog item tracks an ADR or design doc",
+      "transacted_with": "Entity transacted with another entity",
+      "wikilink": "Inline wikilink reference",
+      "wikilinked_by": "Referenced by inline wikilink"
+    },
+    "types": {
+      "collection": {
+        "ai_instructions": "A folder-backed collection that groups related entries. Created automatically from __collection.yaml files in KB folders. Use to organize entries into browsable groups with list or table views.",
+        "description": "A folder-backed collection of entries",
+        "display": {
+          "icon": "folder",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "description": "Human-readable description of the collection's purpose",
+          "folder_path": "Relative path to the folder within the KB",
+          "icon": "Icon identifier for display",
+          "source_type": "Collection source: 'folder' for filesystem-backed",
+          "view_config": "View settings: default_view, table_columns"
+        },
+        "fields": {
+          "description": "str",
+          "folder_path": "str",
+          "icon": "str",
+          "source_type": "str",
+          "view_config": "dict"
+        }
+      },
+      "document": {
+        "ai_instructions": "A reference to an external document: report, filing, memo, article, etc. Always include the source URL when available. Use document_type to classify.",
+        "description": "A reference document",
+        "display": {
+          "icon": "file",
+          "layout": "document"
+        },
+        "evaluation_rubric": [
+          {
+            "checker": "has_any_field",
+            "params": {
+              "fields": [
+                "url",
+                "author"
+              ]
+            },
+            "text": "Document has a source URL or author"
+          },
+          {
+            "checker": "has_field",
+            "params": {
+              "field": "document_type"
+            },
+            "text": "Document has a document_type classification"
+          }
+        ],
+        "field_descriptions": {
+          "author": "Author or issuing body",
+          "date": "Publication or filing date",
+          "document_type": "Category: report, filing, memo, article, press-release, court-document, etc.",
+          "url": "URL to the original document"
+        },
+        "fields": {
+          "author": "str",
+          "date": "str",
+          "document_type": "str",
+          "url": "str"
+        }
+      },
+      "event": {
+        "ai_instructions": "A specific occurrence with a known or approximate date. Always include a date. Set importance 1-10 based on significance. Use participants to link people/orgs involved.",
+        "description": "Something that happened",
+        "display": {
+          "icon": "calendar",
+          "layout": "record"
+        },
+        "evaluation_rubric": [
+          {
+            "covered_by": "schema",
+            "text": "Event has a date field"
+          },
+          {
+            "covered_by": "schema",
+            "text": "Event has an importance score between 1 and 10"
+          }
+        ],
+        "field_descriptions": {
+          "date": "When the event occurred (YYYY-MM-DD)",
+          "importance": "Significance score from 1 (minor) to 10 (major)",
+          "location": "Where the event took place",
+          "participants": "People or organizations involved",
+          "status": "Verification status: confirmed, disputed, alleged, rumored"
+        },
+        "fields": {
+          "date": "str",
+          "importance": "int",
+          "location": "str",
+          "participants": "list[str]",
+          "status": "EventStatus"
+        }
+      },
+      "note": {
+        "ai_instructions": "General-purpose knowledge note. Use for observations, analysis, summaries, or any content that doesn't fit a more specific type. Keep notes focused on a single topic.",
+        "description": "General-purpose knowledge note",
+        "display": {
+          "icon": "file-text",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "links": "Typed relationships to other entries",
+          "summary": "Brief one-line summary of the note",
+          "tags": "Categorization tags for discovery and filtering",
+          "title": "Descriptive title summarizing the note's content"
+        },
+        "fields": {
+          "links": "list[Link]",
+          "tags": "list[str]"
+        }
+      },
+      "organization": {
+        "ai_instructions": "A group, company, government body, or institution. Specify org_type (gov, ngo, corp, media, political, military, etc.) and jurisdiction where relevant.",
+        "description": "A group, company, institution",
+        "display": {
+          "icon": "building",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "founded": "Date or year the organization was established",
+          "importance": "Relevance score from 1 to 10",
+          "jurisdiction": "Geographic or legal jurisdiction",
+          "org_type": "Category: gov, ngo, corp, media, political, military, academic, religious, etc."
+        },
+        "fields": {
+          "founded": "str",
+          "jurisdiction": "str",
+          "org_type": "str"
+        }
+      },
+      "person": {
+        "ai_instructions": "An individual person. Use role to describe their primary function or position. List organizational affiliations. Set importance based on relevance to research.",
+        "description": "An individual",
+        "display": {
+          "icon": "user",
+          "layout": "record"
+        },
+        "evaluation_rubric": [
+          {
+            "checker": "has_field",
+            "params": {
+              "field": "role"
+            },
+            "text": "Person has a role or position described"
+          }
+        ],
+        "field_descriptions": {
+          "affiliations": "Organizations this person is associated with",
+          "importance": "Relevance score from 1 (peripheral) to 10 (central)",
+          "research_status": "How complete the profile is: stub, partial, draft, complete, published",
+          "role": "Primary role, title, or position"
+        },
+        "fields": {
+          "affiliations": "list[str]",
+          "role": "str"
+        }
+      },
+      "relationship": {
+        "ai_instructions": "A reified relationship between two entities. Use when the relationship itself has properties worth tracking (dates, evidence, context). For simple links, use the links field instead.",
+        "description": "A connection between entities",
+        "display": {
+          "icon": "link",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "relationship_type": "Type of relationship (see relationship_types in schema)",
+          "source_entity": "Entry ID of the source entity",
+          "target_entity": "Entry ID of the target entity"
+        },
+        "fields": {
+          "relationship_type": "str",
+          "source": "str",
+          "target": "str"
+        }
+      },
+      "timeline": {
+        "ai_instructions": "An ordered sequence of related events. Use to group events into a narrative arc. Reference individual events via links.",
+        "description": "An ordered sequence of events",
+        "display": {
+          "icon": "clock",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "date_range": "Time span covered, e.g. '2024-01 to 2025-06'"
+        },
+        "fields": {
+          "date_range": "str"
+        }
+      },
+      "topic": {
+        "ai_instructions": "A theme, subject area, or concept that entries can be organized around. Use as a hub to connect related entries via links and tags.",
+        "description": "A theme, subject area, or concept",
+        "display": {
+          "icon": "hash",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "importance": "Centrality of this topic to the research, 1-10"
+        },
+        "fields": {}
+      }
+    }
+  },
+  "kb_schema | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_schema | global_user | readable-kb": {
+    "evaluation_rubric": [
+      {
+        "checker": "descriptive_title",
+        "text": "Entry has a descriptive title"
+      },
+      {
+        "covered_by": "schema",
+        "text": "Entry body is non-empty"
+      },
+      {
+        "checker": "has_tags",
+        "text": "Entry has at least one tag"
+      },
+      {
+        "checker": "has_outlinks",
+        "text": "Entry links to at least one related entry (unless a stub)"
+      }
+    ],
+    "guidelines": {
+      "completeness": "Fill all required fields. Use summary for quick orientation.",
+      "cross_linking": "Entries should link to related entries for discoverability.",
+      "sourcing": "Claims should link to evidence. Prefer primary sources."
+    },
+    "relationship_types": {
+      "actor_reference": "Event references an actor (resolved from string or wikilink)",
+      "advised_by": "Advised by another entity",
+      "advises": "Advisory relationship",
+      "answers_question": "Answers a question",
+      "asks_question": "Poses a question",
+      "authored": "Authorship",
+      "authored_by": "Authored by",
+      "beneficial_owner_of": "Person is the beneficial owner of an entity",
+      "beneficially_owned_by": "Entity is beneficially owned by a person",
+      "blocked_by": "Backlog item cannot start until blocker completes",
+      "blocks": "Backlog item must complete before another can start",
+      "branches_from": "Branches from a parent note",
+      "built_on": "Solidarity infrastructure built on earlier infrastructure",
+      "capture_mechanism": "Mechanism used in a capture event",
+      "causally_follows": "Causal successor",
+      "causally_precedes": "Causal predecessor",
+      "contains_part": "Contains a part",
+      "contradicted_by": "Claim is contradicted by evidence",
+      "contradicts": "Evidence contradicts a claim",
+      "controlled_by": "Controlled by another entity",
+      "controls": "Control relationship",
+      "corroborated_by": "Claim is corroborated by evidence",
+      "corroborates": "Evidence corroborates a claim",
+      "depended_on_by": "Component depended on by another",
+      "depends_on": "Component depends on another component",
+      "directed_by": "Directed by another entity",
+      "directs": "Directorship",
+      "documented_by": "Component documented by a runbook",
+      "documents": "Runbook documents a component",
+      "elaborated_by": "Elaborated by another note",
+      "elaborates": "Elaborates on another note",
+      "employed_by": "Employment relationship",
+      "employs": "Employs",
+      "enabled": "Earlier infrastructure enabled later solidarity infrastructure",
+      "enabled_capture": "Event enabled by a capture mechanism",
+      "extended_by": "Extended by",
+      "extends": "Extends or elaborates on",
+      "funded_by": "Organization is funded by another organization",
+      "funds": "Organization funds another organization",
+      "has_actor": "Actor is referenced by an event",
+      "has_branch": "Has a branch note",
+      "has_example": "Has example",
+      "has_member": "Organization has a member",
+      "has_party": "Legal action has an entity as a party",
+      "has_session": "Backlog item has a work session log",
+      "has_subtask": "Epic or large item decomposed into subtasks",
+      "implemented_by": "Component implements a design doc",
+      "implements": "Design doc implemented by a component",
+      "investigated": "Actor investigated an event",
+      "investigated_by": "Event was investigated by an actor",
+      "involved_in": "Involved in",
+      "involves": "Involvement",
+      "is_example_of": "Example of a concept",
+      "is_part_of": "Part of a larger whole",
+      "located_at": "Location relationship",
+      "location_of": "Location of",
+      "member_of": "Actor is a member of an organization",
+      "mentioned_by": "Mentioned by",
+      "mentions": "Mentions",
+      "owned_by": "Asset or organization is owned by an entity",
+      "owns": "Entity owns an asset or organization",
+      "party_to": "Entity is a party to a legal action",
+      "produced_by": "Entry was produced by a task",
+      "produces": "Task produces an entry as evidence",
+      "provoked_response": "Capture event provoked a solidarity response",
+      "received_transaction_from": "Entity received a transaction from another entity",
+      "refined_by": "Refined by",
+      "refines": "Refines or narrows",
+      "responded_to": "Solidarity action responded to a capture event",
+      "session_for": "Work log records a session for a backlog item",
+      "source_for": "Document is a source for a claim or fact",
+      "sourced_from": "Claim or fact is sourced from a document",
+      "subtask_of": "Subtask belonging to a parent epic or large item",
+      "superseded_by": "Old ADR superseded by a new one",
+      "supersedes": "New ADR supersedes an old one",
+      "supported_by": "Claim is supported by evidence",
+      "supports": "Evidence supports a claim",
+      "synthesized_from": "Was synthesized from into a permanent note",
+      "synthesizes": "Synthesizes multiple notes into a permanent note",
+      "tracked_by": "ADR/design doc tracked by a backlog item",
+      "tracks": "Backlog item tracks an ADR or design doc",
+      "transacted_with": "Entity transacted with another entity",
+      "wikilink": "Inline wikilink reference",
+      "wikilinked_by": "Referenced by inline wikilink"
+    },
+    "types": {
+      "collection": {
+        "ai_instructions": "A folder-backed collection that groups related entries. Created automatically from __collection.yaml files in KB folders. Use to organize entries into browsable groups with list or table views.",
+        "description": "A folder-backed collection of entries",
+        "display": {
+          "icon": "folder",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "description": "Human-readable description of the collection's purpose",
+          "folder_path": "Relative path to the folder within the KB",
+          "icon": "Icon identifier for display",
+          "source_type": "Collection source: 'folder' for filesystem-backed",
+          "view_config": "View settings: default_view, table_columns"
+        },
+        "fields": {
+          "description": "str",
+          "folder_path": "str",
+          "icon": "str",
+          "source_type": "str",
+          "view_config": "dict"
+        }
+      },
+      "document": {
+        "ai_instructions": "A reference to an external document: report, filing, memo, article, etc. Always include the source URL when available. Use document_type to classify.",
+        "description": "A reference document",
+        "display": {
+          "icon": "file",
+          "layout": "document"
+        },
+        "evaluation_rubric": [
+          {
+            "checker": "has_any_field",
+            "params": {
+              "fields": [
+                "url",
+                "author"
+              ]
+            },
+            "text": "Document has a source URL or author"
+          },
+          {
+            "checker": "has_field",
+            "params": {
+              "field": "document_type"
+            },
+            "text": "Document has a document_type classification"
+          }
+        ],
+        "field_descriptions": {
+          "author": "Author or issuing body",
+          "date": "Publication or filing date",
+          "document_type": "Category: report, filing, memo, article, press-release, court-document, etc.",
+          "url": "URL to the original document"
+        },
+        "fields": {
+          "author": "str",
+          "date": "str",
+          "document_type": "str",
+          "url": "str"
+        }
+      },
+      "event": {
+        "ai_instructions": "A specific occurrence with a known or approximate date. Always include a date. Set importance 1-10 based on significance. Use participants to link people/orgs involved.",
+        "description": "Something that happened",
+        "display": {
+          "icon": "calendar",
+          "layout": "record"
+        },
+        "evaluation_rubric": [
+          {
+            "covered_by": "schema",
+            "text": "Event has a date field"
+          },
+          {
+            "covered_by": "schema",
+            "text": "Event has an importance score between 1 and 10"
+          }
+        ],
+        "field_descriptions": {
+          "date": "When the event occurred (YYYY-MM-DD)",
+          "importance": "Significance score from 1 (minor) to 10 (major)",
+          "location": "Where the event took place",
+          "participants": "People or organizations involved",
+          "status": "Verification status: confirmed, disputed, alleged, rumored"
+        },
+        "fields": {
+          "date": "str",
+          "importance": "int",
+          "location": "str",
+          "participants": "list[str]",
+          "status": "EventStatus"
+        }
+      },
+      "note": {
+        "ai_instructions": "General-purpose knowledge note. Use for observations, analysis, summaries, or any content that doesn't fit a more specific type. Keep notes focused on a single topic.",
+        "description": "General-purpose knowledge note",
+        "display": {
+          "icon": "file-text",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "links": "Typed relationships to other entries",
+          "summary": "Brief one-line summary of the note",
+          "tags": "Categorization tags for discovery and filtering",
+          "title": "Descriptive title summarizing the note's content"
+        },
+        "fields": {
+          "links": "list[Link]",
+          "tags": "list[str]"
+        }
+      },
+      "organization": {
+        "ai_instructions": "A group, company, government body, or institution. Specify org_type (gov, ngo, corp, media, political, military, etc.) and jurisdiction where relevant.",
+        "description": "A group, company, institution",
+        "display": {
+          "icon": "building",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "founded": "Date or year the organization was established",
+          "importance": "Relevance score from 1 to 10",
+          "jurisdiction": "Geographic or legal jurisdiction",
+          "org_type": "Category: gov, ngo, corp, media, political, military, academic, religious, etc."
+        },
+        "fields": {
+          "founded": "str",
+          "jurisdiction": "str",
+          "org_type": "str"
+        }
+      },
+      "person": {
+        "ai_instructions": "An individual person. Use role to describe their primary function or position. List organizational affiliations. Set importance based on relevance to research.",
+        "description": "An individual",
+        "display": {
+          "icon": "user",
+          "layout": "record"
+        },
+        "evaluation_rubric": [
+          {
+            "checker": "has_field",
+            "params": {
+              "field": "role"
+            },
+            "text": "Person has a role or position described"
+          }
+        ],
+        "field_descriptions": {
+          "affiliations": "Organizations this person is associated with",
+          "importance": "Relevance score from 1 (peripheral) to 10 (central)",
+          "research_status": "How complete the profile is: stub, partial, draft, complete, published",
+          "role": "Primary role, title, or position"
+        },
+        "fields": {
+          "affiliations": "list[str]",
+          "role": "str"
+        }
+      },
+      "relationship": {
+        "ai_instructions": "A reified relationship between two entities. Use when the relationship itself has properties worth tracking (dates, evidence, context). For simple links, use the links field instead.",
+        "description": "A connection between entities",
+        "display": {
+          "icon": "link",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "relationship_type": "Type of relationship (see relationship_types in schema)",
+          "source_entity": "Entry ID of the source entity",
+          "target_entity": "Entry ID of the target entity"
+        },
+        "fields": {
+          "relationship_type": "str",
+          "source": "str",
+          "target": "str"
+        }
+      },
+      "timeline": {
+        "ai_instructions": "An ordered sequence of related events. Use to group events into a narrative arc. Reference individual events via links.",
+        "description": "An ordered sequence of events",
+        "display": {
+          "icon": "clock",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "date_range": "Time span covered, e.g. '2024-01 to 2025-06'"
+        },
+        "fields": {
+          "date_range": "str"
+        }
+      },
+      "topic": {
+        "ai_instructions": "A theme, subject area, or concept that entries can be organized around. Use as a hub to connect related entries via links and tags.",
+        "description": "A theme, subject area, or concept",
+        "display": {
+          "icon": "hash",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "importance": "Centrality of this topic to the research, 1-10"
+        },
+        "fields": {}
+      }
+    }
+  },
+  "kb_search | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_search | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "query": "zebra",
+    "results": [
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      }
+    ]
+  },
+  "kb_search | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_search | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "query": "zebra",
+    "results": [
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
+    ]
+  },
+  "kb_stats | global_user | missing-kb": {
+    "kbs": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_links": "<ENUMERATION_CONTENT>",
+    "total_tags": "<ENUMERATION_CONTENT>",
+    "type_counts": "<ENUMERATION_CONTENT>"
+  },
+  "kb_stats | global_user | no-default-role-kb": {
+    "kbs": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_links": "<ENUMERATION_CONTENT>",
+    "total_tags": "<ENUMERATION_CONTENT>",
+    "type_counts": "<ENUMERATION_CONTENT>"
+  },
+  "kb_stats | global_user | private-kb": {
+    "kbs": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_links": "<ENUMERATION_CONTENT>",
+    "total_tags": "<ENUMERATION_CONTENT>",
+    "type_counts": "<ENUMERATION_CONTENT>"
+  },
+  "kb_stats | global_user | readable-kb": {
+    "kbs": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_links": "<ENUMERATION_CONTENT>",
+    "total_tags": "<ENUMERATION_CONTENT>",
+    "type_counts": "<ENUMERATION_CONTENT>"
+  },
+  "kb_tags | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_tags | global_user | no-default-role-kb": {
+    "has_more": "<ENUMERATION_CONTENT>",
+    "tag_count": "<ENUMERATION_CONTENT>",
+    "tags": []
+  },
+  "kb_tags | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_tags | global_user | readable-kb": {
+    "has_more": "<ENUMERATION_CONTENT>",
+    "tag_count": "<ENUMERATION_CONTENT>",
+    "tags": []
+  },
+  "kb_timeline | global_user | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_timeline | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_timeline | global_user | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_timeline | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_update | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_update | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "kb_update | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_update | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "list_edge_types | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "list_edge_types | global_user | no-default-role-kb": {
+    "edge_types": [],
+    "total": 0
+  },
+  "list_edge_types | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "list_edge_types | global_user | readable-kb": {
+    "edge_types": [],
+    "total": 0
+  },
+  "social_newest | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "social_newest | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "newest": []
+  },
+  "social_newest | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "social_newest | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "newest": []
+  },
+  "social_post | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "social_post | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "social_post | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "social_post | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "social_top | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "social_top | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "top": []
+  },
+  "social_top | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "social_top | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "top": []
+  },
+  "social_vote | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "social_vote | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "social_vote | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "social_vote | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "solidarity_infrastructure_types | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "solidarity_infrastructure_types | global_user | no-default-role-kb": {
+    "count": 0,
+    "infrastructure_types": []
+  },
+  "solidarity_infrastructure_types | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "solidarity_infrastructure_types | global_user | readable-kb": {
+    "count": 0,
+    "infrastructure_types": []
+  },
+  "solidarity_timeline | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "solidarity_timeline | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": []
+  },
+  "solidarity_timeline | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "solidarity_timeline | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": []
+  },
+  "sw_adrs | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_adrs | global_user | no-default-role-kb": {
+    "adrs": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_adrs | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_adrs | global_user | readable-kb": {
+    "adrs": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_backlog | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_backlog | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "items": [],
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_backlog | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_backlog | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "items": [],
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_board | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_board | global_user | no-default-role-kb": {
+    "lanes": [
+      {
+        "name": "Backlog"
+      },
+      {
+        "name": "Done"
+      },
+      {
+        "name": "In Progress"
+      },
+      {
+        "name": "Ready"
+      },
+      {
+        "name": "Review"
+      }
+    ],
+    "wip_policy": "warn"
+  },
+  "sw_board | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_board | global_user | readable-kb": {
+    "lanes": [
+      {
+        "name": "Backlog"
+      },
+      {
+        "name": "Done"
+      },
+      {
+        "name": "In Progress"
+      },
+      {
+        "name": "Ready"
+      },
+      {
+        "name": "Review"
+      }
+    ],
+    "wip_policy": "warn"
+  },
+  "sw_check_ready | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_check_ready | global_user | no-default-role-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_check_ready-global_user-no-default-role-kb' not found in KB 'no-default-role-kb'"
+  },
+  "sw_check_ready | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_check_ready | global_user | readable-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_check_ready-global_user-readable-kb' not found in KB 'readable-kb'"
+  },
+  "sw_claim | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_claim | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_claim | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_claim | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_component | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_component | global_user | no-default-role-kb": {
+    "components": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_component | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_component | global_user | readable-kb": {
+    "components": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_context_for_item | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_context_for_item | global_user | no-default-role-kb": {
+    "error": "Entry 'characterization-placeholder-id-sw_context_for_item-global_user-no-default-role-kb' not found in KB 'no-default-role-kb'"
+  },
+  "sw_context_for_item | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_context_for_item | global_user | readable-kb": {
+    "error": "Entry 'characterization-placeholder-id-sw_context_for_item-global_user-readable-kb' not found in KB 'readable-kb'"
+  },
+  "sw_conventions | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_conventions | global_user | no-default-role-kb": {
+    "conventions": [],
+    "count": 0
+  },
+  "sw_conventions | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_conventions | global_user | readable-kb": {
+    "conventions": [],
+    "count": 0
+  },
+  "sw_create_adr | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_create_adr | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_create_adr | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_create_adr | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_create_backlog_item | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_create_backlog_item | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_create_backlog_item | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_create_backlog_item | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_epic_detail | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_epic_detail | global_user | no-default-role-kb": {
+    "error": "Epic 'characterization-placeholder-id-sw_epic_detail-global_user-no-default-role-kb' not found in KB 'no-default-role-kb'"
+  },
+  "sw_epic_detail | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_epic_detail | global_user | readable-kb": {
+    "error": "Epic 'characterization-placeholder-id-sw_epic_detail-global_user-readable-kb' not found in KB 'readable-kb'"
+  },
+  "sw_epics | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_epics | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "epics": []
+  },
+  "sw_epics | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_epics | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "epics": []
+  },
+  "sw_log | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_log | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_log | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_log | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_milestones | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_milestones | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "milestones": []
+  },
+  "sw_milestones | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_milestones | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "milestones": []
+  },
+  "sw_prioritize | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_prioritize | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_prioritize | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_prioritize | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_pull_next | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_pull_next | global_user | no-default-role-kb": {
+    "reason": "<ENUMERATION_CONTENT>",
+    "recommendation": "<ENUMERATION_CONTENT>",
+    "wip_status": "<ENUMERATION_CONTENT>"
+  },
+  "sw_pull_next | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_pull_next | global_user | readable-kb": {
+    "reason": "<ENUMERATION_CONTENT>",
+    "recommendation": "<ENUMERATION_CONTENT>",
+    "wip_status": "<ENUMERATION_CONTENT>"
+  },
+  "sw_refine | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_refine | global_user | no-default-role-kb": {
+    "items": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "sw_refine | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_refine | global_user | readable-kb": {
+    "items": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "sw_review | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_review | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_review | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_review | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_review_queue | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_review_queue | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "items": [],
+    "over_limit": "<ENUMERATION_CONTENT>",
+    "wip_limit": 3
+  },
+  "sw_review_queue | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_review_queue | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "items": [],
+    "over_limit": "<ENUMERATION_CONTENT>",
+    "wip_limit": 3
+  },
+  "sw_standards | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_standards | global_user | no-default-role-kb": {
+    "count": 0,
+    "has_more": false,
+    "limit": 50,
+    "offset": 0,
+    "standards": [],
+    "total": 0
+  },
+  "sw_standards | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_standards | global_user | readable-kb": {
+    "count": 0,
+    "has_more": false,
+    "limit": 50,
+    "offset": 0,
+    "standards": [],
+    "total": 0
+  },
+  "sw_submit | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_submit | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_submit | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_submit | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_transition | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_transition | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_transition | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_transition | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "sw_validations | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_validations | global_user | no-default-role-kb": {
+    "count": 0,
+    "validations": []
+  },
+  "sw_validations | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "sw_validations | global_user | readable-kb": {
+    "count": 0,
+    "validations": []
+  },
+  "task_ancestors | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_ancestors | global_user | no-default-role-kb": {
+    "error": "Task 'characterization-placeholder-id-task_ancestors-global_user-no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_ancestors | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_ancestors | global_user | readable-kb": {
+    "error": "Task 'characterization-placeholder-id-task_ancestors-global_user-readable-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_blocked_by | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_blocked_by | global_user | no-default-role-kb": {
+    "error": "Task 'characterization-placeholder-id-task_blocked_by-global_user-no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_blocked_by | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_blocked_by | global_user | readable-kb": {
+    "error": "Task 'characterization-placeholder-id-task_blocked_by-global_user-readable-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_checkpoint | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_checkpoint | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "task_checkpoint | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_checkpoint | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "task_claim | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_claim | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "task_claim | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_claim | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "task_create | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_create | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "task_create | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_create | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "task_critical_path | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_critical_path | global_user | no-default-role-kb": {
+    "error": "Task 'characterization-placeholder-id-task_critical_path-global_user-no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_critical_path | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_critical_path | global_user | readable-kb": {
+    "error": "Task 'characterization-placeholder-id-task_critical_path-global_user-readable-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_decompose | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_decompose | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "task_decompose | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_decompose | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "task_list | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_list | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "tasks": []
+  },
+  "task_list | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_list | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "tasks": []
+  },
+  "task_status | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_status | global_user | no-default-role-kb": {
+    "error": "Task 'characterization-placeholder-id-task_status-global_user-no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_status | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_status | global_user | readable-kb": {
+    "error": "Task 'characterization-placeholder-id-task_status-global_user-readable-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_subtree | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_subtree | global_user | no-default-role-kb": {
+    "error": "Task 'characterization-placeholder-id-task_subtree-global_user-no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_subtree | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_subtree | global_user | readable-kb": {
+    "error": "Task 'characterization-placeholder-id-task_subtree-global_user-readable-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_update | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_update | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "task_update | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_update | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "wiki_assess_quality | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_assess_quality | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "wiki_assess_quality | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_assess_quality | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "wiki_protect | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_protect | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "wiki_protect | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_protect | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "wiki_quality_stats | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_quality_stats | global_user | no-default-role-kb": {
+    "quality_distribution": "<ENUMERATION_CONTENT>",
+    "review_queue_size": "<ENUMERATION_CONTENT>",
+    "review_status_distribution": "<ENUMERATION_CONTENT>",
+    "total_articles": "<ENUMERATION_CONTENT>"
+  },
+  "wiki_quality_stats | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_quality_stats | global_user | readable-kb": {
+    "quality_distribution": "<ENUMERATION_CONTENT>",
+    "review_queue_size": "<ENUMERATION_CONTENT>",
+    "review_status_distribution": "<ENUMERATION_CONTENT>",
+    "total_articles": "<ENUMERATION_CONTENT>"
+  },
+  "wiki_review_queue | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_review_queue | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "queue": []
+  },
+  "wiki_review_queue | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_review_queue | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "queue": []
+  },
+  "wiki_stubs | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_stubs | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "stubs": []
+  },
+  "wiki_stubs | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_stubs | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "stubs": []
+  },
+  "wiki_submit_review | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_submit_review | global_user | no-default-role-kb": {
+    "error": "Insufficient permissions on KB 'no-default-role-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "wiki_submit_review | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "wiki_submit_review | global_user | readable-kb": {
+    "error": "Insufficient permissions on KB 'readable-kb': requires 'write' tier",
+    "error_code": "FORBIDDEN",
+    "retryable": false
+  },
+  "zettel_graph | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "zettel_graph | global_user | no-default-role-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "no-default-role-note",
+      "title": "No-default-role note"
+    },
+    "outlinks": []
+  },
+  "zettel_graph | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "zettel_graph | global_user | readable-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "readable-note",
+      "title": "Readable note"
+    },
+    "outlinks": []
+  },
+  "zettel_inbox | global_user | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "zettel_inbox | global_user | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "inbox": []
+  },
+  "zettel_inbox | global_user | private-kb": {
+    "error": "KB 'private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "zettel_inbox | global_user | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "inbox": []
+  }
+}

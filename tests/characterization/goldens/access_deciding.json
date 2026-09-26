@@ -1,0 +1,737 @@
+{
+  "DELETE /api/kbs/characterization-access-deciding-does-not-exist | admin_key": {
+    "status": 404
+  },
+  "DELETE /api/kbs/characterization-access-deciding-does-not-exist | anonymous": {
+    "status": 403
+  },
+  "DELETE /api/kbs/characterization-access-deciding-does-not-exist | global_user": {
+    "status": 403
+  },
+  "DELETE /api/kbs/characterization-access-deciding-does-not-exist | granted_user": {
+    "status": 403
+  },
+  "DELETE /api/kbs/characterization-access-deciding-does-not-exist | local_user": {
+    "status": 403
+  },
+  "DELETE /api/kbs/characterization-access-deciding-does-not-exist | read_key": {
+    "status": 403
+  },
+  "DELETE /api/kbs/characterization-access-deciding-does-not-exist | write_key": {
+    "status": 403
+  },
+  "DELETE /api/kbs/ephemeral/characterization-access-deciding-does-not-exist | admin_key": {
+    "status": 404
+  },
+  "DELETE /api/kbs/ephemeral/characterization-access-deciding-does-not-exist | anonymous": {
+    "status": 403
+  },
+  "DELETE /api/kbs/ephemeral/characterization-access-deciding-does-not-exist | global_user": {
+    "status": 403
+  },
+  "DELETE /api/kbs/ephemeral/characterization-access-deciding-does-not-exist | granted_user": {
+    "status": 403
+  },
+  "DELETE /api/kbs/ephemeral/characterization-access-deciding-does-not-exist | local_user": {
+    "status": 403
+  },
+  "DELETE /api/kbs/ephemeral/characterization-access-deciding-does-not-exist | read_key": {
+    "status": 403
+  },
+  "DELETE /api/kbs/ephemeral/characterization-access-deciding-does-not-exist | write_key": {
+    "status": 403
+  },
+  "DELETE /api/settings/characterization.does.not.exist | admin_key": {
+    "status": 200
+  },
+  "DELETE /api/settings/characterization.does.not.exist | anonymous": {
+    "status": 403
+  },
+  "DELETE /api/settings/characterization.does.not.exist | global_user": {
+    "status": 403
+  },
+  "DELETE /api/settings/characterization.does.not.exist | granted_user": {
+    "status": 403
+  },
+  "DELETE /api/settings/characterization.does.not.exist | local_user": {
+    "status": 403
+  },
+  "DELETE /api/settings/characterization.does.not.exist | read_key": {
+    "status": 403
+  },
+  "DELETE /api/settings/characterization.does.not.exist | write_key": {
+    "status": 200
+  },
+  "DELETE /auth/api-keys/does-not-exist-provider | admin_key": {
+    "status": 401
+  },
+  "DELETE /auth/api-keys/does-not-exist-provider | anonymous": {
+    "status": 401
+  },
+  "DELETE /auth/api-keys/does-not-exist-provider | global_user": {
+    "status": 404
+  },
+  "DELETE /auth/api-keys/does-not-exist-provider | granted_user": {
+    "status": 404
+  },
+  "DELETE /auth/api-keys/does-not-exist-provider | local_user": {
+    "status": 404
+  },
+  "DELETE /auth/api-keys/does-not-exist-provider | read_key": {
+    "status": 401
+  },
+  "DELETE /auth/api-keys/does-not-exist-provider | write_key": {
+    "status": 401
+  },
+  "DELETE /auth/invite-codes/does-not-exist-invite-code | admin_key": {
+    "status": 401
+  },
+  "DELETE /auth/invite-codes/does-not-exist-invite-code | anonymous": {
+    "status": 401
+  },
+  "DELETE /auth/invite-codes/does-not-exist-invite-code | global_user": {
+    "status": 401
+  },
+  "DELETE /auth/invite-codes/does-not-exist-invite-code | granted_user": {
+    "status": 401
+  },
+  "DELETE /auth/invite-codes/does-not-exist-invite-code | local_user": {
+    "status": 401
+  },
+  "DELETE /auth/invite-codes/does-not-exist-invite-code | read_key": {
+    "status": 401
+  },
+  "DELETE /auth/invite-codes/does-not-exist-invite-code | write_key": {
+    "status": 401
+  },
+  "GET /api/admin/merge-queue | admin_key": {
+    "status": 200
+  },
+  "GET /api/admin/merge-queue | anonymous": {
+    "status": 403
+  },
+  "GET /api/admin/merge-queue | global_user": {
+    "status": 403
+  },
+  "GET /api/admin/merge-queue | granted_user": {
+    "status": 403
+  },
+  "GET /api/admin/merge-queue | local_user": {
+    "status": 403
+  },
+  "GET /api/admin/merge-queue | read_key": {
+    "status": 403
+  },
+  "GET /api/admin/merge-queue | write_key": {
+    "status": 403
+  },
+  "GET /api/admin/merge-queue/characterization-access-deciding-does-not-exist/diff | admin_key": {
+    "status": 422
+  },
+  "GET /api/admin/merge-queue/characterization-access-deciding-does-not-exist/diff | anonymous": {
+    "status": 403
+  },
+  "GET /api/admin/merge-queue/characterization-access-deciding-does-not-exist/diff | global_user": {
+    "status": 403
+  },
+  "GET /api/admin/merge-queue/characterization-access-deciding-does-not-exist/diff | granted_user": {
+    "status": 403
+  },
+  "GET /api/admin/merge-queue/characterization-access-deciding-does-not-exist/diff | local_user": {
+    "status": 403
+  },
+  "GET /api/admin/merge-queue/characterization-access-deciding-does-not-exist/diff | read_key": {
+    "status": 403
+  },
+  "GET /api/admin/merge-queue/characterization-access-deciding-does-not-exist/diff | write_key": {
+    "status": 403
+  },
+  "GET /api/admin/usage | admin_key": {
+    "status": 200
+  },
+  "GET /api/admin/usage | anonymous": {
+    "status": 403
+  },
+  "GET /api/admin/usage | global_user": {
+    "status": 403
+  },
+  "GET /api/admin/usage | granted_user": {
+    "status": 403
+  },
+  "GET /api/admin/usage | local_user": {
+    "status": 403
+  },
+  "GET /api/admin/usage | read_key": {
+    "status": 403
+  },
+  "GET /api/admin/usage | write_key": {
+    "status": 403
+  },
+  "GET /api/index/jobs | admin_key": {
+    "status": 200
+  },
+  "GET /api/index/jobs | anonymous": {
+    "status": 403
+  },
+  "GET /api/index/jobs | global_user": {
+    "status": 403
+  },
+  "GET /api/index/jobs | granted_user": {
+    "status": 403
+  },
+  "GET /api/index/jobs | local_user": {
+    "status": 403
+  },
+  "GET /api/index/jobs | read_key": {
+    "status": 403
+  },
+  "GET /api/index/jobs | write_key": {
+    "status": 403
+  },
+  "GET /api/index/jobs/characterization-access-deciding-no-such-job | admin_key": {
+    "status": 404
+  },
+  "GET /api/index/jobs/characterization-access-deciding-no-such-job | anonymous": {
+    "status": 403
+  },
+  "GET /api/index/jobs/characterization-access-deciding-no-such-job | global_user": {
+    "status": 403
+  },
+  "GET /api/index/jobs/characterization-access-deciding-no-such-job | granted_user": {
+    "status": 403
+  },
+  "GET /api/index/jobs/characterization-access-deciding-no-such-job | local_user": {
+    "status": 403
+  },
+  "GET /api/index/jobs/characterization-access-deciding-no-such-job | read_key": {
+    "status": 403
+  },
+  "GET /api/index/jobs/characterization-access-deciding-no-such-job | write_key": {
+    "status": 403
+  },
+  "GET /api/kbs/ephemeral | admin_key": {
+    "status": 404
+  },
+  "GET /api/kbs/ephemeral | anonymous": {
+    "status": 404
+  },
+  "GET /api/kbs/ephemeral | global_user": {
+    "status": 404
+  },
+  "GET /api/kbs/ephemeral | granted_user": {
+    "status": 404
+  },
+  "GET /api/kbs/ephemeral | local_user": {
+    "status": 404
+  },
+  "GET /api/kbs/ephemeral | read_key": {
+    "status": 404
+  },
+  "GET /api/kbs/ephemeral | write_key": {
+    "status": 404
+  },
+  "GET /api/settings | admin_key": {
+    "status": 200
+  },
+  "GET /api/settings | anonymous": {
+    "status": 200
+  },
+  "GET /api/settings | global_user": {
+    "status": 200
+  },
+  "GET /api/settings | granted_user": {
+    "status": 200
+  },
+  "GET /api/settings | local_user": {
+    "status": 200
+  },
+  "GET /api/settings | read_key": {
+    "status": 200
+  },
+  "GET /api/settings | write_key": {
+    "status": 200
+  },
+  "GET /api/settings/characterization.does.not.exist | admin_key": {
+    "status": 200
+  },
+  "GET /api/settings/characterization.does.not.exist | anonymous": {
+    "status": 200
+  },
+  "GET /api/settings/characterization.does.not.exist | global_user": {
+    "status": 200
+  },
+  "GET /api/settings/characterization.does.not.exist | granted_user": {
+    "status": 200
+  },
+  "GET /api/settings/characterization.does.not.exist | local_user": {
+    "status": 200
+  },
+  "GET /api/settings/characterization.does.not.exist | read_key": {
+    "status": 200
+  },
+  "GET /api/settings/characterization.does.not.exist | write_key": {
+    "status": 200
+  },
+  "GET /auth/api-keys | admin_key": {
+    "status": 401
+  },
+  "GET /auth/api-keys | anonymous": {
+    "status": 401
+  },
+  "GET /auth/api-keys | global_user": {
+    "status": 200
+  },
+  "GET /auth/api-keys | granted_user": {
+    "status": 200
+  },
+  "GET /auth/api-keys | local_user": {
+    "status": 200
+  },
+  "GET /auth/api-keys | read_key": {
+    "status": 401
+  },
+  "GET /auth/api-keys | write_key": {
+    "status": 401
+  },
+  "GET /auth/invite-codes | admin_key": {
+    "status": 401
+  },
+  "GET /auth/invite-codes | anonymous": {
+    "status": 401
+  },
+  "GET /auth/invite-codes | global_user": {
+    "status": 401
+  },
+  "GET /auth/invite-codes | granted_user": {
+    "status": 401
+  },
+  "GET /auth/invite-codes | local_user": {
+    "status": 401
+  },
+  "GET /auth/invite-codes | read_key": {
+    "status": 401
+  },
+  "GET /auth/invite-codes | write_key": {
+    "status": 401
+  },
+  "GET /auth/users | admin_key": {
+    "status": 200
+  },
+  "GET /auth/users | anonymous": {
+    "status": 403
+  },
+  "GET /auth/users | global_user": {
+    "status": 403
+  },
+  "GET /auth/users | granted_user": {
+    "status": 403
+  },
+  "GET /auth/users | local_user": {
+    "status": 403
+  },
+  "GET /auth/users | read_key": {
+    "status": 403
+  },
+  "GET /auth/users | write_key": {
+    "status": 403
+  },
+  "GET /auth/users/999999999/permissions | admin_key": {
+    "status": 200
+  },
+  "GET /auth/users/999999999/permissions | anonymous": {
+    "status": 403
+  },
+  "GET /auth/users/999999999/permissions | global_user": {
+    "status": 403
+  },
+  "GET /auth/users/999999999/permissions | granted_user": {
+    "status": 403
+  },
+  "GET /auth/users/999999999/permissions | local_user": {
+    "status": 403
+  },
+  "GET /auth/users/999999999/permissions | read_key": {
+    "status": 403
+  },
+  "GET /auth/users/999999999/permissions | write_key": {
+    "status": 403
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/merge | admin_key": {
+    "status": 422
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/merge | anonymous": {
+    "status": 403
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/merge | global_user": {
+    "status": 403
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/merge | granted_user": {
+    "status": 403
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/merge | local_user": {
+    "status": 403
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/merge | read_key": {
+    "status": 403
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/merge | write_key": {
+    "status": 403
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/reject | admin_key": {
+    "status": 422
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/reject | anonymous": {
+    "status": 403
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/reject | global_user": {
+    "status": 403
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/reject | granted_user": {
+    "status": 403
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/reject | local_user": {
+    "status": 403
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/reject | read_key": {
+    "status": 403
+  },
+  "POST /api/admin/merge-queue/characterization-access-deciding-does-not-exist/reject | write_key": {
+    "status": 403
+  },
+  "POST /api/index/sync | admin_key": {
+    "status": 200
+  },
+  "POST /api/index/sync | anonymous": {
+    "status": 403
+  },
+  "POST /api/index/sync | global_user": {
+    "status": 403
+  },
+  "POST /api/index/sync | granted_user": {
+    "status": 403
+  },
+  "POST /api/index/sync | local_user": {
+    "status": 403
+  },
+  "POST /api/index/sync | read_key": {
+    "status": 403
+  },
+  "POST /api/index/sync | write_key": {
+    "status": 403
+  },
+  "POST /api/kbs | admin_key": {
+    "status": 422
+  },
+  "POST /api/kbs | anonymous": {
+    "status": 403
+  },
+  "POST /api/kbs | global_user": {
+    "status": 403
+  },
+  "POST /api/kbs | granted_user": {
+    "status": 403
+  },
+  "POST /api/kbs | local_user": {
+    "status": 403
+  },
+  "POST /api/kbs | read_key": {
+    "status": 403
+  },
+  "POST /api/kbs | write_key": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/commit | admin_key": {
+    "status": 404
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/commit | anonymous": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/commit | global_user": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/commit | granted_user": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/commit | local_user": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/commit | read_key": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/commit | write_key": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/publish | admin_key": {
+    "status": 404
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/publish | anonymous": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/publish | global_user": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/publish | granted_user": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/publish | local_user": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/publish | read_key": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/publish | write_key": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/push | admin_key": {
+    "status": 404
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/push | anonymous": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/push | global_user": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/push | granted_user": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/push | local_user": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/push | read_key": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/push | write_key": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/reindex | admin_key": {
+    "status": 404
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/reindex | anonymous": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/reindex | global_user": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/reindex | granted_user": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/reindex | local_user": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/reindex | read_key": {
+    "status": 403
+  },
+  "POST /api/kbs/characterization-access-deciding-does-not-exist/reindex | write_key": {
+    "status": 403
+  },
+  "POST /api/kbs/ephemeral | admin_key": {
+    "status": 401
+  },
+  "POST /api/kbs/ephemeral | anonymous": {
+    "status": 401
+  },
+  "POST /api/kbs/ephemeral | global_user": {
+    "status": 403
+  },
+  "POST /api/kbs/ephemeral | granted_user": {
+    "status": 403
+  },
+  "POST /api/kbs/ephemeral | local_user": {
+    "status": 403
+  },
+  "POST /api/kbs/ephemeral | read_key": {
+    "status": 401
+  },
+  "POST /api/kbs/ephemeral | write_key": {
+    "status": 401
+  },
+  "POST /api/kbs/gc | admin_key": {
+    "status": 200
+  },
+  "POST /api/kbs/gc | anonymous": {
+    "status": 403
+  },
+  "POST /api/kbs/gc | global_user": {
+    "status": 403
+  },
+  "POST /api/kbs/gc | granted_user": {
+    "status": 403
+  },
+  "POST /api/kbs/gc | local_user": {
+    "status": 403
+  },
+  "POST /api/kbs/gc | read_key": {
+    "status": 403
+  },
+  "POST /api/kbs/gc | write_key": {
+    "status": 403
+  },
+  "POST /api/site/render | admin_key": {
+    "status": 200
+  },
+  "POST /api/site/render | anonymous": {
+    "status": 403
+  },
+  "POST /api/site/render | global_user": {
+    "status": 403
+  },
+  "POST /api/site/render | granted_user": {
+    "status": 403
+  },
+  "POST /api/site/render | local_user": {
+    "status": 403
+  },
+  "POST /api/site/render | read_key": {
+    "status": 403
+  },
+  "POST /api/site/render | write_key": {
+    "status": 403
+  },
+  "POST /auth/api-keys | admin_key": {
+    "status": 422
+  },
+  "POST /auth/api-keys | anonymous": {
+    "status": 422
+  },
+  "POST /auth/api-keys | global_user": {
+    "status": 422
+  },
+  "POST /auth/api-keys | granted_user": {
+    "status": 422
+  },
+  "POST /auth/api-keys | local_user": {
+    "status": 422
+  },
+  "POST /auth/api-keys | read_key": {
+    "status": 422
+  },
+  "POST /auth/api-keys | write_key": {
+    "status": 422
+  },
+  "POST /auth/invite-codes | admin_key": {
+    "status": 401
+  },
+  "POST /auth/invite-codes | anonymous": {
+    "status": 401
+  },
+  "POST /auth/invite-codes | global_user": {
+    "status": 401
+  },
+  "POST /auth/invite-codes | granted_user": {
+    "status": 401
+  },
+  "POST /auth/invite-codes | local_user": {
+    "status": 401
+  },
+  "POST /auth/invite-codes | read_key": {
+    "status": 401
+  },
+  "POST /auth/invite-codes | write_key": {
+    "status": 401
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist | admin_key": {
+    "status": 404
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist | anonymous": {
+    "status": 403
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist | global_user": {
+    "status": 403
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist | granted_user": {
+    "status": 403
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist | local_user": {
+    "status": 403
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist | read_key": {
+    "status": 403
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist | write_key": {
+    "status": 403
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist/default-role | admin_key": {
+    "status": 422
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist/default-role | anonymous": {
+    "status": 403
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist/default-role | global_user": {
+    "status": 403
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist/default-role | granted_user": {
+    "status": 403
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist/default-role | local_user": {
+    "status": 403
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist/default-role | read_key": {
+    "status": 403
+  },
+  "PUT /api/kbs/characterization-access-deciding-does-not-exist/default-role | write_key": {
+    "status": 403
+  },
+  "PUT /api/settings | admin_key": {
+    "status": 422
+  },
+  "PUT /api/settings | anonymous": {
+    "status": 403
+  },
+  "PUT /api/settings | global_user": {
+    "status": 403
+  },
+  "PUT /api/settings | granted_user": {
+    "status": 403
+  },
+  "PUT /api/settings | local_user": {
+    "status": 403
+  },
+  "PUT /api/settings | read_key": {
+    "status": 403
+  },
+  "PUT /api/settings | write_key": {
+    "status": 422
+  },
+  "PUT /api/settings/characterization.does.not.exist | admin_key": {
+    "status": 200
+  },
+  "PUT /api/settings/characterization.does.not.exist | anonymous": {
+    "status": 403
+  },
+  "PUT /api/settings/characterization.does.not.exist | global_user": {
+    "status": 403
+  },
+  "PUT /api/settings/characterization.does.not.exist | granted_user": {
+    "status": 403
+  },
+  "PUT /api/settings/characterization.does.not.exist | local_user": {
+    "status": 403
+  },
+  "PUT /api/settings/characterization.does.not.exist | read_key": {
+    "status": 403
+  },
+  "PUT /api/settings/characterization.does.not.exist | write_key": {
+    "status": 200
+  },
+  "PUT /auth/users/999999999/role | admin_key": {
+    "status": 404
+  },
+  "PUT /auth/users/999999999/role | anonymous": {
+    "status": 403
+  },
+  "PUT /auth/users/999999999/role | global_user": {
+    "status": 403
+  },
+  "PUT /auth/users/999999999/role | granted_user": {
+    "status": 403
+  },
+  "PUT /auth/users/999999999/role | local_user": {
+    "status": 403
+  },
+  "PUT /auth/users/999999999/role | read_key": {
+    "status": 403
+  },
+  "PUT /auth/users/999999999/role | write_key": {
+    "status": 403
+  }
+}

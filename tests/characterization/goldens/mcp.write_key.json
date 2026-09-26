@@ -1,0 +1,4493 @@
+{
+  "cascade_actors | write_key | missing-kb": {
+    "actors": [],
+    "count": "<ENUMERATION_CONTENT>"
+  },
+  "cascade_actors | write_key | no-default-role-kb": {
+    "actors": [],
+    "count": "<ENUMERATION_CONTENT>"
+  },
+  "cascade_actors | write_key | private-kb": {
+    "actors": [],
+    "count": "<ENUMERATION_CONTENT>"
+  },
+  "cascade_actors | write_key | readable-kb": {
+    "actors": [],
+    "count": "<ENUMERATION_CONTENT>"
+  },
+  "cascade_capture_lanes | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "lanes": []
+  },
+  "cascade_capture_lanes | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "lanes": []
+  },
+  "cascade_capture_lanes | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "lanes": []
+  },
+  "cascade_capture_lanes | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "lanes": []
+  },
+  "cascade_network | write_key | missing-kb": {
+    "error": "Entry 'characterization-missing-entry' not found"
+  },
+  "cascade_network | write_key | no-default-role-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "no-default-role-note",
+      "title": "No-default-role note"
+    },
+    "limit": 50,
+    "offset": 0,
+    "outlinks": [],
+    "totals": {
+      "backlinks": 0,
+      "outlinks": 0
+    },
+    "truncated": false
+  },
+  "cascade_network | write_key | private-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "private-note",
+      "title": "Private note"
+    },
+    "limit": 50,
+    "offset": 0,
+    "outlinks": [],
+    "totals": {
+      "backlinks": 0,
+      "outlinks": 0
+    },
+    "truncated": false
+  },
+  "cascade_network | write_key | readable-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "readable-note",
+      "title": "Readable note"
+    },
+    "limit": 50,
+    "offset": 0,
+    "outlinks": [],
+    "totals": {
+      "backlinks": 0,
+      "outlinks": 0
+    },
+    "truncated": false
+  },
+  "cascade_timeline | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": []
+  },
+  "cascade_timeline | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": []
+  },
+  "cascade_timeline | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": []
+  },
+  "cascade_timeline | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": []
+  },
+  "investigation_bulk_edges | write_key | missing-kb": {
+    "created": 0,
+    "entries": [
+      {
+        "errors": [
+          "Invalid type 'characterization-placeholder'. Must be one of: funding, membership, ownership"
+        ],
+        "id": null,
+        "status": "error",
+        "title": null,
+        "type": "characterization-placeholder"
+      }
+    ],
+    "errors": 1,
+    "skipped": 0
+  },
+  "investigation_bulk_edges | write_key | no-default-role-kb": {
+    "created": 0,
+    "entries": [
+      {
+        "errors": [
+          "Invalid type 'characterization-placeholder'. Must be one of: funding, membership, ownership"
+        ],
+        "id": null,
+        "status": "error",
+        "title": null,
+        "type": "characterization-placeholder"
+      }
+    ],
+    "errors": 1,
+    "skipped": 0
+  },
+  "investigation_bulk_edges | write_key | private-kb": {
+    "created": 0,
+    "entries": [
+      {
+        "errors": [
+          "Invalid type 'characterization-placeholder'. Must be one of: funding, membership, ownership"
+        ],
+        "id": null,
+        "status": "error",
+        "title": null,
+        "type": "characterization-placeholder"
+      }
+    ],
+    "errors": 1,
+    "skipped": 0
+  },
+  "investigation_bulk_edges | write_key | readable-kb": {
+    "created": 0,
+    "entries": [
+      {
+        "errors": [
+          "Invalid type 'characterization-placeholder'. Must be one of: funding, membership, ownership"
+        ],
+        "id": null,
+        "status": "error",
+        "title": null,
+        "type": "characterization-placeholder"
+      }
+    ],
+    "errors": 1,
+    "skipped": 0
+  },
+  "investigation_claims | write_key | missing-kb": {
+    "claims": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_claims | write_key | no-default-role-kb": {
+    "claims": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_claims | write_key | private-kb": {
+    "claims": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_claims | write_key | readable-kb": {
+    "claims": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_create_claim | write_key | missing-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_create_claim | write_key | no-default-role-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_create_claim | write_key | private-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_create_claim | write_key | readable-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_create_entity | write_key | missing-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_create_entity | write_key | no-default-role-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_create_entity | write_key | private-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_create_entity | write_key | readable-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_create_event | write_key | missing-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_create_event | write_key | no-default-role-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_create_event | write_key | private-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_create_event | write_key | readable-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_entities | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entities": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_entities | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entities": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_entities | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entities": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_entities | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entities": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_evidence_chain | write_key | missing-kb": {
+    "error": "Claim 'characterization-placeholder-id-investigation_evidence_chain-write_key-missing-kb' not found"
+  },
+  "investigation_evidence_chain | write_key | no-default-role-kb": {
+    "error": "Claim 'characterization-placeholder-id-investigation_evidence_chain-write_key-no-default-role-kb' not found"
+  },
+  "investigation_evidence_chain | write_key | private-kb": {
+    "error": "Claim 'characterization-placeholder-id-investigation_evidence_chain-write_key-private-kb' not found"
+  },
+  "investigation_evidence_chain | write_key | readable-kb": {
+    "error": "Claim 'characterization-placeholder-id-investigation_evidence_chain-write_key-readable-kb' not found"
+  },
+  "investigation_export_pack | write_key | missing-kb": {
+    "content": "<ENUMERATION_CONTENT>",
+    "format": "json"
+  },
+  "investigation_export_pack | write_key | no-default-role-kb": {
+    "content": "<ENUMERATION_CONTENT>",
+    "format": "json"
+  },
+  "investigation_export_pack | write_key | private-kb": {
+    "content": "<ENUMERATION_CONTENT>",
+    "format": "json"
+  },
+  "investigation_export_pack | write_key | readable-kb": {
+    "content": "<ENUMERATION_CONTENT>",
+    "format": "json"
+  },
+  "investigation_find_duplicates | write_key | missing-kb": {
+    "duplicates": []
+  },
+  "investigation_find_duplicates | write_key | no-default-role-kb": {
+    "duplicates": []
+  },
+  "investigation_find_duplicates | write_key | private-kb": {
+    "duplicates": []
+  },
+  "investigation_find_duplicates | write_key | readable-kb": {
+    "duplicates": []
+  },
+  "investigation_ftm_export | write_key | missing-kb": {
+    "entities": []
+  },
+  "investigation_ftm_export | write_key | no-default-role-kb": {
+    "entities": []
+  },
+  "investigation_ftm_export | write_key | private-kb": {
+    "entities": []
+  },
+  "investigation_ftm_export | write_key | readable-kb": {
+    "entities": []
+  },
+  "investigation_ftm_import | write_key | missing-kb": {
+    "entries": [],
+    "errors": 0,
+    "imported": 0,
+    "skipped": 0,
+    "unmapped": 1,
+    "unmapped_schemas": []
+  },
+  "investigation_ftm_import | write_key | no-default-role-kb": {
+    "entries": [],
+    "errors": 0,
+    "imported": 0,
+    "skipped": 0,
+    "unmapped": 1,
+    "unmapped_schemas": []
+  },
+  "investigation_ftm_import | write_key | private-kb": {
+    "entries": [],
+    "errors": 0,
+    "imported": 0,
+    "skipped": 0,
+    "unmapped": 1,
+    "unmapped_schemas": []
+  },
+  "investigation_ftm_import | write_key | readable-kb": {
+    "entries": [],
+    "errors": 0,
+    "imported": 0,
+    "skipped": 0,
+    "unmapped": 1,
+    "unmapped_schemas": []
+  },
+  "investigation_log_source | write_key | missing-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_log_source | write_key | no-default-role-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_log_source | write_key | private-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_log_source | write_key | readable-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_money_flow | write_key | missing-kb": {
+    "circular_flows": [],
+    "direction": "both",
+    "entity": {
+      "id": "characterization-missing-entry",
+      "title": "characterization-missing-entry"
+    },
+    "flows": [],
+    "summary": "Traced both flows for characterization-missing-entry; 0 flow path(s) found"
+  },
+  "investigation_money_flow | write_key | no-default-role-kb": {
+    "circular_flows": [],
+    "direction": "both",
+    "entity": {
+      "id": "no-default-role-note",
+      "title": "No-default-role note"
+    },
+    "flows": [],
+    "summary": "Traced both flows for No-default-role note; 0 flow path(s) found"
+  },
+  "investigation_money_flow | write_key | private-kb": {
+    "circular_flows": [],
+    "direction": "both",
+    "entity": {
+      "id": "private-note",
+      "title": "Private note"
+    },
+    "flows": [],
+    "summary": "Traced both flows for Private note; 0 flow path(s) found"
+  },
+  "investigation_money_flow | write_key | readable-kb": {
+    "circular_flows": [],
+    "direction": "both",
+    "entity": {
+      "id": "readable-note",
+      "title": "Readable note"
+    },
+    "flows": [],
+    "summary": "Traced both flows for Readable note; 0 flow path(s) found"
+  },
+  "investigation_network | write_key | missing-kb": {
+    "error": "Entry 'characterization-missing-entry' not found"
+  },
+  "investigation_network | write_key | no-default-role-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "no-default-role-note",
+      "title": "No-default-role note"
+    },
+    "limit": 50,
+    "offset": 0,
+    "outlinks": [],
+    "totals": {
+      "backlinks": 0,
+      "outlinks": 0
+    },
+    "truncated": false
+  },
+  "investigation_network | write_key | private-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "private-note",
+      "title": "Private note"
+    },
+    "limit": 50,
+    "offset": 0,
+    "outlinks": [],
+    "totals": {
+      "backlinks": 0,
+      "outlinks": 0
+    },
+    "truncated": false
+  },
+  "investigation_network | write_key | readable-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "readable-note",
+      "title": "Readable note"
+    },
+    "limit": 50,
+    "offset": 0,
+    "outlinks": [],
+    "totals": {
+      "backlinks": 0,
+      "outlinks": 0
+    },
+    "truncated": false
+  },
+  "investigation_ownership_chain | write_key | missing-kb": {
+    "beneficial_owners": [],
+    "chains": [],
+    "entity": {
+      "id": "characterization-missing-entry",
+      "title": "characterization-missing-entry"
+    },
+    "shell_indicators": []
+  },
+  "investigation_ownership_chain | write_key | no-default-role-kb": {
+    "beneficial_owners": [],
+    "chains": [],
+    "entity": {
+      "id": "no-default-role-note",
+      "title": "No-default-role note"
+    },
+    "shell_indicators": []
+  },
+  "investigation_ownership_chain | write_key | private-kb": {
+    "beneficial_owners": [],
+    "chains": [],
+    "entity": {
+      "id": "private-note",
+      "title": "Private note"
+    },
+    "shell_indicators": []
+  },
+  "investigation_ownership_chain | write_key | readable-kb": {
+    "beneficial_owners": [],
+    "chains": [],
+    "entity": {
+      "id": "readable-note",
+      "title": "Readable note"
+    },
+    "shell_indicators": []
+  },
+  "investigation_promote_claim | write_key | missing-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_promote_claim | write_key | no-default-role-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_promote_claim | write_key | private-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_promote_claim | write_key | readable-kb": {
+    "error": "No KB service available \u2014 write tools require a running server context"
+  },
+  "investigation_qa_report | write_key | missing-kb": {
+    "claims": "<ENUMERATION_CONTENT>",
+    "quality_score": "<ENUMERATION_CONTENT>",
+    "source_tiers": "<ENUMERATION_CONTENT>",
+    "warnings": []
+  },
+  "investigation_qa_report | write_key | no-default-role-kb": {
+    "claims": "<ENUMERATION_CONTENT>",
+    "quality_score": "<ENUMERATION_CONTENT>",
+    "source_tiers": "<ENUMERATION_CONTENT>",
+    "warnings": []
+  },
+  "investigation_qa_report | write_key | private-kb": {
+    "claims": "<ENUMERATION_CONTENT>",
+    "quality_score": "<ENUMERATION_CONTENT>",
+    "source_tiers": "<ENUMERATION_CONTENT>",
+    "warnings": []
+  },
+  "investigation_qa_report | write_key | readable-kb": {
+    "claims": "<ENUMERATION_CONTENT>",
+    "quality_score": "<ENUMERATION_CONTENT>",
+    "source_tiers": "<ENUMERATION_CONTENT>",
+    "warnings": []
+  },
+  "investigation_search_all | write_key | missing-kb": {
+    "groups": [],
+    "query": "zebra",
+    "total_count": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_search_all | write_key | no-default-role-kb": {
+    "groups": "<ENUMERATION_CONTENT>",
+    "query": "zebra",
+    "total_count": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_search_all | write_key | private-kb": {
+    "groups": "<ENUMERATION_CONTENT>",
+    "query": "zebra",
+    "total_count": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_search_all | write_key | readable-kb": {
+    "groups": "<ENUMERATION_CONTENT>",
+    "query": "zebra",
+    "total_count": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_sources | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "sources": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_sources | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "sources": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_sources | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "sources": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_sources | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "sources": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_start | write_key | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "suggestion": "Pass kb_name, or create an investigation KB first"
+  },
+  "investigation_start | write_key | no-default-role-kb": {
+    "created": "characterization-title-investigation-start-write-key-no-default-role-kb",
+    "title": "characterization-title-investigation_start-write_key-no-default-role-kb"
+  },
+  "investigation_start | write_key | private-kb": {
+    "created": "characterization-title-investigation-start-write-key-private-kb",
+    "title": "characterization-title-investigation_start-write_key-private-kb"
+  },
+  "investigation_start | write_key | readable-kb": {
+    "created": "characterization-title-investigation-start-write-key-readable-kb",
+    "title": "characterization-title-investigation_start-write_key-readable-kb"
+  },
+  "investigation_status | write_key | missing-kb": {
+    "claim_breakdown": "<ENUMERATION_CONTENT>",
+    "claim_count": "<ENUMERATION_CONTENT>",
+    "entity_count": "<ENUMERATION_CONTENT>",
+    "event_count": "<ENUMERATION_CONTENT>",
+    "source_count": "<ENUMERATION_CONTENT>",
+    "summary": "<ENUMERATION_CONTENT>",
+    "unverified_claims": []
+  },
+  "investigation_status | write_key | no-default-role-kb": {
+    "claim_breakdown": "<ENUMERATION_CONTENT>",
+    "claim_count": "<ENUMERATION_CONTENT>",
+    "entity_count": "<ENUMERATION_CONTENT>",
+    "event_count": "<ENUMERATION_CONTENT>",
+    "source_count": "<ENUMERATION_CONTENT>",
+    "summary": "<ENUMERATION_CONTENT>",
+    "unverified_claims": []
+  },
+  "investigation_status | write_key | private-kb": {
+    "claim_breakdown": "<ENUMERATION_CONTENT>",
+    "claim_count": "<ENUMERATION_CONTENT>",
+    "entity_count": "<ENUMERATION_CONTENT>",
+    "event_count": "<ENUMERATION_CONTENT>",
+    "source_count": "<ENUMERATION_CONTENT>",
+    "summary": "<ENUMERATION_CONTENT>",
+    "unverified_claims": []
+  },
+  "investigation_status | write_key | readable-kb": {
+    "claim_breakdown": "<ENUMERATION_CONTENT>",
+    "claim_count": "<ENUMERATION_CONTENT>",
+    "entity_count": "<ENUMERATION_CONTENT>",
+    "event_count": "<ENUMERATION_CONTENT>",
+    "source_count": "<ENUMERATION_CONTENT>",
+    "summary": "<ENUMERATION_CONTENT>",
+    "unverified_claims": []
+  },
+  "investigation_timeline | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_timeline | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_timeline | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "investigation_timeline | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "kb_backlinks | write_key | missing-kb": {
+    "backlink_count": "<ENUMERATION_CONTENT>",
+    "backlinks": [],
+    "entry_id": "characterization-missing-entry",
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_backlinks | write_key | no-default-role-kb": {
+    "backlink_count": "<ENUMERATION_CONTENT>",
+    "backlinks": [],
+    "entry_id": "no-default-role-note",
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_backlinks | write_key | private-kb": {
+    "backlink_count": "<ENUMERATION_CONTENT>",
+    "backlinks": [],
+    "entry_id": "private-note",
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_backlinks | write_key | readable-kb": {
+    "backlink_count": "<ENUMERATION_CONTENT>",
+    "backlinks": [],
+    "entry_id": "readable-note",
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_batch_read | write_key | missing-kb": {
+    "entries": [],
+    "found": 0,
+    "not_found": [
+      {
+        "entry_id": "characterization-missing-entry",
+        "kb_name": "missing-kb"
+      }
+    ]
+  },
+  "kb_batch_read | write_key | no-default-role-kb": {
+    "entries": [
+      {
+        "assigned_at": null,
+        "assignee": null,
+        "body": "a zebra of no fixed abode",
+        "coordinates": null,
+        "created_at": "<TIMESTAMP>",
+        "created_by": null,
+        "date": null,
+        "due_date": null,
+        "end_date": null,
+        "entry_type": "note",
+        "file_path": "<TMPDIR>/no-default-role-kb/notes/no-default-role-note.md",
+        "id": "no-default-role-note",
+        "importance": 5,
+        "indexed_at": "<TIMESTAMP>",
+        "kb_name": "no-default-role-kb",
+        "lifecycle": "active",
+        "links": [],
+        "location": null,
+        "metadata": {},
+        "modified_by": null,
+        "priority": null,
+        "sources": [],
+        "start_date": null,
+        "status": null,
+        "summary": "",
+        "tags": [],
+        "title": "No-default-role note",
+        "updated_at": "<TIMESTAMP>"
+      }
+    ],
+    "found": 1,
+    "not_found": []
+  },
+  "kb_batch_read | write_key | private-kb": {
+    "entries": [
+      {
+        "assigned_at": null,
+        "assignee": null,
+        "body": "a zebra behind the wall",
+        "coordinates": null,
+        "created_at": "<TIMESTAMP>",
+        "created_by": null,
+        "date": null,
+        "due_date": null,
+        "end_date": null,
+        "entry_type": "note",
+        "file_path": "<TMPDIR>/private-kb/notes/private-note.md",
+        "id": "private-note",
+        "importance": 5,
+        "indexed_at": "<TIMESTAMP>",
+        "kb_name": "private-kb",
+        "lifecycle": "active",
+        "links": [],
+        "location": null,
+        "metadata": {},
+        "modified_by": null,
+        "priority": null,
+        "sources": [],
+        "start_date": null,
+        "status": null,
+        "summary": "",
+        "tags": [],
+        "title": "Private note",
+        "updated_at": "<TIMESTAMP>"
+      }
+    ],
+    "found": 1,
+    "not_found": []
+  },
+  "kb_batch_read | write_key | readable-kb": {
+    "entries": [
+      {
+        "assigned_at": null,
+        "assignee": null,
+        "body": "a zebra in the open",
+        "coordinates": null,
+        "created_at": "<TIMESTAMP>",
+        "created_by": null,
+        "date": null,
+        "due_date": null,
+        "end_date": null,
+        "entry_type": "note",
+        "file_path": "<TMPDIR>/readable-kb/notes/readable-note.md",
+        "id": "readable-note",
+        "importance": 5,
+        "indexed_at": "<TIMESTAMP>",
+        "kb_name": "readable-kb",
+        "lifecycle": "active",
+        "links": [],
+        "location": null,
+        "metadata": {},
+        "modified_by": null,
+        "priority": null,
+        "sources": [],
+        "start_date": null,
+        "status": null,
+        "summary": "",
+        "tags": [],
+        "title": "Readable note",
+        "updated_at": "<TIMESTAMP>"
+      }
+    ],
+    "found": 1,
+    "not_found": []
+  },
+  "kb_batch_suggest | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "pairs": [],
+    "source_kb": "missing-kb",
+    "target_kb": "missing-kb"
+  },
+  "kb_batch_suggest | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "pairs": [],
+    "source_kb": "no-default-role-kb",
+    "target_kb": "no-default-role-kb"
+  },
+  "kb_batch_suggest | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "pairs": [],
+    "source_kb": "private-kb",
+    "target_kb": "private-kb"
+  },
+  "kb_batch_suggest | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "pairs": [],
+    "source_kb": "readable-kb",
+    "target_kb": "readable-kb"
+  },
+  "kb_bulk_create | write_key | missing-kb": {
+    "error": "KB not found: missing-kb",
+    "error_code": "BULK_CREATE_FAILED",
+    "retryable": true
+  },
+  "kb_bulk_create | write_key | no-default-role-kb": {
+    "created": 0,
+    "failed": 1,
+    "results": [
+      {
+        "created": false,
+        "error": "title is required",
+        "error_code": "VALIDATION_FAILED"
+      }
+    ],
+    "total": 1
+  },
+  "kb_bulk_create | write_key | private-kb": {
+    "created": 0,
+    "failed": 1,
+    "results": [
+      {
+        "created": false,
+        "error": "title is required",
+        "error_code": "VALIDATION_FAILED"
+      }
+    ],
+    "total": 1
+  },
+  "kb_bulk_create | write_key | readable-kb": {
+    "created": 0,
+    "failed": 1,
+    "results": [
+      {
+        "created": false,
+        "error": "title is required",
+        "error_code": "VALIDATION_FAILED"
+      }
+    ],
+    "total": 1
+  },
+  "kb_commit | write_key | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "kb_commit | write_key | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' is not in a git repository",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "kb_commit | write_key | private-kb": {
+    "error": "KB 'private-kb' is not in a git repository",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "kb_commit | write_key | readable-kb": {
+    "error": "KB 'readable-kb' is not in a git repository",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "kb_create | write_key | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "KB_NOT_FOUND",
+    "retryable": false,
+    "suggestion": "Use kb_list to see available KBs"
+  },
+  "kb_create | write_key | no-default-role-kb": {
+    "created": true,
+    "entry_id": "characterization-title-kb-create-write-key-no-default-role-kb",
+    "file_path": "<TMPDIR>/no-default-role-kb/characterization-title-kb-create-write-key-no-default-role-kb.md"
+  },
+  "kb_create | write_key | private-kb": {
+    "created": true,
+    "entry_id": "characterization-title-kb-create-write-key-private-kb",
+    "file_path": "<TMPDIR>/private-kb/characterization-title-kb-create-write-key-private-kb.md"
+  },
+  "kb_create | write_key | readable-kb": {
+    "created": true,
+    "entry_id": "characterization-title-kb-create-write-key-readable-kb",
+    "file_path": "<TMPDIR>/readable-kb/characterization-title-kb-create-write-key-readable-kb.md"
+  },
+  "kb_delete | write_key | missing-kb": {
+    "error": "KB not found: missing-kb",
+    "error_code": "DELETE_FAILED",
+    "retryable": true
+  },
+  "kb_delete | write_key | no-default-role-kb": {
+    "deleted": true,
+    "entry_id": "characterization-disposable-mutation-target"
+  },
+  "kb_delete | write_key | private-kb": {
+    "deleted": true,
+    "entry_id": "characterization-disposable-mutation-target"
+  },
+  "kb_delete | write_key | readable-kb": {
+    "deleted": true,
+    "entry_id": "characterization-disposable-mutation-target"
+  },
+  "kb_discover_neighbors | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "discoveries": [],
+    "entry_id": "characterization-missing-entry",
+    "kb_name": "missing-kb"
+  },
+  "kb_discover_neighbors | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "discoveries": [],
+    "entry_id": "no-default-role-note",
+    "kb_name": "no-default-role-kb"
+  },
+  "kb_discover_neighbors | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "discoveries": [],
+    "entry_id": "private-note",
+    "kb_name": "private-kb"
+  },
+  "kb_discover_neighbors | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "discoveries": [],
+    "entry_id": "readable-note",
+    "kb_name": "readable-kb"
+  },
+  "kb_find_by_assignee | write_key | missing-kb": {
+    "assignee": "characterization-assignee",
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_find_by_assignee | write_key | no-default-role-kb": {
+    "assignee": "characterization-assignee",
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_find_by_assignee | write_key | private-kb": {
+    "assignee": "characterization-assignee",
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_find_by_assignee | write_key | readable-kb": {
+    "assignee": "characterization-assignee",
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_find_by_location | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [],
+    "location": "characterization-location-kb_find_by_location-write_key-missing-kb"
+  },
+  "kb_find_by_location | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [],
+    "location": "characterization-location-kb_find_by_location-write_key-no-default-role-kb"
+  },
+  "kb_find_by_location | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [],
+    "location": "characterization-location-kb_find_by_location-write_key-private-kb"
+  },
+  "kb_find_by_location | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [],
+    "location": "characterization-location-kb_find_by_location-write_key-readable-kb"
+  },
+  "kb_find_by_status | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [],
+    "status": "open"
+  },
+  "kb_find_by_status | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [],
+    "status": "open"
+  },
+  "kb_find_by_status | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [],
+    "status": "open"
+  },
+  "kb_find_by_status | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [],
+    "status": "open"
+  },
+  "kb_find_overdue | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_find_overdue | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_find_overdue | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_find_overdue | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_get | write_key | missing-kb": {
+    "error": "Entry 'characterization-missing-entry' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false,
+    "suggestion": "Use kb_list_entries or kb_search to find entries"
+  },
+  "kb_get | write_key | no-default-role-kb": {
+    "entry": {
+      "assigned_at": null,
+      "assignee": null,
+      "backlinks": [],
+      "body": "a zebra of no fixed abode",
+      "coordinates": null,
+      "created_at": "<TIMESTAMP>",
+      "created_by": null,
+      "date": null,
+      "due_date": null,
+      "end_date": null,
+      "entry_type": "note",
+      "file_path": "<TMPDIR>/no-default-role-kb/notes/no-default-role-note.md",
+      "id": "no-default-role-note",
+      "importance": 5,
+      "indexed_at": "<TIMESTAMP>",
+      "kb_name": "no-default-role-kb",
+      "lifecycle": "active",
+      "links": [],
+      "location": null,
+      "metadata": {},
+      "modified_by": null,
+      "outlinks": [],
+      "priority": null,
+      "sources": [],
+      "start_date": null,
+      "status": null,
+      "summary": "",
+      "tags": [],
+      "title": "No-default-role note",
+      "updated_at": "<TIMESTAMP>"
+    }
+  },
+  "kb_get | write_key | private-kb": {
+    "entry": {
+      "assigned_at": null,
+      "assignee": null,
+      "backlinks": [],
+      "body": "a zebra behind the wall",
+      "coordinates": null,
+      "created_at": "<TIMESTAMP>",
+      "created_by": null,
+      "date": null,
+      "due_date": null,
+      "end_date": null,
+      "entry_type": "note",
+      "file_path": "<TMPDIR>/private-kb/notes/private-note.md",
+      "id": "private-note",
+      "importance": 5,
+      "indexed_at": "<TIMESTAMP>",
+      "kb_name": "private-kb",
+      "lifecycle": "active",
+      "links": [],
+      "location": null,
+      "metadata": {},
+      "modified_by": null,
+      "outlinks": [],
+      "priority": null,
+      "sources": [],
+      "start_date": null,
+      "status": null,
+      "summary": "",
+      "tags": [],
+      "title": "Private note",
+      "updated_at": "<TIMESTAMP>"
+    }
+  },
+  "kb_get | write_key | readable-kb": {
+    "entry": {
+      "assigned_at": null,
+      "assignee": null,
+      "backlinks": [],
+      "body": "a zebra in the open",
+      "coordinates": null,
+      "created_at": "<TIMESTAMP>",
+      "created_by": null,
+      "date": null,
+      "due_date": null,
+      "end_date": null,
+      "entry_type": "note",
+      "file_path": "<TMPDIR>/readable-kb/notes/readable-note.md",
+      "id": "readable-note",
+      "importance": 5,
+      "indexed_at": "<TIMESTAMP>",
+      "kb_name": "readable-kb",
+      "lifecycle": "active",
+      "links": [],
+      "location": null,
+      "metadata": {},
+      "modified_by": null,
+      "outlinks": [],
+      "priority": null,
+      "sources": [],
+      "start_date": null,
+      "status": null,
+      "summary": "",
+      "tags": [],
+      "title": "Readable note",
+      "updated_at": "<TIMESTAMP>"
+    }
+  },
+  "kb_index_sync | write_key | missing-kb": {
+    "added": "<ENUMERATION_CONTENT>",
+    "removed": "<ENUMERATION_CONTENT>",
+    "synced": "<ENUMERATION_CONTENT>",
+    "updated": "<ENUMERATION_CONTENT>"
+  },
+  "kb_index_sync | write_key | no-default-role-kb": {
+    "added": "<ENUMERATION_CONTENT>",
+    "removed": "<ENUMERATION_CONTENT>",
+    "synced": "<ENUMERATION_CONTENT>",
+    "updated": "<ENUMERATION_CONTENT>"
+  },
+  "kb_index_sync | write_key | private-kb": {
+    "added": "<ENUMERATION_CONTENT>",
+    "removed": "<ENUMERATION_CONTENT>",
+    "synced": "<ENUMERATION_CONTENT>",
+    "updated": "<ENUMERATION_CONTENT>"
+  },
+  "kb_index_sync | write_key | readable-kb": {
+    "added": "<ENUMERATION_CONTENT>",
+    "removed": "<ENUMERATION_CONTENT>",
+    "synced": "<ENUMERATION_CONTENT>",
+    "updated": "<ENUMERATION_CONTENT>"
+  },
+  "kb_link | write_key | missing-kb": {
+    "error": "KB not found: missing-kb",
+    "error_code": "LINK_FAILED",
+    "retryable": false
+  },
+  "kb_link | write_key | no-default-role-kb": {
+    "error": "Entry not found: characterization-placeholder-id-kb_link-write_key-no-default-role-kb",
+    "error_code": "LINK_FAILED",
+    "retryable": false
+  },
+  "kb_link | write_key | private-kb": {
+    "error": "Entry not found: characterization-placeholder-id-kb_link-write_key-private-kb",
+    "error_code": "LINK_FAILED",
+    "retryable": false
+  },
+  "kb_link | write_key | readable-kb": {
+    "error": "Entry not found: characterization-placeholder-id-kb_link-write_key-readable-kb",
+    "error_code": "LINK_FAILED",
+    "retryable": false
+  },
+  "kb_list | write_key | missing-kb": {
+    "knowledge_bases": [
+      {
+        "name": "no-default-role-kb"
+      },
+      {
+        "name": "private-kb"
+      },
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
+    ]
+  },
+  "kb_list | write_key | no-default-role-kb": {
+    "knowledge_bases": [
+      {
+        "name": "no-default-role-kb"
+      },
+      {
+        "name": "private-kb"
+      },
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
+    ]
+  },
+  "kb_list | write_key | private-kb": {
+    "knowledge_bases": [
+      {
+        "name": "no-default-role-kb"
+      },
+      {
+        "name": "private-kb"
+      },
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
+    ]
+  },
+  "kb_list | write_key | readable-kb": {
+    "knowledge_bases": [
+      {
+        "name": "no-default-role-kb"
+      },
+      {
+        "name": "private-kb"
+      },
+      {
+        "name": "read-only-kb"
+      },
+      {
+        "name": "readable-kb"
+      }
+    ]
+  },
+  "kb_list_entries | write_key | missing-kb": {
+    "entries": [],
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "kb_list_entries | write_key | no-default-role-kb": {
+    "entries": [
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      }
+    ],
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "kb_list_entries | write_key | private-kb": {
+    "entries": [
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      }
+    ],
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "kb_list_entries | write_key | readable-kb": {
+    "entries": [
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
+    ],
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "kb_manage | write_key | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_manage | write_key | no-default-role-kb": {
+    "types": [],
+    "valid": true
+  },
+  "kb_manage | write_key | private-kb": {
+    "types": [],
+    "valid": true
+  },
+  "kb_manage | write_key | readable-kb": {
+    "types": [],
+    "valid": true
+  },
+  "kb_orient | write_key | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "kb_orient | write_key | no-default-role-kb": {
+    "description": "",
+    "guidelines": {},
+    "kb": "no-default-role-kb",
+    "kb_type": "generic",
+    "operational_contracts": {
+      "error_contract": {
+        "error": "human-readable message",
+        "error_code": "machine-readable code, e.g. QUERY_SYNTAX, KB_NOT_FOUND",
+        "retryable": "bool -- whether retrying the same request could succeed",
+        "shape": "{error, error_code, suggestion?, retryable}",
+        "suggestion": "optional fix hint, omitted when not applicable"
+      },
+      "indexing": "Entries are only searchable once indexed. Direct file writes under a KB's path (not via `pyrite create`/`update`) need `pyrite index sync` afterward -- it's incremental and cheap, safe to run after every batch of writes.",
+      "search_quoting": "Special-char tokens (hyphens, dots, colons) are auto-quoted ONLY when the query has no AND/OR/NOT operator and no existing quote. Once you use an operator or a phrase quote, quote special-char tokens yourself (e.g. '\"family separation\" \"cross-link\"') or the query can fail with error_code QUERY_SYNTAX (deterministic, not retryable).",
+      "task_claims": "Task claims are atomic; a lost race means the task is already claimed by someone else. On conflict, do NOT override the claim -- re-run the task list and pick a different item."
+    },
+    "read_only": false,
+    "recent": "<ENUMERATION_CONTENT>",
+    "schema": {
+      "evaluation_rubric": [
+        {
+          "checker": "descriptive_title",
+          "text": "Entry has a descriptive title"
+        },
+        {
+          "covered_by": "schema",
+          "text": "Entry body is non-empty"
+        },
+        {
+          "checker": "has_tags",
+          "text": "Entry has at least one tag"
+        },
+        {
+          "checker": "has_outlinks",
+          "text": "Entry links to at least one related entry (unless a stub)"
+        }
+      ],
+      "guidelines": {
+        "completeness": "Fill all required fields. Use summary for quick orientation.",
+        "cross_linking": "Entries should link to related entries for discoverability.",
+        "sourcing": "Claims should link to evidence. Prefer primary sources."
+      },
+      "relationship_types": {
+        "actor_reference": "Event references an actor (resolved from string or wikilink)",
+        "advised_by": "Advised by another entity",
+        "advises": "Advisory relationship",
+        "answers_question": "Answers a question",
+        "asks_question": "Poses a question",
+        "authored": "Authorship",
+        "authored_by": "Authored by",
+        "beneficial_owner_of": "Person is the beneficial owner of an entity",
+        "beneficially_owned_by": "Entity is beneficially owned by a person",
+        "blocked_by": "Backlog item cannot start until blocker completes",
+        "blocks": "Backlog item must complete before another can start",
+        "branches_from": "Branches from a parent note",
+        "built_on": "Solidarity infrastructure built on earlier infrastructure",
+        "capture_mechanism": "Mechanism used in a capture event",
+        "causally_follows": "Causal successor",
+        "causally_precedes": "Causal predecessor",
+        "contains_part": "Contains a part",
+        "contradicted_by": "Claim is contradicted by evidence",
+        "contradicts": "Evidence contradicts a claim",
+        "controlled_by": "Controlled by another entity",
+        "controls": "Control relationship",
+        "corroborated_by": "Claim is corroborated by evidence",
+        "corroborates": "Evidence corroborates a claim",
+        "depended_on_by": "Component depended on by another",
+        "depends_on": "Component depends on another component",
+        "directed_by": "Directed by another entity",
+        "directs": "Directorship",
+        "documented_by": "Component documented by a runbook",
+        "documents": "Runbook documents a component",
+        "elaborated_by": "Elaborated by another note",
+        "elaborates": "Elaborates on another note",
+        "employed_by": "Employment relationship",
+        "employs": "Employs",
+        "enabled": "Earlier infrastructure enabled later solidarity infrastructure",
+        "enabled_capture": "Event enabled by a capture mechanism",
+        "extended_by": "Extended by",
+        "extends": "Extends or elaborates on",
+        "funded_by": "Organization is funded by another organization",
+        "funds": "Organization funds another organization",
+        "has_actor": "Actor is referenced by an event",
+        "has_branch": "Has a branch note",
+        "has_example": "Has example",
+        "has_member": "Organization has a member",
+        "has_party": "Legal action has an entity as a party",
+        "has_session": "Backlog item has a work session log",
+        "has_subtask": "Epic or large item decomposed into subtasks",
+        "implemented_by": "Component implements a design doc",
+        "implements": "Design doc implemented by a component",
+        "investigated": "Actor investigated an event",
+        "investigated_by": "Event was investigated by an actor",
+        "involved_in": "Involved in",
+        "involves": "Involvement",
+        "is_example_of": "Example of a concept",
+        "is_part_of": "Part of a larger whole",
+        "located_at": "Location relationship",
+        "location_of": "Location of",
+        "member_of": "Actor is a member of an organization",
+        "mentioned_by": "Mentioned by",
+        "mentions": "Mentions",
+        "owned_by": "Asset or organization is owned by an entity",
+        "owns": "Entity owns an asset or organization",
+        "party_to": "Entity is a party to a legal action",
+        "produced_by": "Entry was produced by a task",
+        "produces": "Task produces an entry as evidence",
+        "provoked_response": "Capture event provoked a solidarity response",
+        "received_transaction_from": "Entity received a transaction from another entity",
+        "refined_by": "Refined by",
+        "refines": "Refines or narrows",
+        "responded_to": "Solidarity action responded to a capture event",
+        "session_for": "Work log records a session for a backlog item",
+        "source_for": "Document is a source for a claim or fact",
+        "sourced_from": "Claim or fact is sourced from a document",
+        "subtask_of": "Subtask belonging to a parent epic or large item",
+        "superseded_by": "Old ADR superseded by a new one",
+        "supersedes": "New ADR supersedes an old one",
+        "supported_by": "Claim is supported by evidence",
+        "supports": "Evidence supports a claim",
+        "synthesized_from": "Was synthesized from into a permanent note",
+        "synthesizes": "Synthesizes multiple notes into a permanent note",
+        "tracked_by": "ADR/design doc tracked by a backlog item",
+        "tracks": "Backlog item tracks an ADR or design doc",
+        "transacted_with": "Entity transacted with another entity",
+        "wikilink": "Inline wikilink reference",
+        "wikilinked_by": "Referenced by inline wikilink"
+      },
+      "types": {
+        "collection": {
+          "ai_instructions": "A folder-backed collection that groups related entries. Created automatically from __collection.yaml files in KB folders. Use to organize entries into browsable groups with list or table views.",
+          "description": "A folder-backed collection of entries",
+          "display": {
+            "icon": "folder",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "description": "Human-readable description of the collection's purpose",
+            "folder_path": "Relative path to the folder within the KB",
+            "icon": "Icon identifier for display",
+            "source_type": "Collection source: 'folder' for filesystem-backed",
+            "view_config": "View settings: default_view, table_columns"
+          },
+          "fields": {
+            "description": "str",
+            "folder_path": "str",
+            "icon": "str",
+            "source_type": "str",
+            "view_config": "dict"
+          }
+        },
+        "document": {
+          "ai_instructions": "A reference to an external document: report, filing, memo, article, etc. Always include the source URL when available. Use document_type to classify.",
+          "description": "A reference document",
+          "display": {
+            "icon": "file",
+            "layout": "document"
+          },
+          "evaluation_rubric": [
+            {
+              "checker": "has_any_field",
+              "params": {
+                "fields": [
+                  "url",
+                  "author"
+                ]
+              },
+              "text": "Document has a source URL or author"
+            },
+            {
+              "checker": "has_field",
+              "params": {
+                "field": "document_type"
+              },
+              "text": "Document has a document_type classification"
+            }
+          ],
+          "field_descriptions": {
+            "author": "Author or issuing body",
+            "date": "Publication or filing date",
+            "document_type": "Category: report, filing, memo, article, press-release, court-document, etc.",
+            "url": "URL to the original document"
+          },
+          "fields": {
+            "author": "str",
+            "date": "str",
+            "document_type": "str",
+            "url": "str"
+          }
+        },
+        "event": {
+          "ai_instructions": "A specific occurrence with a known or approximate date. Always include a date. Set importance 1-10 based on significance. Use participants to link people/orgs involved.",
+          "description": "Something that happened",
+          "display": {
+            "icon": "calendar",
+            "layout": "record"
+          },
+          "evaluation_rubric": [
+            {
+              "covered_by": "schema",
+              "text": "Event has a date field"
+            },
+            {
+              "covered_by": "schema",
+              "text": "Event has an importance score between 1 and 10"
+            }
+          ],
+          "field_descriptions": {
+            "date": "When the event occurred (YYYY-MM-DD)",
+            "importance": "Significance score from 1 (minor) to 10 (major)",
+            "location": "Where the event took place",
+            "participants": "People or organizations involved",
+            "status": "Verification status: confirmed, disputed, alleged, rumored"
+          },
+          "fields": {
+            "date": "str",
+            "importance": "int",
+            "location": "str",
+            "participants": "list[str]",
+            "status": "EventStatus"
+          }
+        },
+        "note": {
+          "ai_instructions": "General-purpose knowledge note. Use for observations, analysis, summaries, or any content that doesn't fit a more specific type. Keep notes focused on a single topic.",
+          "description": "General-purpose knowledge note",
+          "display": {
+            "icon": "file-text",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "links": "Typed relationships to other entries",
+            "summary": "Brief one-line summary of the note",
+            "tags": "Categorization tags for discovery and filtering",
+            "title": "Descriptive title summarizing the note's content"
+          },
+          "fields": {
+            "links": "list[Link]",
+            "tags": "list[str]"
+          }
+        },
+        "organization": {
+          "ai_instructions": "A group, company, government body, or institution. Specify org_type (gov, ngo, corp, media, political, military, etc.) and jurisdiction where relevant.",
+          "description": "A group, company, institution",
+          "display": {
+            "icon": "building",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "founded": "Date or year the organization was established",
+            "importance": "Relevance score from 1 to 10",
+            "jurisdiction": "Geographic or legal jurisdiction",
+            "org_type": "Category: gov, ngo, corp, media, political, military, academic, religious, etc."
+          },
+          "fields": {
+            "founded": "str",
+            "jurisdiction": "str",
+            "org_type": "str"
+          }
+        },
+        "person": {
+          "ai_instructions": "An individual person. Use role to describe their primary function or position. List organizational affiliations. Set importance based on relevance to research.",
+          "description": "An individual",
+          "display": {
+            "icon": "user",
+            "layout": "record"
+          },
+          "evaluation_rubric": [
+            {
+              "checker": "has_field",
+              "params": {
+                "field": "role"
+              },
+              "text": "Person has a role or position described"
+            }
+          ],
+          "field_descriptions": {
+            "affiliations": "Organizations this person is associated with",
+            "importance": "Relevance score from 1 (peripheral) to 10 (central)",
+            "research_status": "How complete the profile is: stub, partial, draft, complete, published",
+            "role": "Primary role, title, or position"
+          },
+          "fields": {
+            "affiliations": "list[str]",
+            "role": "str"
+          }
+        },
+        "relationship": {
+          "ai_instructions": "A reified relationship between two entities. Use when the relationship itself has properties worth tracking (dates, evidence, context). For simple links, use the links field instead.",
+          "description": "A connection between entities",
+          "display": {
+            "icon": "link",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "relationship_type": "Type of relationship (see relationship_types in schema)",
+            "source_entity": "Entry ID of the source entity",
+            "target_entity": "Entry ID of the target entity"
+          },
+          "fields": {
+            "relationship_type": "str",
+            "source": "str",
+            "target": "str"
+          }
+        },
+        "timeline": {
+          "ai_instructions": "An ordered sequence of related events. Use to group events into a narrative arc. Reference individual events via links.",
+          "description": "An ordered sequence of events",
+          "display": {
+            "icon": "clock",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "date_range": "Time span covered, e.g. '2024-01 to 2025-06'"
+          },
+          "fields": {
+            "date_range": "str"
+          }
+        },
+        "topic": {
+          "ai_instructions": "A theme, subject area, or concept that entries can be organized around. Use as a hub to connect related entries via links and tags.",
+          "description": "A theme, subject area, or concept",
+          "display": {
+            "icon": "hash",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "importance": "Centrality of this topic to the research, 1-10"
+          },
+          "fields": {}
+        }
+      }
+    },
+    "top_tags": [],
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "types": "<ENUMERATION_CONTENT>"
+  },
+  "kb_orient | write_key | private-kb": {
+    "description": "",
+    "guidelines": {},
+    "kb": "private-kb",
+    "kb_type": "generic",
+    "operational_contracts": {
+      "error_contract": {
+        "error": "human-readable message",
+        "error_code": "machine-readable code, e.g. QUERY_SYNTAX, KB_NOT_FOUND",
+        "retryable": "bool -- whether retrying the same request could succeed",
+        "shape": "{error, error_code, suggestion?, retryable}",
+        "suggestion": "optional fix hint, omitted when not applicable"
+      },
+      "indexing": "Entries are only searchable once indexed. Direct file writes under a KB's path (not via `pyrite create`/`update`) need `pyrite index sync` afterward -- it's incremental and cheap, safe to run after every batch of writes.",
+      "search_quoting": "Special-char tokens (hyphens, dots, colons) are auto-quoted ONLY when the query has no AND/OR/NOT operator and no existing quote. Once you use an operator or a phrase quote, quote special-char tokens yourself (e.g. '\"family separation\" \"cross-link\"') or the query can fail with error_code QUERY_SYNTAX (deterministic, not retryable).",
+      "task_claims": "Task claims are atomic; a lost race means the task is already claimed by someone else. On conflict, do NOT override the claim -- re-run the task list and pick a different item."
+    },
+    "read_only": false,
+    "recent": "<ENUMERATION_CONTENT>",
+    "schema": {
+      "evaluation_rubric": [
+        {
+          "checker": "descriptive_title",
+          "text": "Entry has a descriptive title"
+        },
+        {
+          "covered_by": "schema",
+          "text": "Entry body is non-empty"
+        },
+        {
+          "checker": "has_tags",
+          "text": "Entry has at least one tag"
+        },
+        {
+          "checker": "has_outlinks",
+          "text": "Entry links to at least one related entry (unless a stub)"
+        }
+      ],
+      "guidelines": {
+        "completeness": "Fill all required fields. Use summary for quick orientation.",
+        "cross_linking": "Entries should link to related entries for discoverability.",
+        "sourcing": "Claims should link to evidence. Prefer primary sources."
+      },
+      "relationship_types": {
+        "actor_reference": "Event references an actor (resolved from string or wikilink)",
+        "advised_by": "Advised by another entity",
+        "advises": "Advisory relationship",
+        "answers_question": "Answers a question",
+        "asks_question": "Poses a question",
+        "authored": "Authorship",
+        "authored_by": "Authored by",
+        "beneficial_owner_of": "Person is the beneficial owner of an entity",
+        "beneficially_owned_by": "Entity is beneficially owned by a person",
+        "blocked_by": "Backlog item cannot start until blocker completes",
+        "blocks": "Backlog item must complete before another can start",
+        "branches_from": "Branches from a parent note",
+        "built_on": "Solidarity infrastructure built on earlier infrastructure",
+        "capture_mechanism": "Mechanism used in a capture event",
+        "causally_follows": "Causal successor",
+        "causally_precedes": "Causal predecessor",
+        "contains_part": "Contains a part",
+        "contradicted_by": "Claim is contradicted by evidence",
+        "contradicts": "Evidence contradicts a claim",
+        "controlled_by": "Controlled by another entity",
+        "controls": "Control relationship",
+        "corroborated_by": "Claim is corroborated by evidence",
+        "corroborates": "Evidence corroborates a claim",
+        "depended_on_by": "Component depended on by another",
+        "depends_on": "Component depends on another component",
+        "directed_by": "Directed by another entity",
+        "directs": "Directorship",
+        "documented_by": "Component documented by a runbook",
+        "documents": "Runbook documents a component",
+        "elaborated_by": "Elaborated by another note",
+        "elaborates": "Elaborates on another note",
+        "employed_by": "Employment relationship",
+        "employs": "Employs",
+        "enabled": "Earlier infrastructure enabled later solidarity infrastructure",
+        "enabled_capture": "Event enabled by a capture mechanism",
+        "extended_by": "Extended by",
+        "extends": "Extends or elaborates on",
+        "funded_by": "Organization is funded by another organization",
+        "funds": "Organization funds another organization",
+        "has_actor": "Actor is referenced by an event",
+        "has_branch": "Has a branch note",
+        "has_example": "Has example",
+        "has_member": "Organization has a member",
+        "has_party": "Legal action has an entity as a party",
+        "has_session": "Backlog item has a work session log",
+        "has_subtask": "Epic or large item decomposed into subtasks",
+        "implemented_by": "Component implements a design doc",
+        "implements": "Design doc implemented by a component",
+        "investigated": "Actor investigated an event",
+        "investigated_by": "Event was investigated by an actor",
+        "involved_in": "Involved in",
+        "involves": "Involvement",
+        "is_example_of": "Example of a concept",
+        "is_part_of": "Part of a larger whole",
+        "located_at": "Location relationship",
+        "location_of": "Location of",
+        "member_of": "Actor is a member of an organization",
+        "mentioned_by": "Mentioned by",
+        "mentions": "Mentions",
+        "owned_by": "Asset or organization is owned by an entity",
+        "owns": "Entity owns an asset or organization",
+        "party_to": "Entity is a party to a legal action",
+        "produced_by": "Entry was produced by a task",
+        "produces": "Task produces an entry as evidence",
+        "provoked_response": "Capture event provoked a solidarity response",
+        "received_transaction_from": "Entity received a transaction from another entity",
+        "refined_by": "Refined by",
+        "refines": "Refines or narrows",
+        "responded_to": "Solidarity action responded to a capture event",
+        "session_for": "Work log records a session for a backlog item",
+        "source_for": "Document is a source for a claim or fact",
+        "sourced_from": "Claim or fact is sourced from a document",
+        "subtask_of": "Subtask belonging to a parent epic or large item",
+        "superseded_by": "Old ADR superseded by a new one",
+        "supersedes": "New ADR supersedes an old one",
+        "supported_by": "Claim is supported by evidence",
+        "supports": "Evidence supports a claim",
+        "synthesized_from": "Was synthesized from into a permanent note",
+        "synthesizes": "Synthesizes multiple notes into a permanent note",
+        "tracked_by": "ADR/design doc tracked by a backlog item",
+        "tracks": "Backlog item tracks an ADR or design doc",
+        "transacted_with": "Entity transacted with another entity",
+        "wikilink": "Inline wikilink reference",
+        "wikilinked_by": "Referenced by inline wikilink"
+      },
+      "types": {
+        "collection": {
+          "ai_instructions": "A folder-backed collection that groups related entries. Created automatically from __collection.yaml files in KB folders. Use to organize entries into browsable groups with list or table views.",
+          "description": "A folder-backed collection of entries",
+          "display": {
+            "icon": "folder",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "description": "Human-readable description of the collection's purpose",
+            "folder_path": "Relative path to the folder within the KB",
+            "icon": "Icon identifier for display",
+            "source_type": "Collection source: 'folder' for filesystem-backed",
+            "view_config": "View settings: default_view, table_columns"
+          },
+          "fields": {
+            "description": "str",
+            "folder_path": "str",
+            "icon": "str",
+            "source_type": "str",
+            "view_config": "dict"
+          }
+        },
+        "document": {
+          "ai_instructions": "A reference to an external document: report, filing, memo, article, etc. Always include the source URL when available. Use document_type to classify.",
+          "description": "A reference document",
+          "display": {
+            "icon": "file",
+            "layout": "document"
+          },
+          "evaluation_rubric": [
+            {
+              "checker": "has_any_field",
+              "params": {
+                "fields": [
+                  "url",
+                  "author"
+                ]
+              },
+              "text": "Document has a source URL or author"
+            },
+            {
+              "checker": "has_field",
+              "params": {
+                "field": "document_type"
+              },
+              "text": "Document has a document_type classification"
+            }
+          ],
+          "field_descriptions": {
+            "author": "Author or issuing body",
+            "date": "Publication or filing date",
+            "document_type": "Category: report, filing, memo, article, press-release, court-document, etc.",
+            "url": "URL to the original document"
+          },
+          "fields": {
+            "author": "str",
+            "date": "str",
+            "document_type": "str",
+            "url": "str"
+          }
+        },
+        "event": {
+          "ai_instructions": "A specific occurrence with a known or approximate date. Always include a date. Set importance 1-10 based on significance. Use participants to link people/orgs involved.",
+          "description": "Something that happened",
+          "display": {
+            "icon": "calendar",
+            "layout": "record"
+          },
+          "evaluation_rubric": [
+            {
+              "covered_by": "schema",
+              "text": "Event has a date field"
+            },
+            {
+              "covered_by": "schema",
+              "text": "Event has an importance score between 1 and 10"
+            }
+          ],
+          "field_descriptions": {
+            "date": "When the event occurred (YYYY-MM-DD)",
+            "importance": "Significance score from 1 (minor) to 10 (major)",
+            "location": "Where the event took place",
+            "participants": "People or organizations involved",
+            "status": "Verification status: confirmed, disputed, alleged, rumored"
+          },
+          "fields": {
+            "date": "str",
+            "importance": "int",
+            "location": "str",
+            "participants": "list[str]",
+            "status": "EventStatus"
+          }
+        },
+        "note": {
+          "ai_instructions": "General-purpose knowledge note. Use for observations, analysis, summaries, or any content that doesn't fit a more specific type. Keep notes focused on a single topic.",
+          "description": "General-purpose knowledge note",
+          "display": {
+            "icon": "file-text",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "links": "Typed relationships to other entries",
+            "summary": "Brief one-line summary of the note",
+            "tags": "Categorization tags for discovery and filtering",
+            "title": "Descriptive title summarizing the note's content"
+          },
+          "fields": {
+            "links": "list[Link]",
+            "tags": "list[str]"
+          }
+        },
+        "organization": {
+          "ai_instructions": "A group, company, government body, or institution. Specify org_type (gov, ngo, corp, media, political, military, etc.) and jurisdiction where relevant.",
+          "description": "A group, company, institution",
+          "display": {
+            "icon": "building",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "founded": "Date or year the organization was established",
+            "importance": "Relevance score from 1 to 10",
+            "jurisdiction": "Geographic or legal jurisdiction",
+            "org_type": "Category: gov, ngo, corp, media, political, military, academic, religious, etc."
+          },
+          "fields": {
+            "founded": "str",
+            "jurisdiction": "str",
+            "org_type": "str"
+          }
+        },
+        "person": {
+          "ai_instructions": "An individual person. Use role to describe their primary function or position. List organizational affiliations. Set importance based on relevance to research.",
+          "description": "An individual",
+          "display": {
+            "icon": "user",
+            "layout": "record"
+          },
+          "evaluation_rubric": [
+            {
+              "checker": "has_field",
+              "params": {
+                "field": "role"
+              },
+              "text": "Person has a role or position described"
+            }
+          ],
+          "field_descriptions": {
+            "affiliations": "Organizations this person is associated with",
+            "importance": "Relevance score from 1 (peripheral) to 10 (central)",
+            "research_status": "How complete the profile is: stub, partial, draft, complete, published",
+            "role": "Primary role, title, or position"
+          },
+          "fields": {
+            "affiliations": "list[str]",
+            "role": "str"
+          }
+        },
+        "relationship": {
+          "ai_instructions": "A reified relationship between two entities. Use when the relationship itself has properties worth tracking (dates, evidence, context). For simple links, use the links field instead.",
+          "description": "A connection between entities",
+          "display": {
+            "icon": "link",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "relationship_type": "Type of relationship (see relationship_types in schema)",
+            "source_entity": "Entry ID of the source entity",
+            "target_entity": "Entry ID of the target entity"
+          },
+          "fields": {
+            "relationship_type": "str",
+            "source": "str",
+            "target": "str"
+          }
+        },
+        "timeline": {
+          "ai_instructions": "An ordered sequence of related events. Use to group events into a narrative arc. Reference individual events via links.",
+          "description": "An ordered sequence of events",
+          "display": {
+            "icon": "clock",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "date_range": "Time span covered, e.g. '2024-01 to 2025-06'"
+          },
+          "fields": {
+            "date_range": "str"
+          }
+        },
+        "topic": {
+          "ai_instructions": "A theme, subject area, or concept that entries can be organized around. Use as a hub to connect related entries via links and tags.",
+          "description": "A theme, subject area, or concept",
+          "display": {
+            "icon": "hash",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "importance": "Centrality of this topic to the research, 1-10"
+          },
+          "fields": {}
+        }
+      }
+    },
+    "top_tags": [],
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "types": "<ENUMERATION_CONTENT>"
+  },
+  "kb_orient | write_key | readable-kb": {
+    "description": "",
+    "guidelines": {},
+    "kb": "readable-kb",
+    "kb_type": "generic",
+    "operational_contracts": {
+      "error_contract": {
+        "error": "human-readable message",
+        "error_code": "machine-readable code, e.g. QUERY_SYNTAX, KB_NOT_FOUND",
+        "retryable": "bool -- whether retrying the same request could succeed",
+        "shape": "{error, error_code, suggestion?, retryable}",
+        "suggestion": "optional fix hint, omitted when not applicable"
+      },
+      "indexing": "Entries are only searchable once indexed. Direct file writes under a KB's path (not via `pyrite create`/`update`) need `pyrite index sync` afterward -- it's incremental and cheap, safe to run after every batch of writes.",
+      "search_quoting": "Special-char tokens (hyphens, dots, colons) are auto-quoted ONLY when the query has no AND/OR/NOT operator and no existing quote. Once you use an operator or a phrase quote, quote special-char tokens yourself (e.g. '\"family separation\" \"cross-link\"') or the query can fail with error_code QUERY_SYNTAX (deterministic, not retryable).",
+      "task_claims": "Task claims are atomic; a lost race means the task is already claimed by someone else. On conflict, do NOT override the claim -- re-run the task list and pick a different item."
+    },
+    "read_only": false,
+    "recent": "<ENUMERATION_CONTENT>",
+    "schema": {
+      "evaluation_rubric": [
+        {
+          "checker": "descriptive_title",
+          "text": "Entry has a descriptive title"
+        },
+        {
+          "covered_by": "schema",
+          "text": "Entry body is non-empty"
+        },
+        {
+          "checker": "has_tags",
+          "text": "Entry has at least one tag"
+        },
+        {
+          "checker": "has_outlinks",
+          "text": "Entry links to at least one related entry (unless a stub)"
+        }
+      ],
+      "guidelines": {
+        "completeness": "Fill all required fields. Use summary for quick orientation.",
+        "cross_linking": "Entries should link to related entries for discoverability.",
+        "sourcing": "Claims should link to evidence. Prefer primary sources."
+      },
+      "relationship_types": {
+        "actor_reference": "Event references an actor (resolved from string or wikilink)",
+        "advised_by": "Advised by another entity",
+        "advises": "Advisory relationship",
+        "answers_question": "Answers a question",
+        "asks_question": "Poses a question",
+        "authored": "Authorship",
+        "authored_by": "Authored by",
+        "beneficial_owner_of": "Person is the beneficial owner of an entity",
+        "beneficially_owned_by": "Entity is beneficially owned by a person",
+        "blocked_by": "Backlog item cannot start until blocker completes",
+        "blocks": "Backlog item must complete before another can start",
+        "branches_from": "Branches from a parent note",
+        "built_on": "Solidarity infrastructure built on earlier infrastructure",
+        "capture_mechanism": "Mechanism used in a capture event",
+        "causally_follows": "Causal successor",
+        "causally_precedes": "Causal predecessor",
+        "contains_part": "Contains a part",
+        "contradicted_by": "Claim is contradicted by evidence",
+        "contradicts": "Evidence contradicts a claim",
+        "controlled_by": "Controlled by another entity",
+        "controls": "Control relationship",
+        "corroborated_by": "Claim is corroborated by evidence",
+        "corroborates": "Evidence corroborates a claim",
+        "depended_on_by": "Component depended on by another",
+        "depends_on": "Component depends on another component",
+        "directed_by": "Directed by another entity",
+        "directs": "Directorship",
+        "documented_by": "Component documented by a runbook",
+        "documents": "Runbook documents a component",
+        "elaborated_by": "Elaborated by another note",
+        "elaborates": "Elaborates on another note",
+        "employed_by": "Employment relationship",
+        "employs": "Employs",
+        "enabled": "Earlier infrastructure enabled later solidarity infrastructure",
+        "enabled_capture": "Event enabled by a capture mechanism",
+        "extended_by": "Extended by",
+        "extends": "Extends or elaborates on",
+        "funded_by": "Organization is funded by another organization",
+        "funds": "Organization funds another organization",
+        "has_actor": "Actor is referenced by an event",
+        "has_branch": "Has a branch note",
+        "has_example": "Has example",
+        "has_member": "Organization has a member",
+        "has_party": "Legal action has an entity as a party",
+        "has_session": "Backlog item has a work session log",
+        "has_subtask": "Epic or large item decomposed into subtasks",
+        "implemented_by": "Component implements a design doc",
+        "implements": "Design doc implemented by a component",
+        "investigated": "Actor investigated an event",
+        "investigated_by": "Event was investigated by an actor",
+        "involved_in": "Involved in",
+        "involves": "Involvement",
+        "is_example_of": "Example of a concept",
+        "is_part_of": "Part of a larger whole",
+        "located_at": "Location relationship",
+        "location_of": "Location of",
+        "member_of": "Actor is a member of an organization",
+        "mentioned_by": "Mentioned by",
+        "mentions": "Mentions",
+        "owned_by": "Asset or organization is owned by an entity",
+        "owns": "Entity owns an asset or organization",
+        "party_to": "Entity is a party to a legal action",
+        "produced_by": "Entry was produced by a task",
+        "produces": "Task produces an entry as evidence",
+        "provoked_response": "Capture event provoked a solidarity response",
+        "received_transaction_from": "Entity received a transaction from another entity",
+        "refined_by": "Refined by",
+        "refines": "Refines or narrows",
+        "responded_to": "Solidarity action responded to a capture event",
+        "session_for": "Work log records a session for a backlog item",
+        "source_for": "Document is a source for a claim or fact",
+        "sourced_from": "Claim or fact is sourced from a document",
+        "subtask_of": "Subtask belonging to a parent epic or large item",
+        "superseded_by": "Old ADR superseded by a new one",
+        "supersedes": "New ADR supersedes an old one",
+        "supported_by": "Claim is supported by evidence",
+        "supports": "Evidence supports a claim",
+        "synthesized_from": "Was synthesized from into a permanent note",
+        "synthesizes": "Synthesizes multiple notes into a permanent note",
+        "tracked_by": "ADR/design doc tracked by a backlog item",
+        "tracks": "Backlog item tracks an ADR or design doc",
+        "transacted_with": "Entity transacted with another entity",
+        "wikilink": "Inline wikilink reference",
+        "wikilinked_by": "Referenced by inline wikilink"
+      },
+      "types": {
+        "collection": {
+          "ai_instructions": "A folder-backed collection that groups related entries. Created automatically from __collection.yaml files in KB folders. Use to organize entries into browsable groups with list or table views.",
+          "description": "A folder-backed collection of entries",
+          "display": {
+            "icon": "folder",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "description": "Human-readable description of the collection's purpose",
+            "folder_path": "Relative path to the folder within the KB",
+            "icon": "Icon identifier for display",
+            "source_type": "Collection source: 'folder' for filesystem-backed",
+            "view_config": "View settings: default_view, table_columns"
+          },
+          "fields": {
+            "description": "str",
+            "folder_path": "str",
+            "icon": "str",
+            "source_type": "str",
+            "view_config": "dict"
+          }
+        },
+        "document": {
+          "ai_instructions": "A reference to an external document: report, filing, memo, article, etc. Always include the source URL when available. Use document_type to classify.",
+          "description": "A reference document",
+          "display": {
+            "icon": "file",
+            "layout": "document"
+          },
+          "evaluation_rubric": [
+            {
+              "checker": "has_any_field",
+              "params": {
+                "fields": [
+                  "url",
+                  "author"
+                ]
+              },
+              "text": "Document has a source URL or author"
+            },
+            {
+              "checker": "has_field",
+              "params": {
+                "field": "document_type"
+              },
+              "text": "Document has a document_type classification"
+            }
+          ],
+          "field_descriptions": {
+            "author": "Author or issuing body",
+            "date": "Publication or filing date",
+            "document_type": "Category: report, filing, memo, article, press-release, court-document, etc.",
+            "url": "URL to the original document"
+          },
+          "fields": {
+            "author": "str",
+            "date": "str",
+            "document_type": "str",
+            "url": "str"
+          }
+        },
+        "event": {
+          "ai_instructions": "A specific occurrence with a known or approximate date. Always include a date. Set importance 1-10 based on significance. Use participants to link people/orgs involved.",
+          "description": "Something that happened",
+          "display": {
+            "icon": "calendar",
+            "layout": "record"
+          },
+          "evaluation_rubric": [
+            {
+              "covered_by": "schema",
+              "text": "Event has a date field"
+            },
+            {
+              "covered_by": "schema",
+              "text": "Event has an importance score between 1 and 10"
+            }
+          ],
+          "field_descriptions": {
+            "date": "When the event occurred (YYYY-MM-DD)",
+            "importance": "Significance score from 1 (minor) to 10 (major)",
+            "location": "Where the event took place",
+            "participants": "People or organizations involved",
+            "status": "Verification status: confirmed, disputed, alleged, rumored"
+          },
+          "fields": {
+            "date": "str",
+            "importance": "int",
+            "location": "str",
+            "participants": "list[str]",
+            "status": "EventStatus"
+          }
+        },
+        "note": {
+          "ai_instructions": "General-purpose knowledge note. Use for observations, analysis, summaries, or any content that doesn't fit a more specific type. Keep notes focused on a single topic.",
+          "description": "General-purpose knowledge note",
+          "display": {
+            "icon": "file-text",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "links": "Typed relationships to other entries",
+            "summary": "Brief one-line summary of the note",
+            "tags": "Categorization tags for discovery and filtering",
+            "title": "Descriptive title summarizing the note's content"
+          },
+          "fields": {
+            "links": "list[Link]",
+            "tags": "list[str]"
+          }
+        },
+        "organization": {
+          "ai_instructions": "A group, company, government body, or institution. Specify org_type (gov, ngo, corp, media, political, military, etc.) and jurisdiction where relevant.",
+          "description": "A group, company, institution",
+          "display": {
+            "icon": "building",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "founded": "Date or year the organization was established",
+            "importance": "Relevance score from 1 to 10",
+            "jurisdiction": "Geographic or legal jurisdiction",
+            "org_type": "Category: gov, ngo, corp, media, political, military, academic, religious, etc."
+          },
+          "fields": {
+            "founded": "str",
+            "jurisdiction": "str",
+            "org_type": "str"
+          }
+        },
+        "person": {
+          "ai_instructions": "An individual person. Use role to describe their primary function or position. List organizational affiliations. Set importance based on relevance to research.",
+          "description": "An individual",
+          "display": {
+            "icon": "user",
+            "layout": "record"
+          },
+          "evaluation_rubric": [
+            {
+              "checker": "has_field",
+              "params": {
+                "field": "role"
+              },
+              "text": "Person has a role or position described"
+            }
+          ],
+          "field_descriptions": {
+            "affiliations": "Organizations this person is associated with",
+            "importance": "Relevance score from 1 (peripheral) to 10 (central)",
+            "research_status": "How complete the profile is: stub, partial, draft, complete, published",
+            "role": "Primary role, title, or position"
+          },
+          "fields": {
+            "affiliations": "list[str]",
+            "role": "str"
+          }
+        },
+        "relationship": {
+          "ai_instructions": "A reified relationship between two entities. Use when the relationship itself has properties worth tracking (dates, evidence, context). For simple links, use the links field instead.",
+          "description": "A connection between entities",
+          "display": {
+            "icon": "link",
+            "layout": "record"
+          },
+          "field_descriptions": {
+            "relationship_type": "Type of relationship (see relationship_types in schema)",
+            "source_entity": "Entry ID of the source entity",
+            "target_entity": "Entry ID of the target entity"
+          },
+          "fields": {
+            "relationship_type": "str",
+            "source": "str",
+            "target": "str"
+          }
+        },
+        "timeline": {
+          "ai_instructions": "An ordered sequence of related events. Use to group events into a narrative arc. Reference individual events via links.",
+          "description": "An ordered sequence of events",
+          "display": {
+            "icon": "clock",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "date_range": "Time span covered, e.g. '2024-01 to 2025-06'"
+          },
+          "fields": {
+            "date_range": "str"
+          }
+        },
+        "topic": {
+          "ai_instructions": "A theme, subject area, or concept that entries can be organized around. Use as a hub to connect related entries via links and tags.",
+          "description": "A theme, subject area, or concept",
+          "display": {
+            "icon": "hash",
+            "layout": "document"
+          },
+          "field_descriptions": {
+            "importance": "Centrality of this topic to the research, 1-10"
+          },
+          "fields": {}
+        }
+      }
+    },
+    "top_tags": [],
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "types": "<ENUMERATION_CONTENT>"
+  },
+  "kb_push | write_key | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "kb_push | write_key | no-default-role-kb": {
+    "error": "KB 'no-default-role-kb' is not in a git repository",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "kb_push | write_key | private-kb": {
+    "error": "KB 'private-kb' is not in a git repository",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "kb_push | write_key | readable-kb": {
+    "error": "KB 'readable-kb' is not in a git repository",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "kb_qa_assess | write_key | missing-kb": {
+    "assessed": "<ENUMERATION_CONTENT>",
+    "kb_name": "missing-kb",
+    "results": [],
+    "skipped": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_assess | write_key | no-default-role-kb": {
+    "assessed": "<ENUMERATION_CONTENT>",
+    "kb_name": "no-default-role-kb",
+    "results": "<ENUMERATION_CONTENT>",
+    "skipped": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_assess | write_key | private-kb": {
+    "assessed": "<ENUMERATION_CONTENT>",
+    "kb_name": "private-kb",
+    "results": "<ENUMERATION_CONTENT>",
+    "skipped": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_assess | write_key | readable-kb": {
+    "assessed": "<ENUMERATION_CONTENT>",
+    "kb_name": "readable-kb",
+    "results": "<ENUMERATION_CONTENT>",
+    "skipped": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_status | write_key | missing-kb": {
+    "coverage": "<ENUMERATION_CONTENT>",
+    "issues_by_rule": "<ENUMERATION_CONTENT>",
+    "issues_by_severity": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_issues": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_status | write_key | no-default-role-kb": {
+    "coverage": "<ENUMERATION_CONTENT>",
+    "issues_by_rule": "<ENUMERATION_CONTENT>",
+    "issues_by_severity": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_issues": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_status | write_key | private-kb": {
+    "coverage": "<ENUMERATION_CONTENT>",
+    "issues_by_rule": "<ENUMERATION_CONTENT>",
+    "issues_by_severity": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_issues": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_status | write_key | readable-kb": {
+    "coverage": "<ENUMERATION_CONTENT>",
+    "issues_by_rule": "<ENUMERATION_CONTENT>",
+    "issues_by_severity": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_issues": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_validate | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "issues": [],
+    "truncated": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_validate | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "issues": "<ENUMERATION_CONTENT>",
+    "truncated": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_validate | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "issues": "<ENUMERATION_CONTENT>",
+    "truncated": "<ENUMERATION_CONTENT>"
+  },
+  "kb_qa_validate | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "issues": "<ENUMERATION_CONTENT>",
+    "truncated": "<ENUMERATION_CONTENT>"
+  },
+  "kb_read_body | write_key | missing-kb": {
+    "error": "Entry 'characterization-missing-entry' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false,
+    "suggestion": "Use kb_list_entries or kb_search to find entries"
+  },
+  "kb_read_body | write_key | no-default-role-kb": {
+    "body": "a zebra of no fixed abode",
+    "body_chunk_size": 25,
+    "body_length": 25,
+    "body_offset": 0,
+    "has_more": false
+  },
+  "kb_read_body | write_key | private-kb": {
+    "body": "a zebra behind the wall",
+    "body_chunk_size": 23,
+    "body_length": 23,
+    "body_offset": 0,
+    "has_more": false
+  },
+  "kb_read_body | write_key | readable-kb": {
+    "body": "a zebra in the open",
+    "body_chunk_size": 19,
+    "body_length": 19,
+    "body_offset": 0,
+    "has_more": false
+  },
+  "kb_recent | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": []
+  },
+  "kb_recent | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      }
+    ]
+  },
+  "kb_recent | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      }
+    ]
+  },
+  "kb_recent | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "entries": [
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
+    ]
+  },
+  "kb_schema | write_key | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "kb_schema | write_key | no-default-role-kb": {
+    "evaluation_rubric": [
+      {
+        "checker": "descriptive_title",
+        "text": "Entry has a descriptive title"
+      },
+      {
+        "covered_by": "schema",
+        "text": "Entry body is non-empty"
+      },
+      {
+        "checker": "has_tags",
+        "text": "Entry has at least one tag"
+      },
+      {
+        "checker": "has_outlinks",
+        "text": "Entry links to at least one related entry (unless a stub)"
+      }
+    ],
+    "guidelines": {
+      "completeness": "Fill all required fields. Use summary for quick orientation.",
+      "cross_linking": "Entries should link to related entries for discoverability.",
+      "sourcing": "Claims should link to evidence. Prefer primary sources."
+    },
+    "relationship_types": {
+      "actor_reference": "Event references an actor (resolved from string or wikilink)",
+      "advised_by": "Advised by another entity",
+      "advises": "Advisory relationship",
+      "answers_question": "Answers a question",
+      "asks_question": "Poses a question",
+      "authored": "Authorship",
+      "authored_by": "Authored by",
+      "beneficial_owner_of": "Person is the beneficial owner of an entity",
+      "beneficially_owned_by": "Entity is beneficially owned by a person",
+      "blocked_by": "Backlog item cannot start until blocker completes",
+      "blocks": "Backlog item must complete before another can start",
+      "branches_from": "Branches from a parent note",
+      "built_on": "Solidarity infrastructure built on earlier infrastructure",
+      "capture_mechanism": "Mechanism used in a capture event",
+      "causally_follows": "Causal successor",
+      "causally_precedes": "Causal predecessor",
+      "contains_part": "Contains a part",
+      "contradicted_by": "Claim is contradicted by evidence",
+      "contradicts": "Evidence contradicts a claim",
+      "controlled_by": "Controlled by another entity",
+      "controls": "Control relationship",
+      "corroborated_by": "Claim is corroborated by evidence",
+      "corroborates": "Evidence corroborates a claim",
+      "depended_on_by": "Component depended on by another",
+      "depends_on": "Component depends on another component",
+      "directed_by": "Directed by another entity",
+      "directs": "Directorship",
+      "documented_by": "Component documented by a runbook",
+      "documents": "Runbook documents a component",
+      "elaborated_by": "Elaborated by another note",
+      "elaborates": "Elaborates on another note",
+      "employed_by": "Employment relationship",
+      "employs": "Employs",
+      "enabled": "Earlier infrastructure enabled later solidarity infrastructure",
+      "enabled_capture": "Event enabled by a capture mechanism",
+      "extended_by": "Extended by",
+      "extends": "Extends or elaborates on",
+      "funded_by": "Organization is funded by another organization",
+      "funds": "Organization funds another organization",
+      "has_actor": "Actor is referenced by an event",
+      "has_branch": "Has a branch note",
+      "has_example": "Has example",
+      "has_member": "Organization has a member",
+      "has_party": "Legal action has an entity as a party",
+      "has_session": "Backlog item has a work session log",
+      "has_subtask": "Epic or large item decomposed into subtasks",
+      "implemented_by": "Component implements a design doc",
+      "implements": "Design doc implemented by a component",
+      "investigated": "Actor investigated an event",
+      "investigated_by": "Event was investigated by an actor",
+      "involved_in": "Involved in",
+      "involves": "Involvement",
+      "is_example_of": "Example of a concept",
+      "is_part_of": "Part of a larger whole",
+      "located_at": "Location relationship",
+      "location_of": "Location of",
+      "member_of": "Actor is a member of an organization",
+      "mentioned_by": "Mentioned by",
+      "mentions": "Mentions",
+      "owned_by": "Asset or organization is owned by an entity",
+      "owns": "Entity owns an asset or organization",
+      "party_to": "Entity is a party to a legal action",
+      "produced_by": "Entry was produced by a task",
+      "produces": "Task produces an entry as evidence",
+      "provoked_response": "Capture event provoked a solidarity response",
+      "received_transaction_from": "Entity received a transaction from another entity",
+      "refined_by": "Refined by",
+      "refines": "Refines or narrows",
+      "responded_to": "Solidarity action responded to a capture event",
+      "session_for": "Work log records a session for a backlog item",
+      "source_for": "Document is a source for a claim or fact",
+      "sourced_from": "Claim or fact is sourced from a document",
+      "subtask_of": "Subtask belonging to a parent epic or large item",
+      "superseded_by": "Old ADR superseded by a new one",
+      "supersedes": "New ADR supersedes an old one",
+      "supported_by": "Claim is supported by evidence",
+      "supports": "Evidence supports a claim",
+      "synthesized_from": "Was synthesized from into a permanent note",
+      "synthesizes": "Synthesizes multiple notes into a permanent note",
+      "tracked_by": "ADR/design doc tracked by a backlog item",
+      "tracks": "Backlog item tracks an ADR or design doc",
+      "transacted_with": "Entity transacted with another entity",
+      "wikilink": "Inline wikilink reference",
+      "wikilinked_by": "Referenced by inline wikilink"
+    },
+    "types": {
+      "collection": {
+        "ai_instructions": "A folder-backed collection that groups related entries. Created automatically from __collection.yaml files in KB folders. Use to organize entries into browsable groups with list or table views.",
+        "description": "A folder-backed collection of entries",
+        "display": {
+          "icon": "folder",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "description": "Human-readable description of the collection's purpose",
+          "folder_path": "Relative path to the folder within the KB",
+          "icon": "Icon identifier for display",
+          "source_type": "Collection source: 'folder' for filesystem-backed",
+          "view_config": "View settings: default_view, table_columns"
+        },
+        "fields": {
+          "description": "str",
+          "folder_path": "str",
+          "icon": "str",
+          "source_type": "str",
+          "view_config": "dict"
+        }
+      },
+      "document": {
+        "ai_instructions": "A reference to an external document: report, filing, memo, article, etc. Always include the source URL when available. Use document_type to classify.",
+        "description": "A reference document",
+        "display": {
+          "icon": "file",
+          "layout": "document"
+        },
+        "evaluation_rubric": [
+          {
+            "checker": "has_any_field",
+            "params": {
+              "fields": [
+                "url",
+                "author"
+              ]
+            },
+            "text": "Document has a source URL or author"
+          },
+          {
+            "checker": "has_field",
+            "params": {
+              "field": "document_type"
+            },
+            "text": "Document has a document_type classification"
+          }
+        ],
+        "field_descriptions": {
+          "author": "Author or issuing body",
+          "date": "Publication or filing date",
+          "document_type": "Category: report, filing, memo, article, press-release, court-document, etc.",
+          "url": "URL to the original document"
+        },
+        "fields": {
+          "author": "str",
+          "date": "str",
+          "document_type": "str",
+          "url": "str"
+        }
+      },
+      "event": {
+        "ai_instructions": "A specific occurrence with a known or approximate date. Always include a date. Set importance 1-10 based on significance. Use participants to link people/orgs involved.",
+        "description": "Something that happened",
+        "display": {
+          "icon": "calendar",
+          "layout": "record"
+        },
+        "evaluation_rubric": [
+          {
+            "covered_by": "schema",
+            "text": "Event has a date field"
+          },
+          {
+            "covered_by": "schema",
+            "text": "Event has an importance score between 1 and 10"
+          }
+        ],
+        "field_descriptions": {
+          "date": "When the event occurred (YYYY-MM-DD)",
+          "importance": "Significance score from 1 (minor) to 10 (major)",
+          "location": "Where the event took place",
+          "participants": "People or organizations involved",
+          "status": "Verification status: confirmed, disputed, alleged, rumored"
+        },
+        "fields": {
+          "date": "str",
+          "importance": "int",
+          "location": "str",
+          "participants": "list[str]",
+          "status": "EventStatus"
+        }
+      },
+      "note": {
+        "ai_instructions": "General-purpose knowledge note. Use for observations, analysis, summaries, or any content that doesn't fit a more specific type. Keep notes focused on a single topic.",
+        "description": "General-purpose knowledge note",
+        "display": {
+          "icon": "file-text",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "links": "Typed relationships to other entries",
+          "summary": "Brief one-line summary of the note",
+          "tags": "Categorization tags for discovery and filtering",
+          "title": "Descriptive title summarizing the note's content"
+        },
+        "fields": {
+          "links": "list[Link]",
+          "tags": "list[str]"
+        }
+      },
+      "organization": {
+        "ai_instructions": "A group, company, government body, or institution. Specify org_type (gov, ngo, corp, media, political, military, etc.) and jurisdiction where relevant.",
+        "description": "A group, company, institution",
+        "display": {
+          "icon": "building",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "founded": "Date or year the organization was established",
+          "importance": "Relevance score from 1 to 10",
+          "jurisdiction": "Geographic or legal jurisdiction",
+          "org_type": "Category: gov, ngo, corp, media, political, military, academic, religious, etc."
+        },
+        "fields": {
+          "founded": "str",
+          "jurisdiction": "str",
+          "org_type": "str"
+        }
+      },
+      "person": {
+        "ai_instructions": "An individual person. Use role to describe their primary function or position. List organizational affiliations. Set importance based on relevance to research.",
+        "description": "An individual",
+        "display": {
+          "icon": "user",
+          "layout": "record"
+        },
+        "evaluation_rubric": [
+          {
+            "checker": "has_field",
+            "params": {
+              "field": "role"
+            },
+            "text": "Person has a role or position described"
+          }
+        ],
+        "field_descriptions": {
+          "affiliations": "Organizations this person is associated with",
+          "importance": "Relevance score from 1 (peripheral) to 10 (central)",
+          "research_status": "How complete the profile is: stub, partial, draft, complete, published",
+          "role": "Primary role, title, or position"
+        },
+        "fields": {
+          "affiliations": "list[str]",
+          "role": "str"
+        }
+      },
+      "relationship": {
+        "ai_instructions": "A reified relationship between two entities. Use when the relationship itself has properties worth tracking (dates, evidence, context). For simple links, use the links field instead.",
+        "description": "A connection between entities",
+        "display": {
+          "icon": "link",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "relationship_type": "Type of relationship (see relationship_types in schema)",
+          "source_entity": "Entry ID of the source entity",
+          "target_entity": "Entry ID of the target entity"
+        },
+        "fields": {
+          "relationship_type": "str",
+          "source": "str",
+          "target": "str"
+        }
+      },
+      "timeline": {
+        "ai_instructions": "An ordered sequence of related events. Use to group events into a narrative arc. Reference individual events via links.",
+        "description": "An ordered sequence of events",
+        "display": {
+          "icon": "clock",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "date_range": "Time span covered, e.g. '2024-01 to 2025-06'"
+        },
+        "fields": {
+          "date_range": "str"
+        }
+      },
+      "topic": {
+        "ai_instructions": "A theme, subject area, or concept that entries can be organized around. Use as a hub to connect related entries via links and tags.",
+        "description": "A theme, subject area, or concept",
+        "display": {
+          "icon": "hash",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "importance": "Centrality of this topic to the research, 1-10"
+        },
+        "fields": {}
+      }
+    }
+  },
+  "kb_schema | write_key | private-kb": {
+    "evaluation_rubric": [
+      {
+        "checker": "descriptive_title",
+        "text": "Entry has a descriptive title"
+      },
+      {
+        "covered_by": "schema",
+        "text": "Entry body is non-empty"
+      },
+      {
+        "checker": "has_tags",
+        "text": "Entry has at least one tag"
+      },
+      {
+        "checker": "has_outlinks",
+        "text": "Entry links to at least one related entry (unless a stub)"
+      }
+    ],
+    "guidelines": {
+      "completeness": "Fill all required fields. Use summary for quick orientation.",
+      "cross_linking": "Entries should link to related entries for discoverability.",
+      "sourcing": "Claims should link to evidence. Prefer primary sources."
+    },
+    "relationship_types": {
+      "actor_reference": "Event references an actor (resolved from string or wikilink)",
+      "advised_by": "Advised by another entity",
+      "advises": "Advisory relationship",
+      "answers_question": "Answers a question",
+      "asks_question": "Poses a question",
+      "authored": "Authorship",
+      "authored_by": "Authored by",
+      "beneficial_owner_of": "Person is the beneficial owner of an entity",
+      "beneficially_owned_by": "Entity is beneficially owned by a person",
+      "blocked_by": "Backlog item cannot start until blocker completes",
+      "blocks": "Backlog item must complete before another can start",
+      "branches_from": "Branches from a parent note",
+      "built_on": "Solidarity infrastructure built on earlier infrastructure",
+      "capture_mechanism": "Mechanism used in a capture event",
+      "causally_follows": "Causal successor",
+      "causally_precedes": "Causal predecessor",
+      "contains_part": "Contains a part",
+      "contradicted_by": "Claim is contradicted by evidence",
+      "contradicts": "Evidence contradicts a claim",
+      "controlled_by": "Controlled by another entity",
+      "controls": "Control relationship",
+      "corroborated_by": "Claim is corroborated by evidence",
+      "corroborates": "Evidence corroborates a claim",
+      "depended_on_by": "Component depended on by another",
+      "depends_on": "Component depends on another component",
+      "directed_by": "Directed by another entity",
+      "directs": "Directorship",
+      "documented_by": "Component documented by a runbook",
+      "documents": "Runbook documents a component",
+      "elaborated_by": "Elaborated by another note",
+      "elaborates": "Elaborates on another note",
+      "employed_by": "Employment relationship",
+      "employs": "Employs",
+      "enabled": "Earlier infrastructure enabled later solidarity infrastructure",
+      "enabled_capture": "Event enabled by a capture mechanism",
+      "extended_by": "Extended by",
+      "extends": "Extends or elaborates on",
+      "funded_by": "Organization is funded by another organization",
+      "funds": "Organization funds another organization",
+      "has_actor": "Actor is referenced by an event",
+      "has_branch": "Has a branch note",
+      "has_example": "Has example",
+      "has_member": "Organization has a member",
+      "has_party": "Legal action has an entity as a party",
+      "has_session": "Backlog item has a work session log",
+      "has_subtask": "Epic or large item decomposed into subtasks",
+      "implemented_by": "Component implements a design doc",
+      "implements": "Design doc implemented by a component",
+      "investigated": "Actor investigated an event",
+      "investigated_by": "Event was investigated by an actor",
+      "involved_in": "Involved in",
+      "involves": "Involvement",
+      "is_example_of": "Example of a concept",
+      "is_part_of": "Part of a larger whole",
+      "located_at": "Location relationship",
+      "location_of": "Location of",
+      "member_of": "Actor is a member of an organization",
+      "mentioned_by": "Mentioned by",
+      "mentions": "Mentions",
+      "owned_by": "Asset or organization is owned by an entity",
+      "owns": "Entity owns an asset or organization",
+      "party_to": "Entity is a party to a legal action",
+      "produced_by": "Entry was produced by a task",
+      "produces": "Task produces an entry as evidence",
+      "provoked_response": "Capture event provoked a solidarity response",
+      "received_transaction_from": "Entity received a transaction from another entity",
+      "refined_by": "Refined by",
+      "refines": "Refines or narrows",
+      "responded_to": "Solidarity action responded to a capture event",
+      "session_for": "Work log records a session for a backlog item",
+      "source_for": "Document is a source for a claim or fact",
+      "sourced_from": "Claim or fact is sourced from a document",
+      "subtask_of": "Subtask belonging to a parent epic or large item",
+      "superseded_by": "Old ADR superseded by a new one",
+      "supersedes": "New ADR supersedes an old one",
+      "supported_by": "Claim is supported by evidence",
+      "supports": "Evidence supports a claim",
+      "synthesized_from": "Was synthesized from into a permanent note",
+      "synthesizes": "Synthesizes multiple notes into a permanent note",
+      "tracked_by": "ADR/design doc tracked by a backlog item",
+      "tracks": "Backlog item tracks an ADR or design doc",
+      "transacted_with": "Entity transacted with another entity",
+      "wikilink": "Inline wikilink reference",
+      "wikilinked_by": "Referenced by inline wikilink"
+    },
+    "types": {
+      "collection": {
+        "ai_instructions": "A folder-backed collection that groups related entries. Created automatically from __collection.yaml files in KB folders. Use to organize entries into browsable groups with list or table views.",
+        "description": "A folder-backed collection of entries",
+        "display": {
+          "icon": "folder",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "description": "Human-readable description of the collection's purpose",
+          "folder_path": "Relative path to the folder within the KB",
+          "icon": "Icon identifier for display",
+          "source_type": "Collection source: 'folder' for filesystem-backed",
+          "view_config": "View settings: default_view, table_columns"
+        },
+        "fields": {
+          "description": "str",
+          "folder_path": "str",
+          "icon": "str",
+          "source_type": "str",
+          "view_config": "dict"
+        }
+      },
+      "document": {
+        "ai_instructions": "A reference to an external document: report, filing, memo, article, etc. Always include the source URL when available. Use document_type to classify.",
+        "description": "A reference document",
+        "display": {
+          "icon": "file",
+          "layout": "document"
+        },
+        "evaluation_rubric": [
+          {
+            "checker": "has_any_field",
+            "params": {
+              "fields": [
+                "url",
+                "author"
+              ]
+            },
+            "text": "Document has a source URL or author"
+          },
+          {
+            "checker": "has_field",
+            "params": {
+              "field": "document_type"
+            },
+            "text": "Document has a document_type classification"
+          }
+        ],
+        "field_descriptions": {
+          "author": "Author or issuing body",
+          "date": "Publication or filing date",
+          "document_type": "Category: report, filing, memo, article, press-release, court-document, etc.",
+          "url": "URL to the original document"
+        },
+        "fields": {
+          "author": "str",
+          "date": "str",
+          "document_type": "str",
+          "url": "str"
+        }
+      },
+      "event": {
+        "ai_instructions": "A specific occurrence with a known or approximate date. Always include a date. Set importance 1-10 based on significance. Use participants to link people/orgs involved.",
+        "description": "Something that happened",
+        "display": {
+          "icon": "calendar",
+          "layout": "record"
+        },
+        "evaluation_rubric": [
+          {
+            "covered_by": "schema",
+            "text": "Event has a date field"
+          },
+          {
+            "covered_by": "schema",
+            "text": "Event has an importance score between 1 and 10"
+          }
+        ],
+        "field_descriptions": {
+          "date": "When the event occurred (YYYY-MM-DD)",
+          "importance": "Significance score from 1 (minor) to 10 (major)",
+          "location": "Where the event took place",
+          "participants": "People or organizations involved",
+          "status": "Verification status: confirmed, disputed, alleged, rumored"
+        },
+        "fields": {
+          "date": "str",
+          "importance": "int",
+          "location": "str",
+          "participants": "list[str]",
+          "status": "EventStatus"
+        }
+      },
+      "note": {
+        "ai_instructions": "General-purpose knowledge note. Use for observations, analysis, summaries, or any content that doesn't fit a more specific type. Keep notes focused on a single topic.",
+        "description": "General-purpose knowledge note",
+        "display": {
+          "icon": "file-text",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "links": "Typed relationships to other entries",
+          "summary": "Brief one-line summary of the note",
+          "tags": "Categorization tags for discovery and filtering",
+          "title": "Descriptive title summarizing the note's content"
+        },
+        "fields": {
+          "links": "list[Link]",
+          "tags": "list[str]"
+        }
+      },
+      "organization": {
+        "ai_instructions": "A group, company, government body, or institution. Specify org_type (gov, ngo, corp, media, political, military, etc.) and jurisdiction where relevant.",
+        "description": "A group, company, institution",
+        "display": {
+          "icon": "building",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "founded": "Date or year the organization was established",
+          "importance": "Relevance score from 1 to 10",
+          "jurisdiction": "Geographic or legal jurisdiction",
+          "org_type": "Category: gov, ngo, corp, media, political, military, academic, religious, etc."
+        },
+        "fields": {
+          "founded": "str",
+          "jurisdiction": "str",
+          "org_type": "str"
+        }
+      },
+      "person": {
+        "ai_instructions": "An individual person. Use role to describe their primary function or position. List organizational affiliations. Set importance based on relevance to research.",
+        "description": "An individual",
+        "display": {
+          "icon": "user",
+          "layout": "record"
+        },
+        "evaluation_rubric": [
+          {
+            "checker": "has_field",
+            "params": {
+              "field": "role"
+            },
+            "text": "Person has a role or position described"
+          }
+        ],
+        "field_descriptions": {
+          "affiliations": "Organizations this person is associated with",
+          "importance": "Relevance score from 1 (peripheral) to 10 (central)",
+          "research_status": "How complete the profile is: stub, partial, draft, complete, published",
+          "role": "Primary role, title, or position"
+        },
+        "fields": {
+          "affiliations": "list[str]",
+          "role": "str"
+        }
+      },
+      "relationship": {
+        "ai_instructions": "A reified relationship between two entities. Use when the relationship itself has properties worth tracking (dates, evidence, context). For simple links, use the links field instead.",
+        "description": "A connection between entities",
+        "display": {
+          "icon": "link",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "relationship_type": "Type of relationship (see relationship_types in schema)",
+          "source_entity": "Entry ID of the source entity",
+          "target_entity": "Entry ID of the target entity"
+        },
+        "fields": {
+          "relationship_type": "str",
+          "source": "str",
+          "target": "str"
+        }
+      },
+      "timeline": {
+        "ai_instructions": "An ordered sequence of related events. Use to group events into a narrative arc. Reference individual events via links.",
+        "description": "An ordered sequence of events",
+        "display": {
+          "icon": "clock",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "date_range": "Time span covered, e.g. '2024-01 to 2025-06'"
+        },
+        "fields": {
+          "date_range": "str"
+        }
+      },
+      "topic": {
+        "ai_instructions": "A theme, subject area, or concept that entries can be organized around. Use as a hub to connect related entries via links and tags.",
+        "description": "A theme, subject area, or concept",
+        "display": {
+          "icon": "hash",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "importance": "Centrality of this topic to the research, 1-10"
+        },
+        "fields": {}
+      }
+    }
+  },
+  "kb_schema | write_key | readable-kb": {
+    "evaluation_rubric": [
+      {
+        "checker": "descriptive_title",
+        "text": "Entry has a descriptive title"
+      },
+      {
+        "covered_by": "schema",
+        "text": "Entry body is non-empty"
+      },
+      {
+        "checker": "has_tags",
+        "text": "Entry has at least one tag"
+      },
+      {
+        "checker": "has_outlinks",
+        "text": "Entry links to at least one related entry (unless a stub)"
+      }
+    ],
+    "guidelines": {
+      "completeness": "Fill all required fields. Use summary for quick orientation.",
+      "cross_linking": "Entries should link to related entries for discoverability.",
+      "sourcing": "Claims should link to evidence. Prefer primary sources."
+    },
+    "relationship_types": {
+      "actor_reference": "Event references an actor (resolved from string or wikilink)",
+      "advised_by": "Advised by another entity",
+      "advises": "Advisory relationship",
+      "answers_question": "Answers a question",
+      "asks_question": "Poses a question",
+      "authored": "Authorship",
+      "authored_by": "Authored by",
+      "beneficial_owner_of": "Person is the beneficial owner of an entity",
+      "beneficially_owned_by": "Entity is beneficially owned by a person",
+      "blocked_by": "Backlog item cannot start until blocker completes",
+      "blocks": "Backlog item must complete before another can start",
+      "branches_from": "Branches from a parent note",
+      "built_on": "Solidarity infrastructure built on earlier infrastructure",
+      "capture_mechanism": "Mechanism used in a capture event",
+      "causally_follows": "Causal successor",
+      "causally_precedes": "Causal predecessor",
+      "contains_part": "Contains a part",
+      "contradicted_by": "Claim is contradicted by evidence",
+      "contradicts": "Evidence contradicts a claim",
+      "controlled_by": "Controlled by another entity",
+      "controls": "Control relationship",
+      "corroborated_by": "Claim is corroborated by evidence",
+      "corroborates": "Evidence corroborates a claim",
+      "depended_on_by": "Component depended on by another",
+      "depends_on": "Component depends on another component",
+      "directed_by": "Directed by another entity",
+      "directs": "Directorship",
+      "documented_by": "Component documented by a runbook",
+      "documents": "Runbook documents a component",
+      "elaborated_by": "Elaborated by another note",
+      "elaborates": "Elaborates on another note",
+      "employed_by": "Employment relationship",
+      "employs": "Employs",
+      "enabled": "Earlier infrastructure enabled later solidarity infrastructure",
+      "enabled_capture": "Event enabled by a capture mechanism",
+      "extended_by": "Extended by",
+      "extends": "Extends or elaborates on",
+      "funded_by": "Organization is funded by another organization",
+      "funds": "Organization funds another organization",
+      "has_actor": "Actor is referenced by an event",
+      "has_branch": "Has a branch note",
+      "has_example": "Has example",
+      "has_member": "Organization has a member",
+      "has_party": "Legal action has an entity as a party",
+      "has_session": "Backlog item has a work session log",
+      "has_subtask": "Epic or large item decomposed into subtasks",
+      "implemented_by": "Component implements a design doc",
+      "implements": "Design doc implemented by a component",
+      "investigated": "Actor investigated an event",
+      "investigated_by": "Event was investigated by an actor",
+      "involved_in": "Involved in",
+      "involves": "Involvement",
+      "is_example_of": "Example of a concept",
+      "is_part_of": "Part of a larger whole",
+      "located_at": "Location relationship",
+      "location_of": "Location of",
+      "member_of": "Actor is a member of an organization",
+      "mentioned_by": "Mentioned by",
+      "mentions": "Mentions",
+      "owned_by": "Asset or organization is owned by an entity",
+      "owns": "Entity owns an asset or organization",
+      "party_to": "Entity is a party to a legal action",
+      "produced_by": "Entry was produced by a task",
+      "produces": "Task produces an entry as evidence",
+      "provoked_response": "Capture event provoked a solidarity response",
+      "received_transaction_from": "Entity received a transaction from another entity",
+      "refined_by": "Refined by",
+      "refines": "Refines or narrows",
+      "responded_to": "Solidarity action responded to a capture event",
+      "session_for": "Work log records a session for a backlog item",
+      "source_for": "Document is a source for a claim or fact",
+      "sourced_from": "Claim or fact is sourced from a document",
+      "subtask_of": "Subtask belonging to a parent epic or large item",
+      "superseded_by": "Old ADR superseded by a new one",
+      "supersedes": "New ADR supersedes an old one",
+      "supported_by": "Claim is supported by evidence",
+      "supports": "Evidence supports a claim",
+      "synthesized_from": "Was synthesized from into a permanent note",
+      "synthesizes": "Synthesizes multiple notes into a permanent note",
+      "tracked_by": "ADR/design doc tracked by a backlog item",
+      "tracks": "Backlog item tracks an ADR or design doc",
+      "transacted_with": "Entity transacted with another entity",
+      "wikilink": "Inline wikilink reference",
+      "wikilinked_by": "Referenced by inline wikilink"
+    },
+    "types": {
+      "collection": {
+        "ai_instructions": "A folder-backed collection that groups related entries. Created automatically from __collection.yaml files in KB folders. Use to organize entries into browsable groups with list or table views.",
+        "description": "A folder-backed collection of entries",
+        "display": {
+          "icon": "folder",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "description": "Human-readable description of the collection's purpose",
+          "folder_path": "Relative path to the folder within the KB",
+          "icon": "Icon identifier for display",
+          "source_type": "Collection source: 'folder' for filesystem-backed",
+          "view_config": "View settings: default_view, table_columns"
+        },
+        "fields": {
+          "description": "str",
+          "folder_path": "str",
+          "icon": "str",
+          "source_type": "str",
+          "view_config": "dict"
+        }
+      },
+      "document": {
+        "ai_instructions": "A reference to an external document: report, filing, memo, article, etc. Always include the source URL when available. Use document_type to classify.",
+        "description": "A reference document",
+        "display": {
+          "icon": "file",
+          "layout": "document"
+        },
+        "evaluation_rubric": [
+          {
+            "checker": "has_any_field",
+            "params": {
+              "fields": [
+                "url",
+                "author"
+              ]
+            },
+            "text": "Document has a source URL or author"
+          },
+          {
+            "checker": "has_field",
+            "params": {
+              "field": "document_type"
+            },
+            "text": "Document has a document_type classification"
+          }
+        ],
+        "field_descriptions": {
+          "author": "Author or issuing body",
+          "date": "Publication or filing date",
+          "document_type": "Category: report, filing, memo, article, press-release, court-document, etc.",
+          "url": "URL to the original document"
+        },
+        "fields": {
+          "author": "str",
+          "date": "str",
+          "document_type": "str",
+          "url": "str"
+        }
+      },
+      "event": {
+        "ai_instructions": "A specific occurrence with a known or approximate date. Always include a date. Set importance 1-10 based on significance. Use participants to link people/orgs involved.",
+        "description": "Something that happened",
+        "display": {
+          "icon": "calendar",
+          "layout": "record"
+        },
+        "evaluation_rubric": [
+          {
+            "covered_by": "schema",
+            "text": "Event has a date field"
+          },
+          {
+            "covered_by": "schema",
+            "text": "Event has an importance score between 1 and 10"
+          }
+        ],
+        "field_descriptions": {
+          "date": "When the event occurred (YYYY-MM-DD)",
+          "importance": "Significance score from 1 (minor) to 10 (major)",
+          "location": "Where the event took place",
+          "participants": "People or organizations involved",
+          "status": "Verification status: confirmed, disputed, alleged, rumored"
+        },
+        "fields": {
+          "date": "str",
+          "importance": "int",
+          "location": "str",
+          "participants": "list[str]",
+          "status": "EventStatus"
+        }
+      },
+      "note": {
+        "ai_instructions": "General-purpose knowledge note. Use for observations, analysis, summaries, or any content that doesn't fit a more specific type. Keep notes focused on a single topic.",
+        "description": "General-purpose knowledge note",
+        "display": {
+          "icon": "file-text",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "links": "Typed relationships to other entries",
+          "summary": "Brief one-line summary of the note",
+          "tags": "Categorization tags for discovery and filtering",
+          "title": "Descriptive title summarizing the note's content"
+        },
+        "fields": {
+          "links": "list[Link]",
+          "tags": "list[str]"
+        }
+      },
+      "organization": {
+        "ai_instructions": "A group, company, government body, or institution. Specify org_type (gov, ngo, corp, media, political, military, etc.) and jurisdiction where relevant.",
+        "description": "A group, company, institution",
+        "display": {
+          "icon": "building",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "founded": "Date or year the organization was established",
+          "importance": "Relevance score from 1 to 10",
+          "jurisdiction": "Geographic or legal jurisdiction",
+          "org_type": "Category: gov, ngo, corp, media, political, military, academic, religious, etc."
+        },
+        "fields": {
+          "founded": "str",
+          "jurisdiction": "str",
+          "org_type": "str"
+        }
+      },
+      "person": {
+        "ai_instructions": "An individual person. Use role to describe their primary function or position. List organizational affiliations. Set importance based on relevance to research.",
+        "description": "An individual",
+        "display": {
+          "icon": "user",
+          "layout": "record"
+        },
+        "evaluation_rubric": [
+          {
+            "checker": "has_field",
+            "params": {
+              "field": "role"
+            },
+            "text": "Person has a role or position described"
+          }
+        ],
+        "field_descriptions": {
+          "affiliations": "Organizations this person is associated with",
+          "importance": "Relevance score from 1 (peripheral) to 10 (central)",
+          "research_status": "How complete the profile is: stub, partial, draft, complete, published",
+          "role": "Primary role, title, or position"
+        },
+        "fields": {
+          "affiliations": "list[str]",
+          "role": "str"
+        }
+      },
+      "relationship": {
+        "ai_instructions": "A reified relationship between two entities. Use when the relationship itself has properties worth tracking (dates, evidence, context). For simple links, use the links field instead.",
+        "description": "A connection between entities",
+        "display": {
+          "icon": "link",
+          "layout": "record"
+        },
+        "field_descriptions": {
+          "relationship_type": "Type of relationship (see relationship_types in schema)",
+          "source_entity": "Entry ID of the source entity",
+          "target_entity": "Entry ID of the target entity"
+        },
+        "fields": {
+          "relationship_type": "str",
+          "source": "str",
+          "target": "str"
+        }
+      },
+      "timeline": {
+        "ai_instructions": "An ordered sequence of related events. Use to group events into a narrative arc. Reference individual events via links.",
+        "description": "An ordered sequence of events",
+        "display": {
+          "icon": "clock",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "date_range": "Time span covered, e.g. '2024-01 to 2025-06'"
+        },
+        "fields": {
+          "date_range": "str"
+        }
+      },
+      "topic": {
+        "ai_instructions": "A theme, subject area, or concept that entries can be organized around. Use as a hub to connect related entries via links and tags.",
+        "description": "A theme, subject area, or concept",
+        "display": {
+          "icon": "hash",
+          "layout": "document"
+        },
+        "field_descriptions": {
+          "importance": "Centrality of this topic to the research, 1-10"
+        },
+        "fields": {}
+      }
+    }
+  },
+  "kb_search | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "query": "zebra",
+    "results": []
+  },
+  "kb_search | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "query": "zebra",
+    "results": [
+      {
+        "id": "no-default-role-note",
+        "kb_name": "no-default-role-kb"
+      }
+    ]
+  },
+  "kb_search | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "query": "zebra",
+    "results": [
+      {
+        "id": "private-note",
+        "kb_name": "private-kb"
+      }
+    ]
+  },
+  "kb_search | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "query": "zebra",
+    "results": [
+      {
+        "id": "readable-note",
+        "kb_name": "readable-kb"
+      }
+    ]
+  },
+  "kb_stats | write_key | missing-kb": {
+    "kbs": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_links": "<ENUMERATION_CONTENT>",
+    "total_tags": "<ENUMERATION_CONTENT>",
+    "type_counts": "<ENUMERATION_CONTENT>"
+  },
+  "kb_stats | write_key | no-default-role-kb": {
+    "kbs": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_links": "<ENUMERATION_CONTENT>",
+    "total_tags": "<ENUMERATION_CONTENT>",
+    "type_counts": "<ENUMERATION_CONTENT>"
+  },
+  "kb_stats | write_key | private-kb": {
+    "kbs": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_links": "<ENUMERATION_CONTENT>",
+    "total_tags": "<ENUMERATION_CONTENT>",
+    "type_counts": "<ENUMERATION_CONTENT>"
+  },
+  "kb_stats | write_key | readable-kb": {
+    "kbs": "<ENUMERATION_CONTENT>",
+    "total_entries": "<ENUMERATION_CONTENT>",
+    "total_links": "<ENUMERATION_CONTENT>",
+    "total_tags": "<ENUMERATION_CONTENT>",
+    "type_counts": "<ENUMERATION_CONTENT>"
+  },
+  "kb_tags | write_key | missing-kb": {
+    "has_more": "<ENUMERATION_CONTENT>",
+    "tag_count": "<ENUMERATION_CONTENT>",
+    "tags": []
+  },
+  "kb_tags | write_key | no-default-role-kb": {
+    "has_more": "<ENUMERATION_CONTENT>",
+    "tag_count": "<ENUMERATION_CONTENT>",
+    "tags": []
+  },
+  "kb_tags | write_key | private-kb": {
+    "has_more": "<ENUMERATION_CONTENT>",
+    "tag_count": "<ENUMERATION_CONTENT>",
+    "tags": []
+  },
+  "kb_tags | write_key | readable-kb": {
+    "has_more": "<ENUMERATION_CONTENT>",
+    "tag_count": "<ENUMERATION_CONTENT>",
+    "tags": []
+  },
+  "kb_timeline | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_timeline | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_timeline | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_timeline | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": [],
+    "has_more": "<ENUMERATION_CONTENT>"
+  },
+  "kb_update | write_key | missing-kb": {
+    "error": "KB not found: missing-kb",
+    "error_code": "UPDATE_FAILED",
+    "retryable": true
+  },
+  "kb_update | write_key | no-default-role-kb": {
+    "entry_id": "characterization-disposable-mutation-target",
+    "file_path": "<TMPDIR>/no-default-role-kb/notes/characterization-disposable-mutation-target.md",
+    "updated": true
+  },
+  "kb_update | write_key | private-kb": {
+    "entry_id": "characterization-disposable-mutation-target",
+    "file_path": "<TMPDIR>/private-kb/notes/characterization-disposable-mutation-target.md",
+    "updated": true
+  },
+  "kb_update | write_key | readable-kb": {
+    "entry_id": "characterization-disposable-mutation-target",
+    "file_path": "<TMPDIR>/readable-kb/notes/characterization-disposable-mutation-target.md",
+    "updated": true
+  },
+  "list_edge_types | write_key | missing-kb": {
+    "edge_types": [],
+    "total": 0
+  },
+  "list_edge_types | write_key | no-default-role-kb": {
+    "edge_types": [],
+    "total": 0
+  },
+  "list_edge_types | write_key | private-kb": {
+    "edge_types": [],
+    "total": 0
+  },
+  "list_edge_types | write_key | readable-kb": {
+    "edge_types": [],
+    "total": 0
+  },
+  "social_newest | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "newest": []
+  },
+  "social_newest | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "newest": []
+  },
+  "social_newest | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "newest": []
+  },
+  "social_newest | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "newest": []
+  },
+  "social_post | write_key | missing-kb": {
+    "error": "KB 'missing-kb' not found",
+    "error_code": "KB_NOT_FOUND"
+  },
+  "social_post | write_key | no-default-role-kb": {
+    "created": true,
+    "entry_id": "characterization-title-social-post-write-key-no-default-role-kb",
+    "file_path": "<TMPDIR>/no-default-role-kb/writeups/characterization-title-social-post-write-key-no-default-role-kb.md"
+  },
+  "social_post | write_key | private-kb": {
+    "created": true,
+    "entry_id": "characterization-title-social-post-write-key-private-kb",
+    "file_path": "<TMPDIR>/private-kb/writeups/characterization-title-social-post-write-key-private-kb.md"
+  },
+  "social_post | write_key | readable-kb": {
+    "created": true,
+    "entry_id": "characterization-title-social-post-write-key-readable-kb",
+    "file_path": "<TMPDIR>/readable-kb/writeups/characterization-title-social-post-write-key-readable-kb.md"
+  },
+  "social_top | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "top": []
+  },
+  "social_top | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "top": []
+  },
+  "social_top | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "top": []
+  },
+  "social_top | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "top": []
+  },
+  "social_vote | write_key | missing-kb": {
+    "entry_id": "characterization-missing-entry",
+    "value": "characterization-value",
+    "voted": true
+  },
+  "social_vote | write_key | no-default-role-kb": {
+    "entry_id": "characterization-disposable-mutation-target",
+    "value": "characterization-value",
+    "voted": true
+  },
+  "social_vote | write_key | private-kb": {
+    "entry_id": "characterization-disposable-mutation-target",
+    "value": "characterization-value",
+    "voted": true
+  },
+  "social_vote | write_key | readable-kb": {
+    "entry_id": "characterization-disposable-mutation-target",
+    "value": "characterization-value",
+    "voted": true
+  },
+  "solidarity_infrastructure_types | write_key | missing-kb": {
+    "count": 0,
+    "infrastructure_types": []
+  },
+  "solidarity_infrastructure_types | write_key | no-default-role-kb": {
+    "count": 0,
+    "infrastructure_types": []
+  },
+  "solidarity_infrastructure_types | write_key | private-kb": {
+    "count": 0,
+    "infrastructure_types": []
+  },
+  "solidarity_infrastructure_types | write_key | readable-kb": {
+    "count": 0,
+    "infrastructure_types": []
+  },
+  "solidarity_timeline | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": []
+  },
+  "solidarity_timeline | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": []
+  },
+  "solidarity_timeline | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": []
+  },
+  "solidarity_timeline | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "events": []
+  },
+  "sw_adrs | write_key | missing-kb": {
+    "adrs": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_adrs | write_key | no-default-role-kb": {
+    "adrs": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_adrs | write_key | private-kb": {
+    "adrs": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_adrs | write_key | readable-kb": {
+    "adrs": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_backlog | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "items": [],
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_backlog | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "items": [],
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_backlog | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "items": [],
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_backlog | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "items": [],
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_board | write_key | missing-kb": {
+    "lanes": [
+      {
+        "name": "Backlog"
+      },
+      {
+        "name": "Done"
+      },
+      {
+        "name": "In Progress"
+      },
+      {
+        "name": "Ready"
+      },
+      {
+        "name": "Review"
+      }
+    ],
+    "wip_policy": "warn"
+  },
+  "sw_board | write_key | no-default-role-kb": {
+    "lanes": [
+      {
+        "name": "Backlog"
+      },
+      {
+        "name": "Done"
+      },
+      {
+        "name": "In Progress"
+      },
+      {
+        "name": "Ready"
+      },
+      {
+        "name": "Review"
+      }
+    ],
+    "wip_policy": "warn"
+  },
+  "sw_board | write_key | private-kb": {
+    "lanes": [
+      {
+        "name": "Backlog"
+      },
+      {
+        "name": "Done"
+      },
+      {
+        "name": "In Progress"
+      },
+      {
+        "name": "Ready"
+      },
+      {
+        "name": "Review"
+      }
+    ],
+    "wip_policy": "warn"
+  },
+  "sw_board | write_key | readable-kb": {
+    "lanes": [
+      {
+        "name": "Backlog"
+      },
+      {
+        "name": "Done"
+      },
+      {
+        "name": "In Progress"
+      },
+      {
+        "name": "Ready"
+      },
+      {
+        "name": "Review"
+      }
+    ],
+    "wip_policy": "warn"
+  },
+  "sw_check_ready | write_key | missing-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_check_ready-write_key-missing-kb' not found in KB 'missing-kb'"
+  },
+  "sw_check_ready | write_key | no-default-role-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_check_ready-write_key-no-default-role-kb' not found in KB 'no-default-role-kb'"
+  },
+  "sw_check_ready | write_key | private-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_check_ready-write_key-private-kb' not found in KB 'private-kb'"
+  },
+  "sw_check_ready | write_key | readable-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_check_ready-write_key-readable-kb' not found in KB 'readable-kb'"
+  },
+  "sw_claim | write_key | missing-kb": {
+    "claimed": false,
+    "error": "Backlog item 'characterization-placeholder-id-sw_claim-write_key-missing-kb' not found in KB 'missing-kb'"
+  },
+  "sw_claim | write_key | no-default-role-kb": {
+    "claimed": false,
+    "error": "Backlog item 'characterization-placeholder-id-sw_claim-write_key-no-default-role-kb' not found in KB 'no-default-role-kb'"
+  },
+  "sw_claim | write_key | private-kb": {
+    "claimed": false,
+    "error": "Backlog item 'characterization-placeholder-id-sw_claim-write_key-private-kb' not found in KB 'private-kb'"
+  },
+  "sw_claim | write_key | readable-kb": {
+    "claimed": false,
+    "error": "Backlog item 'characterization-placeholder-id-sw_claim-write_key-readable-kb' not found in KB 'readable-kb'"
+  },
+  "sw_component | write_key | missing-kb": {
+    "components": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_component | write_key | no-default-role-kb": {
+    "components": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_component | write_key | private-kb": {
+    "components": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_component | write_key | readable-kb": {
+    "components": [],
+    "count": "<ENUMERATION_CONTENT>",
+    "has_more": "<ENUMERATION_CONTENT>",
+    "limit": 50,
+    "offset": 0,
+    "total": "<ENUMERATION_CONTENT>"
+  },
+  "sw_context_for_item | write_key | missing-kb": {
+    "error": "Entry 'characterization-placeholder-id-sw_context_for_item-write_key-missing-kb' not found in KB 'missing-kb'"
+  },
+  "sw_context_for_item | write_key | no-default-role-kb": {
+    "error": "Entry 'characterization-placeholder-id-sw_context_for_item-write_key-no-default-role-kb' not found in KB 'no-default-role-kb'"
+  },
+  "sw_context_for_item | write_key | private-kb": {
+    "error": "Entry 'characterization-placeholder-id-sw_context_for_item-write_key-private-kb' not found in KB 'private-kb'"
+  },
+  "sw_context_for_item | write_key | readable-kb": {
+    "error": "Entry 'characterization-placeholder-id-sw_context_for_item-write_key-readable-kb' not found in KB 'readable-kb'"
+  },
+  "sw_conventions | write_key | missing-kb": {
+    "conventions": [],
+    "count": 0
+  },
+  "sw_conventions | write_key | no-default-role-kb": {
+    "conventions": [],
+    "count": 0
+  },
+  "sw_conventions | write_key | private-kb": {
+    "conventions": [],
+    "count": 0
+  },
+  "sw_conventions | write_key | readable-kb": {
+    "conventions": [],
+    "count": 0
+  },
+  "sw_create_adr | write_key | missing-kb": {
+    "adr_number": 1,
+    "body": "## Context\n\nTODO\n\n## Decision\n\nTODO\n\n## Consequences\n\nTODO",
+    "created": true,
+    "deciders": [],
+    "filename": "adrs/0001-characterization-title-sw-create-adr-write-key-missing-kb.md",
+    "note": "Create the markdown file with this frontmatter and body to complete.",
+    "status": "proposed",
+    "title": "characterization-title-sw_create_adr-write_key-missing-kb"
+  },
+  "sw_create_adr | write_key | no-default-role-kb": {
+    "adr_number": 1,
+    "body": "## Context\n\nTODO\n\n## Decision\n\nTODO\n\n## Consequences\n\nTODO",
+    "created": true,
+    "deciders": [],
+    "filename": "adrs/0001-characterization-title-sw-create-adr-write-key-no-default-role-kb.md",
+    "note": "Create the markdown file with this frontmatter and body to complete.",
+    "status": "proposed",
+    "title": "characterization-title-sw_create_adr-write_key-no-default-role-kb"
+  },
+  "sw_create_adr | write_key | private-kb": {
+    "adr_number": 1,
+    "body": "## Context\n\nTODO\n\n## Decision\n\nTODO\n\n## Consequences\n\nTODO",
+    "created": true,
+    "deciders": [],
+    "filename": "adrs/0001-characterization-title-sw-create-adr-write-key-private-kb.md",
+    "note": "Create the markdown file with this frontmatter and body to complete.",
+    "status": "proposed",
+    "title": "characterization-title-sw_create_adr-write_key-private-kb"
+  },
+  "sw_create_adr | write_key | readable-kb": {
+    "adr_number": 1,
+    "body": "## Context\n\nTODO\n\n## Decision\n\nTODO\n\n## Consequences\n\nTODO",
+    "created": true,
+    "deciders": [],
+    "filename": "adrs/0001-characterization-title-sw-create-adr-write-key-readable-kb.md",
+    "note": "Create the markdown file with this frontmatter and body to complete.",
+    "status": "proposed",
+    "title": "characterization-title-sw_create_adr-write_key-readable-kb"
+  },
+  "sw_create_backlog_item | write_key | missing-kb": {
+    "created": false,
+    "error": "KB not found: missing-kb"
+  },
+  "sw_create_backlog_item | write_key | no-default-role-kb": {
+    "created": false,
+    "error": "KB not found: no-default-role-kb"
+  },
+  "sw_create_backlog_item | write_key | private-kb": {
+    "created": false,
+    "error": "KB not found: private-kb"
+  },
+  "sw_create_backlog_item | write_key | readable-kb": {
+    "created": false,
+    "error": "KB not found: readable-kb"
+  },
+  "sw_epic_detail | write_key | missing-kb": {
+    "error": "Epic 'characterization-placeholder-id-sw_epic_detail-write_key-missing-kb' not found in KB 'missing-kb'"
+  },
+  "sw_epic_detail | write_key | no-default-role-kb": {
+    "error": "Epic 'characterization-placeholder-id-sw_epic_detail-write_key-no-default-role-kb' not found in KB 'no-default-role-kb'"
+  },
+  "sw_epic_detail | write_key | private-kb": {
+    "error": "Epic 'characterization-placeholder-id-sw_epic_detail-write_key-private-kb' not found in KB 'private-kb'"
+  },
+  "sw_epic_detail | write_key | readable-kb": {
+    "error": "Epic 'characterization-placeholder-id-sw_epic_detail-write_key-readable-kb' not found in KB 'readable-kb'"
+  },
+  "sw_epics | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "epics": []
+  },
+  "sw_epics | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "epics": []
+  },
+  "sw_epics | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "epics": []
+  },
+  "sw_epics | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "epics": []
+  },
+  "sw_log | write_key | missing-kb": {
+    "created": false,
+    "error": "Backlog item 'characterization-placeholder-id-sw_log-write_key-missing-kb' not found in KB 'missing-kb'"
+  },
+  "sw_log | write_key | no-default-role-kb": {
+    "created": false,
+    "error": "Backlog item 'characterization-placeholder-id-sw_log-write_key-no-default-role-kb' not found in KB 'no-default-role-kb'"
+  },
+  "sw_log | write_key | private-kb": {
+    "created": false,
+    "error": "Backlog item 'characterization-placeholder-id-sw_log-write_key-private-kb' not found in KB 'private-kb'"
+  },
+  "sw_log | write_key | readable-kb": {
+    "created": false,
+    "error": "Backlog item 'characterization-placeholder-id-sw_log-write_key-readable-kb' not found in KB 'readable-kb'"
+  },
+  "sw_milestones | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "milestones": []
+  },
+  "sw_milestones | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "milestones": []
+  },
+  "sw_milestones | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "milestones": []
+  },
+  "sw_milestones | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "milestones": []
+  },
+  "sw_prioritize | write_key | missing-kb": {
+    "error": "Provide either item_ids (batch) or item_id with after/before"
+  },
+  "sw_prioritize | write_key | no-default-role-kb": {
+    "error": "Provide either item_ids (batch) or item_id with after/before"
+  },
+  "sw_prioritize | write_key | private-kb": {
+    "error": "Provide either item_ids (batch) or item_id with after/before"
+  },
+  "sw_prioritize | write_key | readable-kb": {
+    "error": "Provide either item_ids (batch) or item_id with after/before"
+  },
+  "sw_pull_next | write_key | missing-kb": {
+    "reason": "<ENUMERATION_CONTENT>",
+    "recommendation": "<ENUMERATION_CONTENT>",
+    "wip_status": "<ENUMERATION_CONTENT>"
+  },
+  "sw_pull_next | write_key | no-default-role-kb": {
+    "reason": "<ENUMERATION_CONTENT>",
+    "recommendation": "<ENUMERATION_CONTENT>",
+    "wip_status": "<ENUMERATION_CONTENT>"
+  },
+  "sw_pull_next | write_key | private-kb": {
+    "reason": "<ENUMERATION_CONTENT>",
+    "recommendation": "<ENUMERATION_CONTENT>",
+    "wip_status": "<ENUMERATION_CONTENT>"
+  },
+  "sw_pull_next | write_key | readable-kb": {
+    "reason": "<ENUMERATION_CONTENT>",
+    "recommendation": "<ENUMERATION_CONTENT>",
+    "wip_status": "<ENUMERATION_CONTENT>"
+  },
+  "sw_refine | write_key | missing-kb": {
+    "items": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "sw_refine | write_key | no-default-role-kb": {
+    "items": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "sw_refine | write_key | private-kb": {
+    "items": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "sw_refine | write_key | readable-kb": {
+    "items": [],
+    "summary": "<ENUMERATION_CONTENT>"
+  },
+  "sw_review | write_key | missing-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_review-write_key-missing-kb' not found in KB 'missing-kb'",
+    "reviewed": false
+  },
+  "sw_review | write_key | no-default-role-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_review-write_key-no-default-role-kb' not found in KB 'no-default-role-kb'",
+    "reviewed": false
+  },
+  "sw_review | write_key | private-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_review-write_key-private-kb' not found in KB 'private-kb'",
+    "reviewed": false
+  },
+  "sw_review | write_key | readable-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_review-write_key-readable-kb' not found in KB 'readable-kb'",
+    "reviewed": false
+  },
+  "sw_review_queue | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "items": [],
+    "over_limit": "<ENUMERATION_CONTENT>",
+    "wip_limit": 3
+  },
+  "sw_review_queue | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "items": [],
+    "over_limit": "<ENUMERATION_CONTENT>",
+    "wip_limit": 3
+  },
+  "sw_review_queue | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "items": [],
+    "over_limit": "<ENUMERATION_CONTENT>",
+    "wip_limit": 3
+  },
+  "sw_review_queue | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "items": [],
+    "over_limit": "<ENUMERATION_CONTENT>",
+    "wip_limit": 3
+  },
+  "sw_standards | write_key | missing-kb": {
+    "count": 0,
+    "has_more": false,
+    "limit": 50,
+    "offset": 0,
+    "standards": [],
+    "total": 0
+  },
+  "sw_standards | write_key | no-default-role-kb": {
+    "count": 0,
+    "has_more": false,
+    "limit": 50,
+    "offset": 0,
+    "standards": [],
+    "total": 0
+  },
+  "sw_standards | write_key | private-kb": {
+    "count": 0,
+    "has_more": false,
+    "limit": 50,
+    "offset": 0,
+    "standards": [],
+    "total": 0
+  },
+  "sw_standards | write_key | readable-kb": {
+    "count": 0,
+    "has_more": false,
+    "limit": 50,
+    "offset": 0,
+    "standards": [],
+    "total": 0
+  },
+  "sw_submit | write_key | missing-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_submit-write_key-missing-kb' not found in KB 'missing-kb'",
+    "submitted": false
+  },
+  "sw_submit | write_key | no-default-role-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_submit-write_key-no-default-role-kb' not found in KB 'no-default-role-kb'",
+    "submitted": false
+  },
+  "sw_submit | write_key | private-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_submit-write_key-private-kb' not found in KB 'private-kb'",
+    "submitted": false
+  },
+  "sw_submit | write_key | readable-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_submit-write_key-readable-kb' not found in KB 'readable-kb'",
+    "submitted": false
+  },
+  "sw_transition | write_key | missing-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_transition-write_key-missing-kb' not found in KB 'missing-kb'",
+    "transitioned": false
+  },
+  "sw_transition | write_key | no-default-role-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_transition-write_key-no-default-role-kb' not found in KB 'no-default-role-kb'",
+    "transitioned": false
+  },
+  "sw_transition | write_key | private-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_transition-write_key-private-kb' not found in KB 'private-kb'",
+    "transitioned": false
+  },
+  "sw_transition | write_key | readable-kb": {
+    "error": "Backlog item 'characterization-placeholder-id-sw_transition-write_key-readable-kb' not found in KB 'readable-kb'",
+    "transitioned": false
+  },
+  "sw_validations | write_key | missing-kb": {
+    "count": 0,
+    "validations": []
+  },
+  "sw_validations | write_key | no-default-role-kb": {
+    "count": 0,
+    "validations": []
+  },
+  "sw_validations | write_key | private-kb": {
+    "count": 0,
+    "validations": []
+  },
+  "sw_validations | write_key | readable-kb": {
+    "count": 0,
+    "validations": []
+  },
+  "task_ancestors | write_key | missing-kb": {
+    "error": "Task 'characterization-placeholder-id-task_ancestors-write_key-missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_ancestors | write_key | no-default-role-kb": {
+    "error": "Task 'characterization-placeholder-id-task_ancestors-write_key-no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_ancestors | write_key | private-kb": {
+    "error": "Task 'characterization-placeholder-id-task_ancestors-write_key-private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_ancestors | write_key | readable-kb": {
+    "error": "Task 'characterization-placeholder-id-task_ancestors-write_key-readable-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_blocked_by | write_key | missing-kb": {
+    "error": "Task 'characterization-placeholder-id-task_blocked_by-write_key-missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_blocked_by | write_key | no-default-role-kb": {
+    "error": "Task 'characterization-placeholder-id-task_blocked_by-write_key-no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_blocked_by | write_key | private-kb": {
+    "error": "Task 'characterization-placeholder-id-task_blocked_by-write_key-private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_blocked_by | write_key | readable-kb": {
+    "error": "Task 'characterization-placeholder-id-task_blocked_by-write_key-readable-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_checkpoint | write_key | missing-kb": {
+    "error": "KB not found: missing-kb",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "task_checkpoint | write_key | no-default-role-kb": {
+    "error": "Task 'characterization-placeholder-id-task_checkpoint-write_key-no-default-role-kb' not found in KB 'no-default-role-kb'",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "task_checkpoint | write_key | private-kb": {
+    "error": "Task 'characterization-placeholder-id-task_checkpoint-write_key-private-kb' not found in KB 'private-kb'",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "task_checkpoint | write_key | readable-kb": {
+    "error": "Task 'characterization-placeholder-id-task_checkpoint-write_key-readable-kb' not found in KB 'readable-kb'",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "task_claim | write_key | missing-kb": {
+    "claimed": false,
+    "error": "Entry 'characterization-placeholder-id-task_claim-write_key-missing-kb' not found in KB 'missing-kb'"
+  },
+  "task_claim | write_key | no-default-role-kb": {
+    "claimed": false,
+    "error": "Entry 'characterization-placeholder-id-task_claim-write_key-no-default-role-kb' not found in KB 'no-default-role-kb'"
+  },
+  "task_claim | write_key | private-kb": {
+    "claimed": false,
+    "error": "Entry 'characterization-placeholder-id-task_claim-write_key-private-kb' not found in KB 'private-kb'"
+  },
+  "task_claim | write_key | readable-kb": {
+    "claimed": false,
+    "error": "Entry 'characterization-placeholder-id-task_claim-write_key-readable-kb' not found in KB 'readable-kb'"
+  },
+  "task_create | write_key | missing-kb": {
+    "error": "KB not found: missing-kb",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_create | write_key | no-default-role-kb": {
+    "assignee": "",
+    "created": true,
+    "entry_id": "characterization-title-task-create-write-key-no-default-role-kb",
+    "kb_name": "no-default-role-kb",
+    "parent": "",
+    "priority": 5,
+    "status": "open",
+    "title": "characterization-title-task_create-write_key-no-default-role-kb"
+  },
+  "task_create | write_key | private-kb": {
+    "assignee": "",
+    "created": true,
+    "entry_id": "characterization-title-task-create-write-key-private-kb",
+    "kb_name": "private-kb",
+    "parent": "",
+    "priority": 5,
+    "status": "open",
+    "title": "characterization-title-task_create-write_key-private-kb"
+  },
+  "task_create | write_key | readable-kb": {
+    "assignee": "",
+    "created": true,
+    "entry_id": "characterization-title-task-create-write-key-readable-kb",
+    "kb_name": "readable-kb",
+    "parent": "",
+    "priority": 5,
+    "status": "open",
+    "title": "characterization-title-task_create-write_key-readable-kb"
+  },
+  "task_critical_path | write_key | missing-kb": {
+    "error": "Task 'characterization-placeholder-id-task_critical_path-write_key-missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_critical_path | write_key | no-default-role-kb": {
+    "error": "Task 'characterization-placeholder-id-task_critical_path-write_key-no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_critical_path | write_key | private-kb": {
+    "error": "Task 'characterization-placeholder-id-task_critical_path-write_key-private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_critical_path | write_key | readable-kb": {
+    "error": "Task 'characterization-placeholder-id-task_critical_path-write_key-readable-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_decompose | write_key | missing-kb": {
+    "error": "Parent task 'characterization-placeholder' not found in KB 'missing-kb'",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "task_decompose | write_key | no-default-role-kb": {
+    "error": "Parent task 'characterization-placeholder' not found in KB 'no-default-role-kb'",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "task_decompose | write_key | private-kb": {
+    "error": "Parent task 'characterization-placeholder' not found in KB 'private-kb'",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "task_decompose | write_key | readable-kb": {
+    "error": "Parent task 'characterization-placeholder' not found in KB 'readable-kb'",
+    "error_code": "OPERATION_FAILED",
+    "retryable": false
+  },
+  "task_list | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "tasks": []
+  },
+  "task_list | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "tasks": []
+  },
+  "task_list | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "tasks": []
+  },
+  "task_list | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "tasks": []
+  },
+  "task_status | write_key | missing-kb": {
+    "error": "Task 'characterization-placeholder-id-task_status-write_key-missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_status | write_key | no-default-role-kb": {
+    "error": "Task 'characterization-placeholder-id-task_status-write_key-no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_status | write_key | private-kb": {
+    "error": "Task 'characterization-placeholder-id-task_status-write_key-private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_status | write_key | readable-kb": {
+    "error": "Task 'characterization-placeholder-id-task_status-write_key-readable-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_subtree | write_key | missing-kb": {
+    "error": "Task 'characterization-placeholder-id-task_subtree-write_key-missing-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_subtree | write_key | no-default-role-kb": {
+    "error": "Task 'characterization-placeholder-id-task_subtree-write_key-no-default-role-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_subtree | write_key | private-kb": {
+    "error": "Task 'characterization-placeholder-id-task_subtree-write_key-private-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_subtree | write_key | readable-kb": {
+    "error": "Task 'characterization-placeholder-id-task_subtree-write_key-readable-kb' not found",
+    "error_code": "NOT_FOUND",
+    "retryable": false
+  },
+  "task_update | write_key | missing-kb": {
+    "error": "No updates specified",
+    "error_code": "VALIDATION_ERROR",
+    "retryable": false
+  },
+  "task_update | write_key | no-default-role-kb": {
+    "error": "No updates specified",
+    "error_code": "VALIDATION_ERROR",
+    "retryable": false
+  },
+  "task_update | write_key | private-kb": {
+    "error": "No updates specified",
+    "error_code": "VALIDATION_ERROR",
+    "retryable": false
+  },
+  "task_update | write_key | readable-kb": {
+    "error": "No updates specified",
+    "error_code": "VALIDATION_ERROR",
+    "retryable": false
+  },
+  "wiki_assess_quality | write_key | missing-kb": {
+    "error": "Invalid quality: good"
+  },
+  "wiki_assess_quality | write_key | no-default-role-kb": {
+    "error": "Invalid quality: good"
+  },
+  "wiki_assess_quality | write_key | private-kb": {
+    "error": "Invalid quality: good"
+  },
+  "wiki_assess_quality | write_key | readable-kb": {
+    "error": "Invalid quality: good"
+  },
+  "wiki_protect | write_key | missing-kb": {
+    "error": "Invalid protection level: protected"
+  },
+  "wiki_protect | write_key | no-default-role-kb": {
+    "error": "Invalid protection level: protected"
+  },
+  "wiki_protect | write_key | private-kb": {
+    "error": "Invalid protection level: protected"
+  },
+  "wiki_protect | write_key | readable-kb": {
+    "error": "Invalid protection level: protected"
+  },
+  "wiki_quality_stats | write_key | missing-kb": {
+    "quality_distribution": "<ENUMERATION_CONTENT>",
+    "review_queue_size": "<ENUMERATION_CONTENT>",
+    "review_status_distribution": "<ENUMERATION_CONTENT>",
+    "total_articles": "<ENUMERATION_CONTENT>"
+  },
+  "wiki_quality_stats | write_key | no-default-role-kb": {
+    "quality_distribution": "<ENUMERATION_CONTENT>",
+    "review_queue_size": "<ENUMERATION_CONTENT>",
+    "review_status_distribution": "<ENUMERATION_CONTENT>",
+    "total_articles": "<ENUMERATION_CONTENT>"
+  },
+  "wiki_quality_stats | write_key | private-kb": {
+    "quality_distribution": "<ENUMERATION_CONTENT>",
+    "review_queue_size": "<ENUMERATION_CONTENT>",
+    "review_status_distribution": "<ENUMERATION_CONTENT>",
+    "total_articles": "<ENUMERATION_CONTENT>"
+  },
+  "wiki_quality_stats | write_key | readable-kb": {
+    "quality_distribution": "<ENUMERATION_CONTENT>",
+    "review_queue_size": "<ENUMERATION_CONTENT>",
+    "review_status_distribution": "<ENUMERATION_CONTENT>",
+    "total_articles": "<ENUMERATION_CONTENT>"
+  },
+  "wiki_review_queue | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "queue": []
+  },
+  "wiki_review_queue | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "queue": []
+  },
+  "wiki_review_queue | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "queue": []
+  },
+  "wiki_review_queue | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "queue": []
+  },
+  "wiki_stubs | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "stubs": []
+  },
+  "wiki_stubs | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "stubs": []
+  },
+  "wiki_stubs | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "stubs": []
+  },
+  "wiki_stubs | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "stubs": []
+  },
+  "wiki_submit_review | write_key | missing-kb": {
+    "action": "add",
+    "entry_id": "characterization-missing-entry",
+    "reviewed": true
+  },
+  "wiki_submit_review | write_key | no-default-role-kb": {
+    "action": "add",
+    "entry_id": "characterization-disposable-mutation-target",
+    "reviewed": true
+  },
+  "wiki_submit_review | write_key | private-kb": {
+    "action": "add",
+    "entry_id": "characterization-disposable-mutation-target",
+    "reviewed": true
+  },
+  "wiki_submit_review | write_key | readable-kb": {
+    "action": "add",
+    "entry_id": "characterization-disposable-mutation-target",
+    "reviewed": true
+  },
+  "zettel_graph | write_key | missing-kb": {
+    "error": "Entry 'characterization-missing-entry' not found"
+  },
+  "zettel_graph | write_key | no-default-role-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "no-default-role-note",
+      "title": "No-default-role note"
+    },
+    "outlinks": []
+  },
+  "zettel_graph | write_key | private-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "private-note",
+      "title": "Private note"
+    },
+    "outlinks": []
+  },
+  "zettel_graph | write_key | readable-kb": {
+    "backlinks": [],
+    "center": {
+      "id": "readable-note",
+      "title": "Readable note"
+    },
+    "outlinks": []
+  },
+  "zettel_inbox | write_key | missing-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "inbox": []
+  },
+  "zettel_inbox | write_key | no-default-role-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "inbox": []
+  },
+  "zettel_inbox | write_key | private-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "inbox": []
+  },
+  "zettel_inbox | write_key | readable-kb": {
+    "count": "<ENUMERATION_CONTENT>",
+    "inbox": []
+  }
+}
