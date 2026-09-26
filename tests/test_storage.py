@@ -2203,5 +2203,109 @@ class TestSubdirectoryMismatchInHealth:
                 db.close()
 
 
+class TestTransactionMode:
+    """Pin pysqlite's legacy transaction handling (#440).
+
+    `_create_session`'s cap fix (#435) and other code in this module rely on
+    pysqlite's legacy ("no isolation_level override") transaction control: a
+    SELECT opens no transaction, and a write opens a *deferred* one only at
+    the write statement. Nothing asserted that until now, so a driver-level
+    change -- switching to ``isolation_level=None`` (autocommit) plus manual
+    ``BEGIN``, or SQLAlchemy 2's new-style ``AUTOCOMMIT`` isolation -- could
+    silently change when the write lock is taken, which is exactly the
+    ordering #435's fix depends on.
+    """
+
+    @pytest.fixture
+    def db(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            db = PyriteDB(db_path)
+            yield db
+            db.close()
+
+    @staticmethod
+    def _dbapi_conn(db: PyriteDB) -> sqlite3.Connection:
+        """The raw pysqlite connection backing the calling thread's session."""
+        return db.session.connection().connection.dbapi_connection
+
+    @pytest.mark.control(
+        reason="pins pysqlite's existing legacy transaction mode; dev's "
+        "behaviour is unchanged by this PR, only pinned"
+    )
+    def test_select_leaves_in_transaction_false(self, db):
+        from sqlalchemy import text
+
+        conn = self._dbapi_conn(db)
+        db.session.execute(text("SELECT 1"))
+        assert conn.in_transaction is False, (
+            "a SELECT started a transaction -- pysqlite is no longer in legacy "
+            "mode (autocommit=False or new-style isolation), and #435's "
+            "write-lock-first ordering no longer holds"
+        )
+
+    @pytest.mark.control(
+        reason="pins pysqlite's existing legacy transaction mode; dev's "
+        "behaviour is unchanged by this PR, only pinned"
+    )
+    def test_write_starts_a_deferred_transaction(self, db):
+        from sqlalchemy import text
+
+        conn = self._dbapi_conn(db)
+        assert conn.in_transaction is False
+        db.session.execute(
+            text(
+                "INSERT INTO local_user "
+                "(username, password_hash, role, auth_provider, created_at) "
+                "VALUES ('txn-mode-probe', 'hash', 'read', 'local', datetime('now'))"
+            )
+        )
+        try:
+            assert conn.in_transaction is True, (
+                "a write did not open a transaction on the underlying pysqlite "
+                "connection -- eviction-after-insert ordering (#435) can no "
+                "longer be assumed to share one write lock"
+            )
+        finally:
+            db.session.rollback()
+
+    @staticmethod
+    def _busy_timeout_ms(db: PyriteDB) -> int:
+        cursor = TestTransactionMode._dbapi_conn(db).cursor()
+        cursor.execute("PRAGMA busy_timeout")
+        (timeout_ms,) = cursor.fetchone()
+        cursor.close()
+        return timeout_ms
+
+    def test_busy_timeout_default_is_5000ms(self, db):
+        """The shipped value: unchanged from pysqlite's own previous
+        default, just no longer merely implicit (#440)."""
+        from pyrite.storage import connection as connection_module
+
+        assert connection_module.SQLITE_BUSY_TIMEOUT_MS == 5000
+        assert self._busy_timeout_ms(db) == 5000
+
+    def test_busy_timeout_reads_this_module_constant(self, tmp_path, monkeypatch):
+        """`set_sqlite_pragma` (`pyrite/storage/connection.py`) reads
+        ``SQLITE_BUSY_TIMEOUT_MS`` at each connection's ``connect`` event, so
+        this module -- not pysqlite's own default -- decides the value.
+        Pinned by monkeypatching the constant to a sentinel unrelated to any
+        real default and building a fresh ``PyriteDB``, rather than by
+        asserting a value pysqlite could produce on its own (#440 round 1:
+        the previous version of this test compared against a deliberately
+        different number, 4000ms, for the same reason, but that meant
+        shipping a shorter write-lock tolerance than intended just so the
+        test could tell the two sources apart)."""
+        from pyrite.storage import connection as connection_module
+
+        sentinel_ms = 1234
+        monkeypatch.setattr(connection_module, "SQLITE_BUSY_TIMEOUT_MS", sentinel_ms)
+        db = PyriteDB(tmp_path / "sentinel.db")
+        try:
+            assert self._busy_timeout_ms(db) == sentinel_ms
+        finally:
+            db.close()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -45,6 +45,17 @@ HANDLER_CONCURRENCY_LIMIT = 40
 _POOL_SIZE = HANDLER_CONCURRENCY_LIMIT
 _MAX_OVERFLOW = 20
 
+# How long a connection waits for SQLite's single write lock before raising
+# "database is locked", in milliseconds. Set explicitly, in this one place,
+# on every connection the pool hands out (#440) -- previously unset, so
+# pysqlite's own undeclared default (also 5000 ms, the same number) applied
+# instead, with nothing pinning it or saying so and nothing to notice if a
+# driver upgrade moved it. `set_sqlite_pragma` below reads this module global
+# at each connection's `connect` event, so a test pins it by monkeypatching
+# this name and building a fresh ``PyriteDB`` -- see
+# ``tests/test_storage.py::TestTransactionMode::test_busy_timeout_reads_this_module_constant``.
+SQLITE_BUSY_TIMEOUT_MS = 5000
+
 # Register explicit adapters to avoid Python 3.12+ deprecation warnings
 sqlite3.register_adapter(datetime, lambda dt: dt.isoformat())
 sqlite3.register_adapter(date, lambda d: d.isoformat())
@@ -81,6 +92,7 @@ class ConnectionMixin:
             cursor.execute("PRAGMA foreign_keys = ON")
             cursor.execute("PRAGMA journal_mode = WAL")
             cursor.execute("PRAGMA synchronous = NORMAL")
+            cursor.execute(f"PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MS}")
             cursor.close()
 
         # Create ORM tables

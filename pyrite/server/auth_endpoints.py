@@ -194,6 +194,13 @@ async def register(
 
     Refused (403) until an operator has created an admin with the CLI; a
     registered user never becomes admin. Rate-limited per client (429).
+
+    The account creation and the auto-login are both synchronous DB work, so
+    both run in the threadpool (``run_in_threadpool``, #131 criterion 4):
+    called inline, on this ``async def`` handler's own event-loop thread, a
+    write blocked behind another connection's write lock (an index sync,
+    another login) would stall every other request the loop is holding open
+    for up to the busy timeout, not only this one (#440).
     """
     if not config.settings.auth.enabled:
         raise HTTPException(status_code=400, detail="Authentication is not enabled")
@@ -202,17 +209,30 @@ async def register(
         _anonymized_key_func(request)
     )
 
-    try:
-        user = auth_service.register(
+    from starlette.concurrency import run_in_threadpool
+
+    def _register() -> dict:
+        return auth_service.register(
             body.username, body.password, body.display_name, body.invite_code
         )
+
+    try:
+        user = await run_in_threadpool(_register)
     except RegistrationClosedError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Auto-login after registration
-    _, token = auth_service.login(body.username, body.password)
+    # Auto-login after registration. Deliberately outside the try/except
+    # above: a ValueError here is not a registration failure -- the account
+    # was already created -- so it must not be reported as one (400) or
+    # silently mapped to the wrong status; it propagates like any other
+    # unhandled error, exactly as it did before this call moved off the
+    # event loop.
+    def _login() -> tuple[dict, str]:
+        return auth_service.login(body.username, body.password)
+
+    _, token = await run_in_threadpool(_login)
     _set_session_cookie(response, token, config.settings.auth.session_ttl_hours, request)
 
     return AuthUserResponse(**user)
@@ -230,6 +250,12 @@ async def login(
 
     Rate-limited before the password is checked: every attempt counts for
     the client, failed attempts for the username (429 when either is spent).
+
+    ``AuthService.login`` is synchronous DB work and runs in the threadpool
+    (``run_in_threadpool``, #131 criterion 4), not inline on this handler's
+    event-loop thread: a login whose write is blocked behind another
+    connection's write lock would otherwise stall every other request the
+    loop is holding open for up to the busy timeout, not only this one (#440).
     """
     if not config.settings.auth.enabled:
         raise HTTPException(status_code=400, detail="Authentication is not enabled")
@@ -237,8 +263,13 @@ async def login(
     limiter = get_auth_rate_limiter(request, config.settings.auth)
     limiter.check_login(_anonymized_key_func(request), body.username)
 
+    from starlette.concurrency import run_in_threadpool
+
+    def _login() -> tuple[dict, str]:
+        return auth_service.login(body.username, body.password)
+
     try:
-        user, token = auth_service.login(body.username, body.password)
+        user, token = await run_in_threadpool(_login)
     except ValueError:
         limiter.record_login_failure(body.username)
         raise HTTPException(status_code=401, detail="Invalid username or password")
@@ -338,12 +369,22 @@ async def _github_oauth_callback(
     config: PyriteConfig,
     auth_service: AuthService,
 ) -> RedirectResponse:
+    """Every synchronous DB call this handler makes -- state and session
+    verification, storing a connected token, and the login itself -- runs in
+    the threadpool (``run_in_threadpool``, #131 criterion 4). Called inline
+    on this ``async def`` handler's event-loop thread, a write blocked
+    behind another connection's write lock would stall every other request
+    the loop is holding open for up to the busy timeout, not only this
+    callback (#440).
+    """
+    from starlette.concurrency import run_in_threadpool
+
     if error or not code:
         logger.warning("GitHub OAuth error: %s", error or "no code")
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
 
     binding = request.cookies.get(OAUTH_BINDING_COOKIE, "")
-    state_data = auth_service.verify_oauth_state(state, binding)
+    state_data = await run_in_threadpool(auth_service.verify_oauth_state, state, binding)
     if not state_data:
         logger.warning("GitHub OAuth invalid/expired state")
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
@@ -357,7 +398,11 @@ async def _github_oauth_callback(
     if state_data.get("flow") == "connect":
         connect_user_id = state_data.get("user_id")
         session_token = request.cookies.get(COOKIE_NAME)
-        session_user = auth_service.verify_session(session_token) if session_token else None
+        session_user = (
+            await run_in_threadpool(auth_service.verify_session, session_token)
+            if session_token
+            else None
+        )
         if not connect_user_id or not session_user or session_user["id"] != connect_user_id:
             logger.warning("GitHub connect callback without the initiating user's session")
             return RedirectResponse(url="/settings/kbs?error=connect_failed", status_code=302)
@@ -378,7 +423,9 @@ async def _github_oauth_callback(
     if state_data.get("flow") == "connect":
         connect_user_id = state_data["user_id"]
         try:
-            auth_service.store_github_token(connect_user_id, token.access_token, token.scope)
+            await run_in_threadpool(
+                auth_service.store_github_token, connect_user_id, token.access_token, token.scope
+            )
             return RedirectResponse(url="/settings/kbs?github=connected", status_code=302)
         except Exception:
             logger.exception("Failed to store GitHub token")
@@ -387,7 +434,7 @@ async def _github_oauth_callback(
     # Standard login flow
     try:
         profile = await provider.get_user_profile(token)
-        user, session_token = auth_service.oauth_login(profile, gh_config)
+        user, session_token = await run_in_threadpool(auth_service.oauth_login, profile, gh_config)
     except ValueError as e:
         logger.warning("GitHub OAuth login failed: %s", e)
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
